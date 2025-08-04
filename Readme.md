@@ -2,6 +2,7 @@
   <img src="irondrop-logo.png" alt="IronDrop Logo" width="200"/>
   
   # IronDrop
+  [![Rust CI](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml/badge.svg)](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml)
 </div>
 
 A lightweight, high-performance file server written in Rust featuring **bidirectional file sharing**, **modular template architecture**, and **professional UI design**. Offers secure upload/download capabilities with advanced monitoring, comprehensive security features, and a modern web interface. Every component has been designed for clarity, reliability, and developer friendliness with **zero external dependencies**.
