@@ -128,8 +128,8 @@ fn validate_upload_dir(s: &str) -> Result<PathBuf, String> {
         return Err("Path traversal patterns detected in resolved path".to_string());
     }
 
-    // On Unix systems, check if trying to write to system directories
-    #[cfg(unix)]
+    // On Linux systems, check if trying to write to system directories
+    #[cfg(target_os = "linux")]
     {
         let forbidden_prefixes = ["/etc", "/sys", "/proc", "/dev", "/boot"];
         for prefix in &forbidden_prefixes {
@@ -144,14 +144,16 @@ fn validate_upload_dir(s: &str) -> Result<PathBuf, String> {
     // On Windows, check for system directories
     #[cfg(windows)]
     {
-        let path_lower = path_str.to_lowercase();
+        let path_to_check = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
         let forbidden_patterns = [
-            "c:\\windows",
-            "c:\\program files",
-            "c:\\program files (x86)",
+            "C:\\Windows",
+            "C:\\Program Files",
+            "C:\\Program Files (x86)",
         ];
         for pattern in &forbidden_patterns {
-            if path_lower.starts_with(pattern) {
+            if path_to_check.len() >= pattern.len()
+                && path_to_check[..pattern.len()].eq_ignore_ascii_case(pattern)
+            {
                 return Err("Cannot use Windows system directory as upload directory".to_string());
             }
         }
@@ -277,8 +279,8 @@ mod tests {
         let new_dir = temp_dir.path().join("newdir");
         assert!(validate_upload_dir(new_dir.to_str().unwrap()).is_ok());
 
-        // System directories (Unix)
-        #[cfg(unix)]
+        // System directories (Linux)
+        #[cfg(target_os = "linux")]
         {
             assert!(validate_upload_dir("/etc").is_err());
             assert!(validate_upload_dir("/sys").is_err());

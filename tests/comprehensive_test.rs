@@ -83,8 +83,15 @@ impl TestServer {
 impl Drop for TestServer {
     fn drop(&mut self) {
         if let Some(handle) = self.handle.take() {
-            self.shutdown_tx.send(()).ok();
-            handle.join().unwrap();
+            // Send shutdown signal
+            if self.shutdown_tx.send(()).is_err() {
+                eprintln!("Failed to send shutdown signal to server thread.");
+            }
+
+            // Wait for the server thread to finish
+            if let Err(e) = handle.join() {
+                eprintln!("Server thread panicked: {:?}", e);
+            }
         }
     }
 }

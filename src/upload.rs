@@ -958,9 +958,9 @@ mod tests {
         assert!(result.is_ok());
 
         let dir = result.unwrap();
-        // Should contain "Downloads" in the path on most systems
-        let path_str = dir.to_string_lossy().to_lowercase();
-        assert!(path_str.contains("downloads") || path_str == "." || path_str.contains("current"));
+        // The detected path should be an absolute path and a directory
+        assert!(dir.is_absolute(), "Detected path should be absolute");
+        assert!(dir.is_dir(), "Detected path should be a directory");
     }
 
     #[test]
