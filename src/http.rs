@@ -3,6 +3,7 @@
 use crate::error::AppError;
 use crate::fs::{generate_directory_listing, FileDetails};
 use crate::response::{create_error_response, get_mime_type};
+use crate::upload::UploadHandler;
 use base64::Engine;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -11,12 +12,19 @@ use std::net::TcpStream;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
+/// Maximum size for request body (10GB) to prevent memory exhaustion attacks
+const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024 * 1024;
+
+/// Maximum size for request headers (8KB) to prevent header buffer overflow
+const MAX_HEADERS_SIZE: usize = 8 * 1024;
+
 /// Represents a parsed incoming HTTP request.
 #[derive(Debug)]
 pub struct Request {
     pub method: String,
     pub path: String,
     pub headers: HashMap<String, String>,
+    pub body: Option<Vec<u8>>,
 }
 
 /// Represents an outgoing HTTP response.
@@ -40,7 +48,7 @@ impl Request {
         stream.set_read_timeout(Some(std::time::Duration::from_secs(30)))?;
 
         // Read the entire HTTP headers in chunks for better performance
-        let headers_data = Self::read_headers(stream)?;
+        let (headers_data, remaining_bytes) = Self::read_headers_with_remaining(stream)?;
 
         // Parse the headers
         let mut lines = headers_data.lines();
@@ -83,23 +91,28 @@ impl Request {
             }
         }
 
+        // Read request body if present
+        let body = Self::read_request_body(stream, &headers, remaining_bytes)?;
+
         debug!(
-            "Parsed request: {} {} (headers: {})",
+            "Parsed request: {} {} (headers: {}, body_size: {})",
             method,
             path,
-            headers.len()
+            headers.len(),
+            body.as_ref().map(|b| b.len()).unwrap_or(0)
         );
+
         Ok(Request {
             method,
             path,
             headers,
+            body,
         })
     }
 
-    /// Read HTTP headers efficiently in chunks
-    fn read_headers(stream: &mut TcpStream) -> Result<String, AppError> {
-        let mut buffer = vec![0; 8192]; // 8KB buffer for headers
-        let mut headers_data = String::new();
+    /// Read HTTP headers efficiently in chunks and return remaining bytes from body
+    fn read_headers_with_remaining(stream: &mut TcpStream) -> Result<(String, Vec<u8>), AppError> {
+        let mut buffer = vec![0; MAX_HEADERS_SIZE];
         let mut total_read = 0;
 
         loop {
@@ -113,22 +126,43 @@ impl Request {
                 Ok(bytes_read) => {
                     total_read += bytes_read;
 
-                    // Convert bytes to string (up to what we've read)
-                    match std::str::from_utf8(&buffer[0..total_read]) {
-                        Ok(data) => {
-                            // Look for the end of headers (\r\n\r\n or \n\n)
-                            if data.contains("\r\n\r\n") {
-                                let end_pos = data.find("\r\n\r\n").unwrap() + 4;
-                                headers_data = data[0..end_pos - 4].to_string();
-                                break;
-                            } else if data.contains("\n\n") {
-                                let end_pos = data.find("\n\n").unwrap() + 2;
-                                headers_data = data[0..end_pos - 2].to_string();
-                                break;
+                    // Look for the end of headers (\r\n\r\n or \n\n) in raw bytes
+                    let double_crlf = b"\r\n\r\n";
+                    let double_lf = b"\n\n";
+
+                    if let Some(pos) = buffer[0..total_read]
+                        .windows(4)
+                        .position(|window| window == double_crlf)
+                    {
+                        let headers_end = pos;
+                        let body_start = pos + 4;
+
+                        // Only convert headers portion to UTF-8
+                        match std::str::from_utf8(&buffer[0..headers_end]) {
+                            Ok(headers_data) => {
+                                let remaining_bytes = buffer[body_start..total_read].to_vec();
+                                return Ok((headers_data.to_string(), remaining_bytes));
+                            }
+                            Err(_) => {
+                                return Err(AppError::BadRequest);
                             }
                         }
-                        Err(_) => {
-                            // Invalid UTF-8, continue reading
+                    } else if let Some(pos) = buffer[0..total_read]
+                        .windows(2)
+                        .position(|window| window == double_lf)
+                    {
+                        let headers_end = pos;
+                        let body_start = pos + 2;
+
+                        // Only convert headers portion to UTF-8
+                        match std::str::from_utf8(&buffer[0..headers_end]) {
+                            Ok(headers_data) => {
+                                let remaining_bytes = buffer[body_start..total_read].to_vec();
+                                return Ok((headers_data.to_string(), remaining_bytes));
+                            }
+                            Err(_) => {
+                                return Err(AppError::BadRequest);
+                            }
                         }
                     }
 
@@ -141,7 +175,91 @@ impl Request {
             }
         }
 
-        Ok(headers_data)
+        // No body separator found, return all as headers with empty remaining bytes
+        match std::str::from_utf8(&buffer[0..total_read]) {
+            Ok(data) => Ok((data.to_string(), Vec::new())),
+            Err(_) => Err(AppError::BadRequest),
+        }
+    }
+
+    /// Read request body based on Content-Length header with security validations
+    fn read_request_body(
+        stream: &mut TcpStream,
+        headers: &HashMap<String, String>,
+        remaining_bytes: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, AppError> {
+        // Check if we have a Content-Length header
+        let content_length = match headers.get("content-length") {
+            Some(length_str) => match length_str.parse::<usize>() {
+                Ok(length) => length,
+                Err(_) => return Err(AppError::BadRequest),
+            },
+            None => {
+                // Check for Transfer-Encoding: chunked (not fully implemented but detected)
+                if let Some(encoding) = headers.get("transfer-encoding") {
+                    if encoding.to_lowercase().contains("chunked") {
+                        warn!("Chunked transfer encoding not yet supported");
+                        return Err(AppError::BadRequest);
+                    }
+                }
+                // No body expected
+                return Ok(None);
+            }
+        };
+
+        // Validate content length against security limits
+        if content_length == 0 {
+            return Ok(Some(Vec::new()));
+        }
+
+        if content_length > MAX_REQUEST_BODY_SIZE {
+            return Err(AppError::PayloadTooLarge(MAX_REQUEST_BODY_SIZE as u64));
+        }
+
+        let mut body = Vec::with_capacity(content_length);
+
+        // Use any remaining bytes from header parsing
+        let bytes_from_headers = remaining_bytes.len().min(content_length);
+        body.extend_from_slice(&remaining_bytes[..bytes_from_headers]);
+
+        // Calculate how many more bytes we need to read
+        let bytes_needed = content_length - bytes_from_headers;
+
+        if bytes_needed > 0 {
+            // Read the remaining body in chunks to avoid large allocations
+            let mut bytes_read = 0;
+            let chunk_size = 8192; // 8KB chunks
+            let mut buffer = vec![0; chunk_size];
+
+            while bytes_read < bytes_needed {
+                let to_read = (bytes_needed - bytes_read).min(chunk_size);
+
+                match stream.read(&mut buffer[..to_read]) {
+                    Ok(0) => {
+                        // Unexpected end of stream
+                        return Err(AppError::BadRequest);
+                    }
+                    Ok(n) => {
+                        body.extend_from_slice(&buffer[..n]);
+                        bytes_read += n;
+                    }
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::TimedOut {
+                            warn!("Request body read timeout");
+                        }
+                        return Err(AppError::Io(e));
+                    }
+                }
+            }
+        }
+
+        // Verify we read exactly the expected amount
+        if body.len() != content_length {
+            return Err(AppError::BadRequest);
+        }
+
+        debug!("Successfully read request body: {} bytes", body.len());
+        Ok(Some(body))
     }
 
     /// Simple URL decoding for percent-encoded paths
@@ -180,6 +298,7 @@ impl Request {
 }
 
 /// Top-level function to handle a client connection.
+#[allow(clippy::too_many_arguments)]
 pub fn handle_client(
     mut stream: TcpStream,
     base_dir: &Arc<PathBuf>,
@@ -187,6 +306,8 @@ pub fn handle_client(
     username: &Arc<Option<String>>,
     password: &Arc<Option<String>>,
     chunk_size: usize,
+    cli_config: Option<&crate::cli::Cli>,
+    stats: Option<&crate::server::ServerStats>,
 ) {
     let log_prefix = format!("[{}]", stream.peer_addr().unwrap());
 
@@ -206,6 +327,8 @@ pub fn handle_client(
         username,
         password,
         chunk_size,
+        cli_config,
+        stats,
     );
 
     match response_result {
@@ -295,6 +418,82 @@ fn handle_favicon_request(path: &str) -> Result<Response, AppError> {
     })
 }
 
+/// Handle GET requests for upload form
+fn handle_upload_form_request(
+    _request: &Request,
+    cli_config: Option<&crate::cli::Cli>,
+) -> Result<Response, AppError> {
+    let cli = cli_config.ok_or_else(|| {
+        AppError::InternalServerError(
+            "CLI configuration not available for upload handling".to_string(),
+        )
+    })?;
+
+    if !cli.enable_upload {
+        return Err(AppError::upload_disabled());
+    }
+
+    // Load and render the upload template
+    let template_engine = crate::templates::TemplateEngine::new();
+    let mut variables = HashMap::new();
+    variables.insert("PATH".to_string(), "/".to_string());
+
+    let html_content = template_engine.render("upload_page", &variables)?;
+
+    Ok(Response {
+        status_code: 200,
+        status_text: "OK".to_string(),
+        headers: {
+            let mut map = HashMap::new();
+            map.insert(
+                "Content-Type".to_string(),
+                "text/html; charset=utf-8".to_string(),
+            );
+            map.insert("Cache-Control".to_string(), "no-cache".to_string());
+            map
+        },
+        body: ResponseBody::Text(html_content),
+    })
+}
+
+/// Handle file upload requests
+fn handle_upload_request(
+    request: &Request,
+    cli_config: Option<&crate::cli::Cli>,
+    stats: Option<&crate::server::ServerStats>,
+) -> Result<Response, AppError> {
+    let cli = cli_config.ok_or_else(|| {
+        AppError::InternalServerError(
+            "CLI configuration not available for upload handling".to_string(),
+        )
+    })?;
+
+    if !cli.enable_upload {
+        return Err(AppError::upload_disabled());
+    }
+
+    // Create upload handler
+    let mut upload_handler = UploadHandler::new(cli)?;
+
+    // Process the upload with statistics tracking
+    let http_response = upload_handler.handle_upload_with_stats(request, stats)?;
+
+    // Convert HttpResponse to Response
+    let mut headers = HashMap::new();
+    for (key, value) in http_response.headers {
+        headers.insert(key, value);
+    }
+
+    let body = ResponseBody::Text(String::from_utf8_lossy(&http_response.body).to_string());
+
+    Ok(Response {
+        status_code: http_response.status_code,
+        status_text: http_response.status_text,
+        headers,
+        body,
+    })
+}
+
 /// Create a health check response with server status
 fn create_health_check_response() -> Response {
     let timestamp = std::time::SystemTime::now()
@@ -306,7 +505,7 @@ fn create_health_check_response() -> Response {
         r#"{{
     "status": "healthy",
     "service": "irondrop",
-    "version": "2.0.0",
+    "version": "2.5.0",
     "timestamp": {timestamp},
     "features": [
         "rate_limiting",
@@ -338,6 +537,7 @@ fn create_health_check_response() -> Response {
 }
 
 /// Determines the correct response based on the request.
+#[allow(clippy::too_many_arguments)]
 fn route_request(
     request: &Request,
     base_dir: &Arc<PathBuf>,
@@ -345,6 +545,8 @@ fn route_request(
     username: &Arc<Option<String>>,
     password: &Arc<Option<String>>,
     chunk_size: usize,
+    cli_config: Option<&crate::cli::Cli>,
+    stats: Option<&crate::server::ServerStats>,
 ) -> Result<Response, AppError> {
     if let (Some(expected_user), Some(expected_pass)) = (username.as_ref(), password.as_ref()) {
         if !is_authenticated(
@@ -374,8 +576,31 @@ fn route_request(
         return handle_favicon_request(&request.path);
     }
 
-    if request.method != "GET" {
-        return Err(AppError::MethodNotAllowed);
+    // Handle upload requests (strip query parameters for matching)
+    let path_without_query = request.path.split('?').next().unwrap_or(&request.path);
+    let normalized_path = path_without_query.trim_end_matches('/');
+    if normalized_path == "/upload" {
+        if request.method == "POST" {
+            return handle_upload_request(request, cli_config, stats);
+        } else if request.method == "GET" {
+            return handle_upload_form_request(request, cli_config);
+        }
+    }
+
+    // Handle different methods appropriately
+    match request.method.as_str() {
+        "GET" => {
+            // GET requests are handled normally
+        }
+        "POST" => {
+            // For now, POST requests are only accepted but not fully implemented
+            // In a real implementation, this would handle file uploads
+            // For the current implementation, we'll allow POST but treat it like GET for basic functionality
+            debug!("POST request received, treating as GET for basic functionality");
+        }
+        _ => {
+            return Err(AppError::MethodNotAllowed);
+        }
     }
 
     let requested_path = PathBuf::from(request.path.strip_prefix('/').unwrap_or(&request.path));
@@ -391,6 +616,11 @@ fn route_request(
     }
 
     if full_path.is_dir() {
+        // Only serve directory listings for GET requests
+        if request.method == "POST" {
+            return Err(AppError::MethodNotAllowed);
+        }
+
         let html_content = generate_directory_listing(&full_path, &request.path)?;
         Ok(Response {
             status_code: 200,
@@ -482,7 +712,7 @@ fn send_response(
     );
 
     // Add standard server headers first
-    response_str.push_str("Server: irondrop/2.0.0\r\n");
+    response_str.push_str("Server: irondrop/2.5.0\r\n");
     response_str.push_str("Connection: close\r\n");
 
     // Add response-specific headers
@@ -538,6 +768,13 @@ fn send_error_response(stream: &mut TcpStream, error: AppError, log_prefix: &str
         AppError::BadRequest => (400, "Bad Request"),
         AppError::Unauthorized => (401, "Unauthorized"),
         AppError::MethodNotAllowed => (405, "Method Not Allowed"),
+        // Upload-specific error mappings
+        AppError::PayloadTooLarge(_) => (413, "Payload Too Large"),
+        AppError::InvalidMultipart(_) => (400, "Bad Request"),
+        AppError::InvalidFilename(_) => (400, "Bad Request"),
+        AppError::UploadDiskFull(_) => (507, "Insufficient Storage"),
+        AppError::UnsupportedMediaType(_) => (415, "Unsupported Media Type"),
+        AppError::UploadDisabled => (403, "Forbidden"),
         _ => (500, "Internal Server Error"),
     };
 

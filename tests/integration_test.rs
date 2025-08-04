@@ -42,6 +42,9 @@ fn setup_test_server(username: Option<String>, password: Option<String>) -> Test
         detailed_logging: false,
         username,
         password,
+        enable_upload: false,
+        max_upload_size: 10240,
+        upload_dir: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -51,7 +54,7 @@ fn setup_test_server(username: Option<String>, password: Option<String>) -> Test
         // The server will run here.
         if let Err(e) = run_server(cli, Some(shutdown_rx), Some(addr_tx)) {
             // Use eprintln so the error shows up in test output.
-            eprintln!("Server thread failed: {}", e);
+            eprintln!("Server thread failed: {e}");
         }
     });
 

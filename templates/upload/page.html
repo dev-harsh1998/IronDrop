@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload to {{PATH}} - IronDrop</title>
+    <link rel="stylesheet" href="/_static/directory/styles.css">
+    <link rel="stylesheet" href="/_static/upload/styles.css">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+</head>
+<body>
+    <div class="container">
+        <!-- Upload Header -->
+        <div class="upload-header">
+            <div class="breadcrumb">
+                <a href="{{PATH}}" class="back-link">
+                    <svg class="back-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="m12 19-7-7 7-7"/>
+                        <path d="m19 12H5"/>
+                    </svg>
+                    Back to {{PATH}}
+                </a>
+            </div>
+            <h1 class="upload-title">Upload Files</h1>
+            <p class="upload-subtitle">Drag and drop files here, or click to browse</p>
+        </div>
+
+        <!-- Main Upload Area -->
+        <div class="upload-container">
+            <!-- Drop Zone -->
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-content">
+                    <div class="upload-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17,8 12,3 7,8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <h3 class="drop-zone-title">Drop files here to upload</h3>
+                    <p class="drop-zone-subtitle">or</p>
+                    <button class="browse-button" id="browseButton">Browse Files</button>
+                    <input type="file" id="fileInput" multiple hidden>
+                    <div class="upload-info">
+                        <p class="upload-limit">Maximum file size: 10GB per file</p>
+                        <p class="upload-types">Supports all file types</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Queue -->
+            <div class="upload-queue" id="uploadQueue" style="display: none;">
+                <div class="queue-header">
+                    <h3>Upload Queue</h3>
+                    <div class="queue-actions">
+                        <button class="queue-action" id="clearCompleted">Clear Completed</button>
+                        <button class="queue-action danger" id="cancelAll">Cancel All</button>
+                    </div>
+                </div>
+                <div class="queue-list" id="queueList">
+                    <!-- Queue items will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Upload Summary -->
+            <div class="upload-summary" id="uploadSummary" style="display: none;">
+                <div class="summary-content">
+                    <div class="summary-stat">
+                        <span class="stat-value" id="totalFiles">0</span>
+                        <span class="stat-label">files selected</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="stat-value" id="totalSize">0 B</span>
+                        <span class="stat-label">total size</span>
+                    </div>
+                    <div class="summary-stat">
+                        <span class="stat-value" id="completedFiles">0</span>
+                        <span class="stat-label">uploaded</span>
+                    </div>
+                </div>
+                <div class="summary-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="totalProgress"></div>
+                    </div>
+                    <span class="progress-text" id="progressText">0% complete</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success/Error Messages -->
+        <div class="upload-messages" id="uploadMessages">
+            <!-- Messages will be inserted here -->
+        </div>
+    </div>
+    
+    <script src="/_static/upload/script.js"></script>
+</body>
+</html>

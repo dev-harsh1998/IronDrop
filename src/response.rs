@@ -65,7 +65,7 @@ impl HttpResponse {
             status_code,
             status_text: status_text.to_string(),
             headers: vec![
-                ("Server".to_string(), "irondrop/2.0.0".to_string()),
+                ("Server".to_string(), "irondrop/2.5.0".to_string()),
                 ("Connection".to_string(), "close".to_string()),
                 ("Cache-Control".to_string(), "no-cache".to_string()),
             ],

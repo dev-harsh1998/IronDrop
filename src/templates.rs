@@ -10,6 +10,10 @@ const DIRECTORY_SCRIPT_JS: &str = include_str!("../templates/directory/script.js
 const ERROR_PAGE_HTML: &str = include_str!("../templates/error/page.html");
 const ERROR_STYLES_CSS: &str = include_str!("../templates/error/styles.css");
 const ERROR_SCRIPT_JS: &str = include_str!("../templates/error/script.js");
+const UPLOAD_PAGE_HTML: &str = include_str!("../templates/upload/page.html");
+const UPLOAD_STYLES_CSS: &str = include_str!("../templates/upload/styles.css");
+const UPLOAD_SCRIPT_JS: &str = include_str!("../templates/upload/script.js");
+const UPLOAD_FORM_HTML: &str = include_str!("../templates/upload/form.html");
 
 // Embed favicon files at compile time
 const FAVICON_ICO: &[u8] = include_bytes!("../favicon.ico");
@@ -38,6 +42,8 @@ impl TemplateEngine {
             DIRECTORY_INDEX_HTML.to_string(),
         );
         templates.insert("error_page".to_string(), ERROR_PAGE_HTML.to_string());
+        templates.insert("upload_page".to_string(), UPLOAD_PAGE_HTML.to_string());
+        templates.insert("upload_form".to_string(), UPLOAD_FORM_HTML.to_string());
 
         Self { templates }
     }
@@ -55,6 +61,8 @@ impl TemplateEngine {
             "directory/script.js" => Some((DIRECTORY_SCRIPT_JS, "application/javascript")),
             "error/styles.css" => Some((ERROR_STYLES_CSS, "text/css")),
             "error/script.js" => Some((ERROR_SCRIPT_JS, "application/javascript")),
+            "upload/styles.css" => Some((UPLOAD_STYLES_CSS, "text/css")),
+            "upload/script.js" => Some((UPLOAD_SCRIPT_JS, "application/javascript")),
             _ => None,
         }
     }
@@ -167,6 +175,19 @@ impl TemplateEngine {
         variables.insert("DESCRIPTION".to_string(), description.to_string());
 
         self.render("error_page", &variables)
+    }
+
+    /// Generate upload page HTML using template
+    pub fn render_upload_page(&self, path: &str) -> Result<String, AppError> {
+        let mut variables = HashMap::new();
+        variables.insert("PATH".to_string(), path.to_string());
+
+        self.render("upload_page", &variables)
+    }
+
+    /// Get upload form component HTML
+    pub fn get_upload_form(&self) -> Result<String, AppError> {
+        self.render("upload_form", &HashMap::new())
     }
 }
 

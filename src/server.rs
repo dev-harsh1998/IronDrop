@@ -84,24 +84,63 @@ impl RateLimiter {
     }
 }
 
-/// Server statistics and monitoring
+/// Comprehensive server statistics and monitoring
+///
+/// Tracks both HTTP request statistics and file upload metrics with thread-safe
+/// concurrent access using Arc<Mutex<T>> for all counters.
+///
+/// # Request Statistics
+/// - Total requests processed (successful and failed)
+/// - Bytes served via downloads
+/// - Server uptime tracking
+///
+/// # Upload Statistics
+/// - Upload request counts and success rates
+/// - File upload counts and total bytes uploaded
+/// - Processing time metrics and concurrent upload tracking
+/// - Largest upload size tracking for capacity planning
+///
+/// All statistics are automatically reported every 5 minutes in the background
+/// and provide comprehensive insights into server usage and performance.
 #[derive(Default, Clone)]
 pub struct ServerStats {
+    // Request statistics
     pub total_requests: Arc<Mutex<u64>>,
     pub successful_requests: Arc<Mutex<u64>>,
     pub error_requests: Arc<Mutex<u64>>,
     pub bytes_served: Arc<Mutex<u64>>,
     pub start_time: Arc<Mutex<Option<Instant>>>,
+
+    // Upload statistics
+    pub total_uploads: Arc<Mutex<u64>>,
+    pub successful_uploads: Arc<Mutex<u64>>,
+    pub failed_uploads: Arc<Mutex<u64>>,
+    pub files_uploaded: Arc<Mutex<u64>>,
+    pub upload_bytes: Arc<Mutex<u64>>,
+    pub largest_upload: Arc<Mutex<u64>>,
+    pub concurrent_uploads: Arc<Mutex<u64>>,
+    pub upload_processing_times: Arc<Mutex<Vec<u64>>>,
 }
 
 impl ServerStats {
     pub fn new() -> Self {
         Self {
+            // Request statistics
             total_requests: Arc::new(Mutex::new(0)),
             successful_requests: Arc::new(Mutex::new(0)),
             error_requests: Arc::new(Mutex::new(0)),
             bytes_served: Arc::new(Mutex::new(0)),
             start_time: Arc::new(Mutex::new(Some(Instant::now()))),
+
+            // Upload statistics
+            total_uploads: Arc::new(Mutex::new(0)),
+            successful_uploads: Arc::new(Mutex::new(0)),
+            failed_uploads: Arc::new(Mutex::new(0)),
+            files_uploaded: Arc::new(Mutex::new(0)),
+            upload_bytes: Arc::new(Mutex::new(0)),
+            largest_upload: Arc::new(Mutex::new(0)),
+            concurrent_uploads: Arc::new(Mutex::new(0)),
+            upload_processing_times: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -149,6 +188,202 @@ impl ServerStats {
 
         (total, successful, errors, bytes, uptime)
     }
+
+    /// Record an upload request and track statistics
+    pub fn record_upload_request(
+        &self,
+        success: bool,
+        files_count: u64,
+        upload_bytes: u64,
+        processing_time_ms: u64,
+        largest_file: u64,
+    ) {
+        // Increment total uploads
+        if let Ok(mut total) = self.total_uploads.lock() {
+            *total += 1;
+        }
+
+        // Track success/failure
+        if success {
+            if let Ok(mut successful) = self.successful_uploads.lock() {
+                *successful += 1;
+            }
+        } else if let Ok(mut failed) = self.failed_uploads.lock() {
+            *failed += 1;
+        }
+
+        // Only record additional metrics for successful uploads
+        if success {
+            // Record number of files uploaded
+            if let Ok(mut files) = self.files_uploaded.lock() {
+                *files += files_count;
+            }
+
+            // Record total bytes uploaded
+            if let Ok(mut bytes) = self.upload_bytes.lock() {
+                *bytes += upload_bytes;
+            }
+
+            // Update largest upload if this is bigger
+            if let Ok(mut largest) = self.largest_upload.lock() {
+                if largest_file > *largest {
+                    *largest = largest_file;
+                }
+            }
+
+            // Record processing time (keep last 100 entries for average calculation)
+            if let Ok(mut times) = self.upload_processing_times.lock() {
+                times.push(processing_time_ms);
+                if times.len() > 100 {
+                    times.remove(0);
+                }
+            }
+        }
+    }
+
+    /// Track concurrent upload start
+    pub fn start_upload(&self) {
+        if let Ok(mut concurrent) = self.concurrent_uploads.lock() {
+            *concurrent += 1;
+        }
+    }
+
+    /// Track concurrent upload completion
+    pub fn finish_upload(&self) {
+        if let Ok(mut concurrent) = self.concurrent_uploads.lock() {
+            *concurrent = concurrent.saturating_sub(1);
+        }
+    }
+
+    /// Get upload statistics
+    pub fn get_upload_stats(&self) -> UploadStats {
+        let total_uploads = *self
+            .total_uploads
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let successful_uploads = *self
+            .successful_uploads
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let failed_uploads = *self
+            .failed_uploads
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let files_uploaded = *self
+            .files_uploaded
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let upload_bytes = *self
+            .upload_bytes
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let largest_upload = *self
+            .largest_upload
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let concurrent_uploads = *self
+            .concurrent_uploads
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+
+        let processing_times = self
+            .upload_processing_times
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let average_processing_time = if processing_times.is_empty() {
+            0.0
+        } else {
+            processing_times.iter().sum::<u64>() as f64 / processing_times.len() as f64
+        };
+
+        UploadStats {
+            total_uploads,
+            successful_uploads,
+            failed_uploads,
+            files_uploaded,
+            upload_bytes,
+            average_upload_size: if files_uploaded > 0 {
+                upload_bytes / files_uploaded
+            } else {
+                0
+            },
+            largest_upload,
+            concurrent_uploads,
+            average_processing_time,
+            success_rate: if total_uploads > 0 {
+                (successful_uploads as f64 / total_uploads as f64) * 100.0
+            } else {
+                0.0
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_upload_statistics_tracking() {
+        let stats = ServerStats::new();
+
+        // Verify initial state
+        let initial_stats = stats.get_upload_stats();
+        assert_eq!(initial_stats.total_uploads, 0);
+        assert_eq!(initial_stats.successful_uploads, 0);
+        assert_eq!(initial_stats.failed_uploads, 0);
+        assert_eq!(initial_stats.files_uploaded, 0);
+        assert_eq!(initial_stats.upload_bytes, 0);
+        assert_eq!(initial_stats.success_rate, 0.0);
+
+        // Test concurrent upload tracking
+        stats.start_upload();
+        stats.start_upload();
+        let concurrent_stats = stats.get_upload_stats();
+        assert_eq!(concurrent_stats.concurrent_uploads, 2);
+
+        // Test successful upload recording
+        stats.record_upload_request(true, 3, 1024, 150, 512);
+        stats.finish_upload();
+
+        stats.record_upload_request(true, 2, 2048, 200, 1024);
+        stats.finish_upload();
+
+        let success_stats = stats.get_upload_stats();
+        assert_eq!(success_stats.total_uploads, 2);
+        assert_eq!(success_stats.successful_uploads, 2);
+        assert_eq!(success_stats.failed_uploads, 0);
+        assert_eq!(success_stats.files_uploaded, 5);
+        assert_eq!(success_stats.upload_bytes, 3072);
+        assert_eq!(success_stats.largest_upload, 1024);
+        assert_eq!(success_stats.success_rate, 100.0);
+        assert_eq!(success_stats.average_upload_size, 3072 / 5);
+        assert_eq!(success_stats.average_processing_time, 175.0); // (150 + 200) / 2
+
+        // Test failed upload recording
+        stats.record_upload_request(false, 0, 0, 0, 0);
+
+        let final_stats = stats.get_upload_stats();
+        assert_eq!(final_stats.total_uploads, 3);
+        assert_eq!(final_stats.successful_uploads, 2);
+        assert_eq!(final_stats.failed_uploads, 1);
+        assert!((final_stats.success_rate - (200.0 / 3.0)).abs() < 0.01);
+    }
+}
+
+/// Upload statistics structure for reporting
+#[derive(Debug, Clone)]
+pub struct UploadStats {
+    pub total_uploads: u64,
+    pub successful_uploads: u64,
+    pub failed_uploads: u64,
+    pub files_uploaded: u64,
+    pub upload_bytes: u64,
+    pub average_upload_size: u64,
+    pub largest_upload: u64,
+    pub concurrent_uploads: u64,
+    pub average_processing_time: f64,
+    pub success_rate: f64,
 }
 
 /// Simple native thread pool implementation
@@ -279,8 +514,9 @@ pub fn run_server(
     info!("📊 Monitoring: Statistics collection enabled");
 
     let pool = ThreadPool::new(cli.threads);
-    let username = Arc::new(cli.username);
-    let password = Arc::new(cli.password);
+    let username = Arc::new(cli.username.clone());
+    let password = Arc::new(cli.password.clone());
+    let cli_arc = Arc::new(cli);
 
     // Start background cleanup task for rate limiter
     let rate_limiter_cleanup = rate_limiter.clone();
@@ -297,14 +533,29 @@ pub fn run_server(
         loop {
             thread::sleep(Duration::from_secs(300)); // Report every 5 minutes
             let (total, successful, errors, bytes, uptime) = stats_reporter.get_stats();
+            let upload_stats = stats_reporter.get_upload_stats();
+
             info!(
-                "📊 Stats: {} total requests ({} successful, {} errors), {:.2} MB served, uptime: {}s",
+                "📊 Request Stats: {} total ({} successful, {} errors), {:.2} MB served, uptime: {}s",
                 total,
                 successful,
                 errors,
                 bytes as f64 / 1024.0 / 1024.0,
                 uptime.as_secs()
             );
+
+            if upload_stats.total_uploads > 0 {
+                info!(
+                    "📤 Upload Stats: {} uploads ({:.1}% success), {} files, {:.2} MB uploaded, avg: {:.2} MB/file, {:.0}ms/upload, {} concurrent",
+                    upload_stats.total_uploads,
+                    upload_stats.success_rate,
+                    upload_stats.files_uploaded,
+                    upload_stats.upload_bytes as f64 / 1024.0 / 1024.0,
+                    upload_stats.average_upload_size as f64 / 1024.0 / 1024.0,
+                    upload_stats.average_processing_time,
+                    upload_stats.concurrent_uploads
+                );
+            }
         }
     });
 
@@ -342,14 +593,16 @@ pub fn run_server(
                     chunk_size,
                     rate_limiter,
                     stats,
+                    cli_ref,
                 ) = (
                     base_dir.clone(),
                     allowed_extensions.clone(),
                     username.clone(),
                     password.clone(),
-                    cli.chunk_size,
+                    cli_arc.chunk_size,
                     rate_limiter.clone(),
                     stats.clone(),
+                    cli_arc.clone(),
                 );
 
                 pool.execute(move || {
@@ -362,6 +615,7 @@ pub fn run_server(
                         &password,
                         chunk_size,
                         &stats,
+                        Some(cli_ref.as_ref()),
                     );
 
                     // Release rate limit connection
@@ -385,14 +639,27 @@ pub fn run_server(
 
     // Final stats report
     let (total, successful, errors, bytes, uptime) = stats.get_stats();
+    let upload_stats = stats.get_upload_stats();
+
     info!(
-        "📊 Final stats: {} total requests ({} successful, {} errors), {:.2} MB served, uptime: {}s",
+        "📊 Final Request Stats: {} total ({} successful, {} errors), {:.2} MB served, uptime: {}s",
         total,
         successful,
         errors,
         bytes as f64 / 1024.0 / 1024.0,
         uptime.as_secs()
     );
+
+    if upload_stats.total_uploads > 0 {
+        info!(
+            "📤 Final Upload Stats: {} uploads ({:.1}% success), {} files, {:.2} MB uploaded, largest: {:.2} MB",
+            upload_stats.total_uploads,
+            upload_stats.success_rate,
+            upload_stats.files_uploaded,
+            upload_stats.upload_bytes as f64 / 1024.0 / 1024.0,
+            upload_stats.largest_upload as f64 / 1024.0 / 1024.0
+        );
+    }
 
     info!("✅ Server shut down gracefully.");
     Ok(())
@@ -409,6 +676,7 @@ fn handle_client_with_stats(
     password: &Arc<Option<String>>,
     chunk_size: usize,
     stats: &ServerStats,
+    cli_config: Option<&crate::cli::Cli>,
 ) -> Result<(), AppError> {
     let start = Instant::now();
     let bytes_sent = 0u64;
@@ -422,6 +690,8 @@ fn handle_client_with_stats(
             username,
             password,
             chunk_size,
+            cli_config,
+            Some(stats),
         );
     }));
 

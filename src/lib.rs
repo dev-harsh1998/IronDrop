@@ -8,9 +8,11 @@ pub mod cli;
 pub mod error;
 pub mod fs;
 pub mod http;
+pub mod multipart;
 pub mod response;
 pub mod server;
 pub mod templates;
+pub mod upload;
 pub mod utils;
 
 use crate::cli::Cli;
@@ -39,6 +41,12 @@ pub fn run() {
     env_logger::init();
 
     log::debug!("Log level set to: {log_level}");
+
+    // Validate CLI configuration before starting the server
+    if let Err(e) = cli.validate() {
+        error!("Configuration validation error: {e}");
+        std::process::exit(1);
+    }
 
     if let Err(e) = server::run_server(cli, None, None) {
         error!("Server error: {e}");

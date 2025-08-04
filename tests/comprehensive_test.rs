@@ -34,7 +34,7 @@ impl TestServer {
         let large_file = dir.path().join("large.txt");
         let mut large = File::create(&large_file).unwrap();
         for i in 0..1000 {
-            writeln!(large, "Line {} of a large file for testing", i).unwrap();
+            writeln!(large, "Line {i} of a large file for testing").unwrap();
         }
 
         // Create subdirectory
@@ -55,6 +55,9 @@ impl TestServer {
             detailed_logging: false,
             username,
             password,
+            enable_upload: false,
+            max_upload_size: 10240,
+            upload_dir: None,
         };
 
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -62,7 +65,7 @@ impl TestServer {
 
         let server_handle = thread::spawn(move || {
             if let Err(e) = run_server(cli, Some(shutdown_rx), Some(addr_tx)) {
-                eprintln!("Server thread failed: {}", e);
+                eprintln!("Server thread failed: {e}");
             }
         });
 
@@ -97,9 +100,9 @@ impl HttpClient {
     fn get_with_auth(url: &str, username: &str, password: &str) -> HttpResponse {
         let credentials = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
-            format!("{}:{}", username, password),
+            format!("{username}:{password}"),
         );
-        let auth_header = format!("Basic {}", credentials);
+        let auth_header = format!("Basic {credentials}");
         Self::request("GET", url, Some(&auth_header), None)
     }
 
@@ -119,10 +122,10 @@ impl HttpClient {
             .set_read_timeout(Some(Duration::from_secs(10)))
             .unwrap();
 
-        let mut request = format!("{} {} HTTP/1.1\r\nHost: {}\r\n", method, path, host_port);
+        let mut request = format!("{method} {path} HTTP/1.1\r\nHost: {host_port}\r\n");
 
         if let Some(auth_header) = auth {
-            request.push_str(&format!("Authorization: {}\r\n", auth_header));
+            request.push_str(&format!("Authorization: {auth_header}\r\n"));
         }
 
         if let Some(body_content) = body {
@@ -244,7 +247,7 @@ fn test_beautiful_error_pages() {
         .contains("text/html"));
     assert!(response.body.contains("404"));
     assert!(response.body.contains("Not Found"));
-    assert!(response.body.contains("irondrop/2.0.0"));
+    assert!(response.body.contains("irondrop/2.5.0"));
 
     // Check for modular error page template structure
     assert!(
@@ -380,7 +383,7 @@ fn test_enhanced_security_headers() {
         .headers
         .get("server")
         .unwrap()
-        .contains("irondrop/2.0.0"));
+        .contains("irondrop/2.5.0"));
     assert!(response.headers.contains_key("cache-control"));
     assert!(response.headers.contains_key("accept-ranges"));
 }
@@ -522,7 +525,7 @@ fn test_http_compliance() {
     assert!(response.headers.contains_key("server"));
 
     // Verify server identification
-    assert_eq!(response.headers.get("server").unwrap(), "irondrop/2.0.0");
+    assert_eq!(response.headers.get("server").unwrap(), "irondrop/2.5.0");
 }
 
 #[test]
