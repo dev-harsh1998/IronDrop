@@ -1,4 +1,8 @@
-# Simple Download Server (hdl_sv)
+<div align="center">
+  <img src="irondrop-logo.png" alt="IronDrop Logo" width="200"/>
+  
+  # IronDrop
+</div>
 
 A lightweight, high-performance file download server written in Rust featuring a **modular template architecture** and **professional UI design**. Offers secure, cross-platform file sharing with advanced monitoring, comprehensive security features, and a modern web interface. Every component has been designed for clarity, reliability, and developer friendliness with **zero external dependencies**.
 
@@ -55,23 +59,23 @@ A lightweight, high-performance file download server written in Rust featuring a
 
 ```bash
 # Clone the repository
-git clone https://github.com/dev-harsh1998/SimpleDownloadServer.git
-cd SimpleDownloadServer
+git clone https://github.com/dev-harsh1998/IronDrop.git
+cd IronDrop
 
 # Build in release mode
 cargo build --release
 ```
 
-The resulting binary is `target/release/hdl_sv`; move it into any directory on your `$PATH`.
+The resulting binary is `target/release/irondrop`; move it into any directory on your `$PATH`.
 
 ```bash
-sudo mv target/release/hdl_sv /usr/local/bin/
+sudo mv target/release/irondrop /usr/local/bin/
 ```
 
 ### Windows
 
 ```powershell
-move target\release\hdl_sv.exe C:\Tools\
+move target\release\irondrop.exe C:\Tools\
 ```
 
 ---
@@ -81,7 +85,7 @@ move target\release\hdl_sv.exe C:\Tools\
 Serve the current directory on the default port:
 
 ```bash
-hdl_sv -d .
+irondrop -d .
 ```
 
 Open a browser at [http://127.0.0.1:8080](http://127.0.0.1:8080) and you will see the auto-generated directory index.
@@ -107,12 +111,12 @@ Open a browser at [http://127.0.0.1:8080](http://127.0.0.1:8080) and you will se
 
 | Scenario | Command | Features |
 |----------|---------|----------|
-| **Public File Share** | `hdl_sv -d /srv/files -p 3000 -l 0.0.0.0` | Professional UI, rate limiting, health monitoring |
-| **Document Repository** | `hdl_sv -d ./docs -a "*.pdf,*.png,*.jpg"` | Filtered downloads, file type indicators |
-| **High-Performance Server** | `hdl_sv -d ./big -t 16 -c 8192` | Custom thread pool, optimized streaming |
-| **Secure Corporate Share** | `hdl_sv -d ./private --username alice --password s3cret` | Authentication, audit logging, professional design |
-| **Development Server** | `hdl_sv -d . -v --detailed-logging` | Debug logging, template development, hot reload |
-| **Production Monitoring** | `hdl_sv -d /data -l 0.0.0.0` + health checks at `/_health` | Statistics, uptime monitoring, rate limiting |
+| **Public File Share** | `irondrop -d /srv/files -p 3000 -l 0.0.0.0` | Professional UI, rate limiting, health monitoring |
+| **Document Repository** | `irondrop -d ./docs -a "*.pdf,*.png,*.jpg"` | Filtered downloads, file type indicators |
+| **High-Performance Server** | `irondrop -d ./big -t 16 -c 8192` | Custom thread pool, optimized streaming |
+| **Secure Corporate Share** | `irondrop -d ./private --username alice --password s3cret` | Authentication, audit logging, professional design |
+| **Development Server** | `irondrop -d . -v --detailed-logging` | Debug logging, template development, hot reload |
+| **Production Monitoring** | `irondrop -d /data -l 0.0.0.0` + health checks at `/_health` | Statistics, uptime monitoring, rate limiting |
 
 ---
 
@@ -294,8 +298,8 @@ Developers can launch the server with live `debug` logs by exporting `RUST_LOG=d
 
 1. **Setup Development Environment**
    ```bash
-   git clone https://github.com/dev-harsh1998/SimpleDownloadServer.git
-   cd SimpleDownloadServer
+   git clone https://github.com/dev-harsh1998/IronDrop.git
+   cd IronDrop
    cargo build
    ```
 
@@ -321,7 +325,7 @@ Developers can launch the server with live `debug` logs by exporting `RUST_LOG=d
 
 ### Current Contributors
 
-We're proud to acknowledge our contributors who have helped make SimpleDownloadServer a reliable and feature-rich project:
+We're proud to acknowledge our contributors who have helped make IronDrop a reliable and feature-rich project:
 
 | Name              | GitHub Profile | Primary Contributions                            |
 |-------------------|----------------|--------------------------------------------------|
@@ -332,7 +336,7 @@ We're proud to acknowledge our contributors who have helped make SimpleDownloadS
 
 ### 🧪 **Test Coverage & Quality Initiative**
 
-**We strongly believe that robust testing is the foundation of reliable software.** To maintain and improve the quality of SimpleDownloadServer, we have a special focus on test coverage and encourage all contributors to prioritize testing.
+**We strongly believe that robust testing is the foundation of reliable software.** To maintain and improve the quality of IronDrop, we have a special focus on test coverage and encourage all contributors to prioritize testing.
 
 #### 🎯 **What We're Looking For:**
 
@@ -551,7 +555,7 @@ The modular template system allows easy customization:
 
 ## 📜 License
 
-Simple Download Server is distributed under the **GPL-3.0** license; see `LICENSE` for details.
+IronDrop is distributed under the **GPL-3.0** license; see `LICENSE` for details.
 
 ---
 

@@ -21,8 +21,8 @@ mkdir -p "$TEST_DIR/subdir"
 echo "nested file" > "$TEST_DIR/subdir/nested.txt"
 
 # Copy executable to different locations
-TEMP_EXE="/tmp/hdl_sv_portable_test"
-cp target/release/hdl_sv "$TEMP_EXE"
+TEMP_EXE="/tmp/irondrop_portable_test"
+cp target/release/irondrop "$TEMP_EXE"
 chmod +x "$TEMP_EXE"
 
 echo "✅ Executable copied to: $TEMP_EXE"

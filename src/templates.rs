@@ -11,6 +11,11 @@ const ERROR_PAGE_HTML: &str = include_str!("../templates/error/page.html");
 const ERROR_STYLES_CSS: &str = include_str!("../templates/error/styles.css");
 const ERROR_SCRIPT_JS: &str = include_str!("../templates/error/script.js");
 
+// Embed favicon files at compile time
+const FAVICON_ICO: &[u8] = include_bytes!("../favicon.ico");
+const FAVICON_16X16_PNG: &[u8] = include_bytes!("../favicon-16x16.png");
+const FAVICON_32X32_PNG: &[u8] = include_bytes!("../favicon-32x32.png");
+
 /// Template loader and renderer for modular HTML templates
 pub struct TemplateEngine {
     templates: HashMap<String, String>,
@@ -50,6 +55,16 @@ impl TemplateEngine {
             "directory/script.js" => Some((DIRECTORY_SCRIPT_JS, "application/javascript")),
             "error/styles.css" => Some((ERROR_STYLES_CSS, "text/css")),
             "error/script.js" => Some((ERROR_SCRIPT_JS, "application/javascript")),
+            _ => None,
+        }
+    }
+
+    /// Get embedded favicon as binary data
+    pub fn get_favicon(&self, path: &str) -> Option<(&'static [u8], &'static str)> {
+        match path {
+            "favicon.ico" => Some((FAVICON_ICO, "image/x-icon")),
+            "favicon-16x16.png" => Some((FAVICON_16X16_PNG, "image/png")),
+            "favicon-32x32.png" => Some((FAVICON_32X32_PNG, "image/png")),
             _ => None,
         }
     }

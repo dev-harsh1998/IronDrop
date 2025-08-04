@@ -1,4 +1,4 @@
-/// # Simple Download Server
+/// # IronDrop
 ///
 /// A lightweight, configurable file download server written in Rust.
 ///

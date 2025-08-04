@@ -1,7 +1,7 @@
 //! Integration tests for the file server.
 
-use hdl_sv::cli::Cli;
-use hdl_sv::server::run_server;
+use irondrop::cli::Cli;
+use irondrop::server::run_server;
 use reqwest::blocking::Client;
 use reqwest::StatusCode;
 use std::fs::File;

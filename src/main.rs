@@ -1,4 +1,4 @@
-use hdl_sv::run;
+use irondrop::run;
 
 fn main() {
     run();

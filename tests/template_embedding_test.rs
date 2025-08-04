@@ -1,4 +1,4 @@
-use hdl_sv::templates::TemplateEngine;
+use irondrop::templates::TemplateEngine;
 use std::collections::HashMap;
 
 /// Test that templates are properly embedded and can render without filesystem access
@@ -205,5 +205,50 @@ fn test_error_page_rendering() {
     assert!(
         html.contains("/_static/error/script.js"),
         "Should reference error JS"
+    );
+}
+
+/// Test that favicon files are properly embedded and accessible
+#[test]
+fn test_embedded_favicon_functionality() {
+    let engine = TemplateEngine::new();
+
+    // Test favicon.ico
+    let (favicon_ico, content_type_ico) = engine
+        .get_favicon("favicon.ico")
+        .expect("favicon.ico should be embedded");
+    assert_eq!(content_type_ico, "image/x-icon");
+    assert!(!favicon_ico.is_empty(), "favicon.ico should have content");
+
+    // Test favicon-16x16.png
+    let (favicon_16, content_type_16) = engine
+        .get_favicon("favicon-16x16.png")
+        .expect("favicon-16x16.png should be embedded");
+    assert_eq!(content_type_16, "image/png");
+    assert!(!favicon_16.is_empty(), "16x16 PNG should have content");
+
+    // Test favicon-32x32.png
+    let (favicon_32, content_type_32) = engine
+        .get_favicon("favicon-32x32.png")
+        .expect("favicon-32x32.png should be embedded");
+    assert_eq!(content_type_32, "image/png");
+    assert!(!favicon_32.is_empty(), "32x32 PNG should have content");
+
+    // Test PNG file signature validation
+    assert_eq!(
+        &favicon_16[0..4],
+        &[137, 80, 78, 71],
+        "16x16 PNG should have valid signature"
+    );
+    assert_eq!(
+        &favicon_32[0..4],
+        &[137, 80, 78, 71],
+        "32x32 PNG should have valid signature"
+    );
+
+    // Test non-existent favicon
+    assert!(
+        engine.get_favicon("nonexistent.ico").is_none(),
+        "Should return None for non-existent favicon"
     );
 }

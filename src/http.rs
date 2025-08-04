@@ -29,6 +29,7 @@ pub struct Response {
 
 pub enum ResponseBody {
     Text(String),
+    Binary(Vec<u8>),
     Stream(FileDetails),
 }
 
@@ -267,6 +268,33 @@ fn handle_static_asset(path: &str) -> Result<Response, AppError> {
     })
 }
 
+/// Handle favicon requests using embedded favicon files
+fn handle_favicon_request(path: &str) -> Result<Response, AppError> {
+    use crate::templates::TemplateEngine;
+
+    // Strip leading slash for favicon lookup
+    let favicon_path = path.strip_prefix('/').unwrap_or(path);
+
+    let engine = TemplateEngine::new();
+    let (content, content_type) = engine.get_favicon(favicon_path).ok_or(AppError::NotFound)?;
+
+    Ok(Response {
+        status_code: 200,
+        status_text: "OK".to_string(),
+        headers: {
+            let mut map = HashMap::new();
+            map.insert("Content-Type".to_string(), content_type.to_string());
+            map.insert(
+                "Cache-Control".to_string(),
+                "public, max-age=86400".to_string(),
+            ); // Cache for 24 hours
+            map.insert("Content-Length".to_string(), content.len().to_string());
+            map
+        },
+        body: ResponseBody::Binary(content.to_vec()),
+    })
+}
+
 /// Create a health check response with server status
 fn create_health_check_response() -> Response {
     let timestamp = std::time::SystemTime::now()
@@ -277,7 +305,7 @@ fn create_health_check_response() -> Response {
     let health_info = format!(
         r#"{{
     "status": "healthy",
-    "service": "hdl_sv",
+    "service": "irondrop",
     "version": "2.0.0",
     "timestamp": {timestamp},
     "features": [
@@ -336,6 +364,14 @@ fn route_request(
     // Handle static assets for templates
     if request.path.starts_with("/_static/") {
         return handle_static_asset(&request.path);
+    }
+
+    // Handle favicon requests
+    if request.path == "/favicon.ico"
+        || request.path == "/favicon-16x16.png"
+        || request.path == "/favicon-32x32.png"
+    {
+        return handle_favicon_request(&request.path);
     }
 
     if request.method != "GET" {
@@ -446,7 +482,7 @@ fn send_response(
     );
 
     // Add standard server headers first
-    response_str.push_str("Server: hdl_sv/2.0.0\r\n");
+    response_str.push_str("Server: irondrop/2.0.0\r\n");
     response_str.push_str("Connection: close\r\n");
 
     // Add response-specific headers
@@ -454,12 +490,16 @@ fn send_response(
         response_str.push_str(&format!("{key}: {value}\r\n"));
     }
 
-    // Calculate and add content length for text responses
+    // Calculate and add content length for text and binary responses
     let body_bytes = match &response.body {
         ResponseBody::Text(text) => {
             let bytes = text.as_bytes();
             response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
             bytes.to_vec()
+        }
+        ResponseBody::Binary(bytes) => {
+            response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
+            bytes.clone()
         }
         ResponseBody::Stream(file_details) => {
             response_str.push_str(&format!("Content-Length: {}\r\n", file_details.size));
@@ -473,7 +513,7 @@ fn send_response(
 
     // Send body
     match response.body {
-        ResponseBody::Text(_) => {
+        ResponseBody::Text(_) | ResponseBody::Binary(_) => {
             stream.write_all(&body_bytes)?;
         }
         ResponseBody::Stream(mut file_details) => {

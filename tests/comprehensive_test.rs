@@ -1,9 +1,9 @@
 //! Comprehensive tests for the enhanced file server without external dependencies.
 
-use hdl_sv::cli::Cli;
-use hdl_sv::server::run_server;
+use irondrop::cli::Cli;
+use irondrop::server::run_server;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
@@ -149,29 +149,41 @@ impl HttpClient {
             .unwrap();
 
         let mut headers = std::collections::HashMap::new();
-        let mut body_content = String::new();
         let mut reading_headers = true;
 
-        for line in reader.lines() {
-            let line = line.unwrap();
-            if reading_headers {
-                if line.trim().is_empty() {
-                    reading_headers = false;
-                    continue;
-                }
-                if let Some((key, value)) = line.split_once(": ") {
-                    headers.insert(key.to_lowercase(), value.to_string());
-                }
-            } else {
-                body_content.push_str(&line);
-                body_content.push('\n');
+        // Read headers line by line
+        let mut header_line = String::new();
+        while reading_headers {
+            header_line.clear();
+            reader.read_line(&mut header_line).unwrap();
+            if header_line.trim().is_empty() {
+                reading_headers = false;
+                continue;
+            }
+            if let Some((key, value)) = header_line.trim().split_once(": ") {
+                headers.insert(key.to_lowercase(), value.to_string());
             }
         }
+
+        // Read body as bytes and convert to string if possible
+        let mut body_bytes = Vec::new();
+        reader.read_to_end(&mut body_bytes).unwrap();
+
+        // Try to convert to string, but fall back to a placeholder for binary data
+        let body_content = match String::from_utf8(body_bytes.clone()) {
+            Ok(text) => text,
+            Err(_) => {
+                // For binary data, we'll create a placeholder string that includes the bytes
+                // This allows tests to verify the binary content exists
+                format!("BINARY_DATA_{}_BYTES", body_bytes.len())
+            }
+        };
 
         HttpResponse {
             status_code,
             headers,
-            body: body_content.trim_end_matches('\n').to_string(),
+            body: body_content,
+            body_bytes,
         }
     }
 }
@@ -180,6 +192,7 @@ struct HttpResponse {
     status_code: u16,
     headers: std::collections::HashMap<String, String>,
     body: String,
+    body_bytes: Vec<u8>,
 }
 
 #[test]
@@ -231,7 +244,7 @@ fn test_beautiful_error_pages() {
         .contains("text/html"));
     assert!(response.body.contains("404"));
     assert!(response.body.contains("Not Found"));
-    assert!(response.body.contains("hdl_sv/2.0.0"));
+    assert!(response.body.contains("irondrop/2.0.0"));
 
     // Check for modular error page template structure
     assert!(
@@ -325,7 +338,7 @@ fn test_health_check_endpoint() {
         .unwrap()
         .contains("application/json"));
     assert!(response.body.contains("\"status\": \"healthy\""));
-    assert!(response.body.contains("\"service\": \"hdl_sv\""));
+    assert!(response.body.contains("\"service\": \"irondrop\""));
     assert!(response.body.contains("rate_limiting"));
     assert!(response.body.contains("enhanced_security"));
 }
@@ -367,7 +380,7 @@ fn test_enhanced_security_headers() {
         .headers
         .get("server")
         .unwrap()
-        .contains("hdl_sv/2.0.0"));
+        .contains("irondrop/2.0.0"));
     assert!(response.headers.contains_key("cache-control"));
     assert!(response.headers.contains_key("accept-ranges"));
 }
@@ -509,5 +522,165 @@ fn test_http_compliance() {
     assert!(response.headers.contains_key("server"));
 
     // Verify server identification
-    assert_eq!(response.headers.get("server").unwrap(), "hdl_sv/2.0.0");
+    assert_eq!(response.headers.get("server").unwrap(), "irondrop/2.0.0");
+}
+
+#[test]
+fn test_favicon_ico_serving() {
+    let server = TestServer::new(None, None);
+    let url = format!("http://{}/favicon.ico", server.addr);
+    let response = HttpClient::get(&url);
+
+    assert_eq!(response.status_code, 200);
+    assert_eq!(
+        response.headers.get("content-type").unwrap(),
+        "image/x-icon"
+    );
+    assert!(response.headers.contains_key("content-length"));
+
+    // Verify cache headers
+    assert_eq!(
+        response.headers.get("cache-control").unwrap(),
+        "public, max-age=86400"
+    );
+
+    // Verify binary content exists (favicon should not be empty)
+    assert!(!response.body.is_empty());
+
+    // Basic validation - ICO files should have binary content
+    assert!(response.body_bytes.len() > 4, "Favicon should have content");
+
+    // For binary data, the body should be a placeholder
+    assert!(
+        response.body.starts_with("BINARY_DATA_"),
+        "Should be binary data"
+    );
+}
+
+#[test]
+fn test_favicon_png_16x16() {
+    let server = TestServer::new(None, None);
+    let url = format!("http://{}/favicon-16x16.png", server.addr);
+    let response = HttpClient::get(&url);
+
+    assert_eq!(response.status_code, 200);
+    assert_eq!(response.headers.get("content-type").unwrap(), "image/png");
+    assert!(response.headers.contains_key("content-length"));
+
+    // Verify cache headers for PNG
+    assert_eq!(
+        response.headers.get("cache-control").unwrap(),
+        "public, max-age=86400"
+    );
+
+    // Verify binary content exists
+    assert!(!response.body.is_empty());
+
+    // Basic PNG validation - PNG files start with specific signature
+    assert!(response.body_bytes.len() > 8, "PNG should have content");
+    // PNG signature: 137 80 78 71 13 10 26 10
+    assert_eq!(
+        &response.body_bytes[0..4],
+        &[137, 80, 78, 71],
+        "Should be valid PNG signature"
+    );
+}
+
+#[test]
+fn test_favicon_png_32x32() {
+    let server = TestServer::new(None, None);
+    let url = format!("http://{}/favicon-32x32.png", server.addr);
+    let response = HttpClient::get(&url);
+
+    assert_eq!(response.status_code, 200);
+    assert_eq!(response.headers.get("content-type").unwrap(), "image/png");
+    assert!(response.headers.contains_key("content-length"));
+
+    // Verify binary content exists
+    assert!(!response.body.is_empty());
+
+    // Basic PNG validation
+    assert!(response.body_bytes.len() > 8, "PNG should have content");
+    assert_eq!(
+        &response.body_bytes[0..4],
+        &[137, 80, 78, 71],
+        "Should be valid PNG signature"
+    );
+}
+
+#[test]
+fn test_favicon_not_found() {
+    let server = TestServer::new(None, None);
+    let url = format!("http://{}/favicon-invalid.ico", server.addr);
+    let response = HttpClient::get(&url);
+
+    // Should return 404 for non-existent favicon variants
+    assert_eq!(response.status_code, 404);
+}
+
+#[test]
+fn test_html_includes_favicon_links() {
+    let server = TestServer::new(None, None);
+    let url = format!("http://{}/", server.addr);
+    let response = HttpClient::get(&url);
+
+    assert_eq!(response.status_code, 200);
+    assert!(response
+        .headers
+        .get("content-type")
+        .unwrap()
+        .contains("text/html"));
+
+    // Check that HTML includes favicon links
+    assert!(
+        response.body.contains("favicon.ico"),
+        "HTML should link to favicon.ico"
+    );
+    assert!(
+        response.body.contains("favicon-32x32.png"),
+        "HTML should link to 32x32 PNG"
+    );
+    assert!(
+        response.body.contains("favicon-16x16.png"),
+        "HTML should link to 16x16 PNG"
+    );
+
+    // Check proper link tag structure
+    assert!(response
+        .body
+        .contains(r#"<link rel="icon" type="image/x-icon" href="/favicon.ico">"#));
+    assert!(response
+        .body
+        .contains(r#"<link rel="icon" type="image/png" sizes="32x32""#));
+    assert!(response
+        .body
+        .contains(r#"<link rel="icon" type="image/png" sizes="16x16""#));
+}
+
+#[test]
+fn test_error_page_includes_favicon_links() {
+    let server = TestServer::new(None, None);
+    let url = format!("http://{}/nonexistent-file.txt", server.addr);
+    let response = HttpClient::get(&url);
+
+    assert_eq!(response.status_code, 404);
+    assert!(response
+        .headers
+        .get("content-type")
+        .unwrap()
+        .contains("text/html"));
+
+    // Check that error pages also include favicon links
+    assert!(
+        response.body.contains("favicon.ico"),
+        "Error page should link to favicon.ico"
+    );
+    assert!(
+        response.body.contains("favicon-32x32.png"),
+        "Error page should link to 32x32 PNG"
+    );
+    assert!(
+        response.body.contains("favicon-16x16.png"),
+        "Error page should link to 16x16 PNG"
+    );
 }
