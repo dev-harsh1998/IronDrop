@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Server Monitor</title>
+  <link rel="icon" href="/favicon.ico" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui,-apple-system,Arial,sans-serif; margin: 2rem; background:#0f1115; color:#e6e6e6; }
+    h1 { margin-top:0; font-size:1.9rem; }
+    .grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); margin-top:1rem; }
+    .card { background:#1a1d23; border:1px solid #2a2f37; border-radius:10px; padding:1rem 1.1rem; box-shadow:0 2px 4px rgba(0,0,0,0.4); }
+    .card h2 { margin:0 0 .6rem; font-size:1.05rem; letter-spacing:.5px; font-weight:600; color:#9cc8ff; }
+    table { width:100%; border-collapse:collapse; font-size:.85rem; }
+    th, td { padding:.35rem .5rem; text-align:left; border-bottom:1px solid #2a2f37; vertical-align:top; }
+    th { font-weight:600; color:#b8dafc; }
+    tr:last-child td { border-bottom:none; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.8rem; }
+    footer { margin-top:2rem; font-size:.7rem; opacity:.5; }
+    .ok { color:#4ade80; }
+    .warn { color:#fbbf24; }
+    .err { color:#f87171; }
+  </style>
+</head>
+<body>
+  <h1>Server Monitor</h1>
+  <div id="status" class="mono"></div>
+  <div class="grid">
+    <div class="card">
+      <h2>Requests</h2>
+      <table>
+        <tr><th>Total</th><td id="req_total">-</td></tr>
+        <tr><th>Successful</th><td id="req_success">-</td></tr>
+        <tr><th>Errors</th><td id="req_errors">-</td></tr>
+        <tr><th>Success Rate</th><td id="req_success_rate">-</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Downloads</h2>
+      <table>
+        <tr><th>Bytes Served</th><td id="bytes_served">-</td></tr>
+        <tr><th>Served (MB)</th><td id="mb_served">-</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Uploads</h2>
+      <table>
+        <tr><th>Total Uploads</th><td id="up_total">-</td></tr>
+        <tr><th>Successful</th><td id="up_success">-</td></tr>
+        <tr><th>Failed</th><td id="up_failed">-</td></tr>
+        <tr><th>Files Uploaded</th><td id="files_uploaded">-</td></tr>
+        <tr><th>Bytes Uploaded</th><td id="up_bytes">-</td></tr>
+        <tr><th>Uploaded (MB)</th><td id="up_mb">-</td></tr>
+        <tr><th>Average File Size</th><td id="avg_file_size">-</td></tr>
+        <tr><th>Largest Upload</th><td id="largest_upload">-</td></tr>
+        <tr><th>Concurrent Uploads</th><td id="concurrent_uploads">-</td></tr>
+        <tr><th>Avg Processing (ms)</th><td id="avg_processing">-</td></tr>
+        <tr><th>Upload Success %</th><td id="upload_success_rate">-</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Uptime</h2>
+      <table>
+        <tr><th>Seconds</th><td id="uptime_secs">-</td></tr>
+        <tr><th>Pretty</th><td id="uptime_pretty">-</td></tr>
+        <tr><th>Last Updated</th><td id="last_updated">-</td></tr>
+      </table>
+    </div>
+  </div>
+  <footer>Auto-refreshes every 30s. &copy; IronDrop Monitor</footer>
+  <script>
+    function humanBytes(b){ if(b<1024) return b+" B"; const u=['KB','MB','GB','TB']; let i=-1; do{ b/=1024; i++; }while(b>=1024 && i<u.length-1); return b.toFixed(2)+' '+u[i]; }
+    function prettyUptime(s){ const d=Math.floor(s/86400); s%=86400; const h=Math.floor(s/3600); s%=3600; const m=Math.floor(s/60); const sec=s%60; let out=[]; if(d) out.push(d+'d'); if(h) out.push(h+'h'); if(m) out.push(m+'m'); out.push(sec+'s'); return out.join(' '); }
+    async function load(){
+      try{
+        const res=await fetch('/monitor?json=1');
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const data=await res.json();
+        const r=data.requests, u=data.uploads, d=data.downloads;
+        document.getElementById('req_total').textContent=r.total;
+        document.getElementById('req_success').textContent=r.successful;
+        document.getElementById('req_errors').textContent=r.errors;
+        const successRate = r.total? ((r.successful/r.total)*100).toFixed(2)+'%':'0%';
+        document.getElementById('req_success_rate').textContent=successRate;
+        document.getElementById('bytes_served').textContent=d.bytes_served;
+        document.getElementById('mb_served').textContent=(d.bytes_served/1024/1024).toFixed(2);
+        document.getElementById('up_total').textContent=u.total_uploads;
+        document.getElementById('up_success').textContent=u.successful_uploads;
+        document.getElementById('up_failed').textContent=u.failed_uploads;
+        document.getElementById('files_uploaded').textContent=u.files_uploaded;
+        document.getElementById('up_bytes').textContent=u.upload_bytes;
+        document.getElementById('up_mb').textContent=(u.upload_bytes/1024/1024).toFixed(2);
+        document.getElementById('avg_file_size').textContent=humanBytes(u.average_upload_size);
+        document.getElementById('largest_upload').textContent=humanBytes(u.largest_upload);
+        document.getElementById('concurrent_uploads').textContent=u.concurrent_uploads;
+        document.getElementById('avg_processing').textContent=u.average_processing_ms?.toFixed?u.average_processing_ms.toFixed(1):u.average_processing_ms;
+        document.getElementById('upload_success_rate').textContent=u.success_rate.toFixed?u.success_rate.toFixed(2)+'%':u.success_rate+'%';
+        document.getElementById('uptime_secs').textContent=data.uptime_secs;
+        document.getElementById('uptime_pretty').textContent=prettyUptime(data.uptime_secs);
+        document.getElementById('last_updated').textContent=new Date().toLocaleTimeString();
+        document.getElementById('status').textContent='OK';
+        document.getElementById('status').className='mono ok';
+      }catch(e){
+        document.getElementById('status').textContent='Error: '+e.message;
+        document.getElementById('status').className='mono err';
+      }
+    }
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>

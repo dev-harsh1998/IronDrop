@@ -106,6 +106,16 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 - Extensive test coverage for security scenarios
 
 ### 🔄 [Multipart Parser Documentation](./MULTIPART_README.md)
+### 📊 [Monitoring Guide](./MONITORING.md)
+**Audience**: Operators, Observability Engineers, SREs  
+**Purpose**: Details on `/monitor`, health endpoints, data model, integration patterns
+
+**Contents:**
+- `/monitor` HTML dashboard behavior and refresh model
+- `/monitor?json=1` schema and field semantics
+- Health vs status endpoint differences
+- Example automation + jq scraping patterns
+- Extensibility roadmap (Prometheus, per-endpoint stats)
 **Audience**: Backend Developers, Protocol Implementers  
 **Purpose**: RFC 7578 compliant multipart/form-data parser details
 

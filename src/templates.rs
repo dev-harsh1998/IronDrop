@@ -14,6 +14,7 @@ const UPLOAD_PAGE_HTML: &str = include_str!("../templates/upload/page.html");
 const UPLOAD_STYLES_CSS: &str = include_str!("../templates/upload/styles.css");
 const UPLOAD_SCRIPT_JS: &str = include_str!("../templates/upload/script.js");
 const UPLOAD_FORM_HTML: &str = include_str!("../templates/upload/form.html");
+const MONITOR_PAGE_HTML: &str = include_str!("../templates/monitor/page.html");
 
 // Embed favicon files at compile time
 const FAVICON_ICO: &[u8] = include_bytes!("../favicon.ico");
@@ -44,6 +45,7 @@ impl TemplateEngine {
         templates.insert("error_page".to_string(), ERROR_PAGE_HTML.to_string());
         templates.insert("upload_page".to_string(), UPLOAD_PAGE_HTML.to_string());
         templates.insert("upload_form".to_string(), UPLOAD_FORM_HTML.to_string());
+        templates.insert("monitor_page".to_string(), MONITOR_PAGE_HTML.to_string());
 
         Self { templates }
     }
@@ -183,6 +185,11 @@ impl TemplateEngine {
         variables.insert("PATH".to_string(), path.to_string());
 
         self.render("upload_page", &variables)
+    }
+
+    /// Render monitor page (variables currently unused, placeholder for future extension)
+    pub fn render_monitor_page(&self) -> Result<String, AppError> {
+        self.render("monitor_page", &HashMap::new())
     }
 
     /// Get upload form component HTML
