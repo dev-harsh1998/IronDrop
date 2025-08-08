@@ -1,125 +1,37 @@
+/* Directory Listing Specific Styles - Extends Base */
 /* Professional Blackish Grey Design */
-:root {
-    --bg-primary: #0a0a0a;           /* Deep black */
-    --bg-secondary: #1a1a1a;         /* Dark grey */
-    --bg-tertiary: #2a2a2a;          /* Medium grey */
-    --bg-glass: rgba(26, 26, 26, 0.4);
-    --text-primary: #e5e5e5;         /* Light grey */
-    --text-secondary: #b0b0b0;       /* Medium grey text */
-    --text-accent: #ffffff;          /* Pure white accent */
-    --text-muted: #666666;           /* Muted grey */
-    --border: rgba(64, 64, 64, 0.4);
-    --shadow: 0 25px 35px -5px rgba(0, 0, 0, 0.8), 0 15px 15px -5px rgba(0, 0, 0, 0.5);
-    --gradient: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-    --hover-bg: rgba(255, 255, 255, 0.08);
-    --table-header: #333333;         /* Dark header grey */
-    --table-stripe: rgba(255, 255, 255, 0.03);
-    --table-border: rgba(64, 64, 64, 0.5);
-    --link-hover: #ffffff;           /* Pure white on hover */
+
+/* Directory Header */
+.directory-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: var(--space-xl);
 }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+.directory-breadcrumb {
+    flex: 1;
 }
 
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    min-height: 100vh;
-    line-height: 1.6;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--gradient);
-    opacity: 0.03;
-    z-index: -1;
-}
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
-}
-
-
-
-.listing {
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-th {
-    background: var(--table-header);
-    color: var(--text-primary);
-    padding: 1.8rem 2.5rem;
+.directory-title {
+    font-size: 2.5rem;
     font-weight: 700;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    position: relative;
-    border-right: 2px solid var(--table-border);
-    box-shadow: inset 0 -1px 0 var(--border);
+    color: var(--text-accent);
+    margin-bottom: var(--space-sm);
+    background: var(--gradient-accent);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.1;
 }
 
-th:last-child {
-    border-right: none;
+.directory-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin: 0;
 }
 
-th::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--text-accent), transparent);
-}
-
-td {
-    padding: 1.5rem 2.5rem;
-    border-bottom: 1px solid var(--border);
-    border-right: 1px solid var(--table-border);
-    transition: all 0.3s ease;
-    vertical-align: middle;
-}
-
-td:last-child {
-    border-right: none;
-}
-
-tbody tr:nth-child(even) {
-    background: var(--table-stripe);
-}
-
-tr:hover td {
-    background: var(--hover-bg);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-tr:last-child td {
-    border-bottom: none;
-}
-
+/* File List Enhancements */
 .file-link {
     color: var(--text-primary);
     text-decoration: none;
@@ -127,7 +39,7 @@ tr:last-child td {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    transition: all 0.2s ease;
+    transition: var(--transition-fast);
     position: relative;
 }
 
@@ -145,7 +57,7 @@ tr:last-child td {
 }
 
 .file-type.directory {
-    background: linear-gradient(135deg, #ffffff, #cccccc);
+    background: var(--gradient-accent);
     box-shadow: 0 2px 4px rgba(255, 255, 255, 0.3);
 }
 
@@ -154,38 +66,35 @@ tr:last-child td {
     box-shadow: 0 2px 4px rgba(136, 136, 136, 0.3);
 }
 
-.size {
+.file-size {
     text-align: right;
     color: var(--text-secondary);
-    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+    font-family: var(--font-family);
     font-size: 0.875rem;
 }
 
-.date {
+.file-date {
     color: var(--text-secondary);
     font-size: 0.875rem;
     white-space: nowrap;
 }
 
+/* Mobile Responsiveness */
 @media (max-width: 768px) {
-    .container {
-        padding: 1rem;
+    .directory-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-md);
+        margin-bottom: var(--space-lg);
     }
-    
-    th, td {
-        padding: 1rem 1.5rem;
+
+    .directory-title {
+        font-size: 2rem;
+        margin-bottom: 0.25rem;
     }
-    
-    .size, .date {
+
+    .file-size,
+    .file-date {
         display: none;
     }
-}
-
-.loading {
-    opacity: 0;
-    animation: fadeIn 0.5s ease forwards;
-}
-
-@keyframes fadeIn {
-    to { opacity: 1; }
 }

@@ -1,27 +1,24 @@
-/* Upload-specific styles extending the main theme */
+/* Upload Interface Specific Styles - Extends Base */
 
 /* Upload Header */
 .upload-header {
-    margin-bottom: 2rem;
+    margin-bottom: var(--space-xl);
     text-align: center;
-}
-
-.breadcrumb {
-    margin-bottom: 1.5rem;
 }
 
 .back-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     color: var(--text-secondary);
     text-decoration: none;
     font-size: 0.9rem;
-    padding: 0.5rem 1rem;
-    border-radius: 12px;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
     background: var(--bg-glass);
     border: 1px solid var(--border);
-    transition: all 0.2s ease;
+    transition: var(--transition-fast);
+    margin-bottom: var(--space-lg);
 }
 
 .back-link:hover {
@@ -34,41 +31,14 @@
     flex-shrink: 0;
 }
 
-.upload-title {
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--text-accent);
-    margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, var(--text-accent), var(--text-primary));
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-
-.upload-subtitle {
-    color: var(--text-secondary);
-    font-size: 1.1rem;
-    margin-bottom: 0;
-}
-
-/* Upload Container */
-.upload-container {
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-}
-
 /* Drop Zone */
 .drop-zone {
     padding: 4rem 2rem;
     border: 2px dashed var(--border);
     border-radius: 20px;
-    margin: 2rem;
+    margin: var(--space-xl);
     text-align: center;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: var(--transition-smooth);
     cursor: pointer;
     position: relative;
     overflow: hidden;
@@ -81,7 +51,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--gradient);
+    background: var(--gradient-primary);
     opacity: 0;
     transition: opacity 0.3s ease;
     z-index: -1;
@@ -94,9 +64,16 @@
 
 .drop-zone.drag-over {
     border-color: var(--text-accent);
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--bg-glass);
     transform: scale(1.02);
-    box-shadow: 0 0 0 1px var(--text-accent), var(--shadow);
+    box-shadow: 0 0 0 2px var(--text-accent), var(--shadow);
+}
+
+.drop-zone.touch-active {
+    border-color: var(--text-accent);
+    background: var(--bg-glass);
+    transform: scale(0.98);
+    box-shadow: 0 0 0 2px var(--text-accent), var(--shadow);
 }
 
 .drop-zone.drag-over .upload-icon svg {
@@ -109,39 +86,39 @@
 }
 
 .upload-icon {
-    margin-bottom: 1.5rem;
+    margin-bottom: var(--space-lg);
 }
 
 .upload-icon svg {
     color: var(--text-secondary);
-    transition: all 0.3s ease;
+    transition: var(--transition-smooth);
 }
 
 .drop-zone-title {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--space-sm);
 }
 
 .drop-zone-subtitle {
     color: var(--text-secondary);
-    margin-bottom: 1.5rem;
+    margin-bottom: var(--space-lg);
     font-size: 1rem;
 }
 
 .browse-button {
-    background: linear-gradient(135deg, var(--text-accent), #cccccc);
+    background: var(--gradient-accent);
     color: var(--bg-primary);
     border: none;
-    padding: 1rem 2rem;
-    border-radius: 12px;
+    padding: var(--space-md) var(--space-xl);
+    border-radius: var(--radius-md);
     font-weight: 600;
     font-size: 1rem;
     cursor: pointer;
     pointer-events: auto;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+    transition: var(--transition-fast);
+    box-shadow: var(--shadow-button);
 }
 
 .browse-button:hover {
@@ -154,7 +131,7 @@
 }
 
 .upload-info {
-    margin-top: 1.5rem;
+    margin-top: var(--space-lg);
     color: var(--text-muted);
     font-size: 0.875rem;
 }
@@ -165,16 +142,16 @@
 
 /* Upload Queue */
 .upload-queue {
-    margin: 0 2rem 2rem;
+    margin: 0 var(--space-xl) var(--space-xl);
     border-top: 1px solid var(--border);
-    padding-top: 2rem;
+    padding-top: var(--space-xl);
 }
 
 .queue-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: var(--space-lg);
 }
 
 .queue-header h3 {
@@ -192,11 +169,11 @@
     background: var(--bg-tertiary);
     color: var(--text-secondary);
     border: 1px solid var(--border);
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-sm);
     font-size: 0.875rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: var(--transition-fast);
 }
 
 .queue-action:hover {
@@ -218,12 +195,12 @@
 .queue-item {
     display: flex;
     align-items: center;
-    padding: 1rem;
+    padding: var(--space-md);
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     margin-bottom: 0.75rem;
-    transition: all 0.2s ease;
+    transition: var(--transition-fast);
 }
 
 .queue-item:hover {
@@ -246,11 +223,11 @@
     width: 32px;
     height: 32px;
     background: var(--bg-tertiary);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-right: 1rem;
+    margin-right: var(--space-md);
     flex-shrink: 0;
 }
 
@@ -277,18 +254,18 @@
 .file-meta {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-md);
     color: var(--text-secondary);
     font-size: 0.875rem;
 }
 
 .file-size {
-    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+    font-family: var(--font-family);
 }
 
 .file-progress {
     flex-shrink: 0;
-    margin-left: 1rem;
+    margin-left: var(--space-md);
     min-width: 100px;
 }
 
@@ -303,7 +280,7 @@
 
 .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--text-accent), #cccccc);
+    background: var(--gradient-accent);
     border-radius: 3px;
     transition: width 0.3s ease;
     width: 0%;
@@ -318,8 +295,8 @@
 
 .file-actions {
     display: flex;
-    gap: 0.5rem;
-    margin-left: 1rem;
+    gap: var(--space-sm);
+    margin-left: var(--space-md);
 }
 
 .file-action {
@@ -327,12 +304,12 @@
     height: 32px;
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: var(--transition-fast);
 }
 
 .file-action:hover {
@@ -358,14 +335,14 @@
 .upload-summary {
     background: var(--bg-secondary);
     border-top: 1px solid var(--border);
-    padding: 1.5rem 2rem;
+    padding: var(--space-lg) var(--space-xl);
 }
 
 .summary-content {
     display: flex;
     justify-content: center;
-    gap: 3rem;
-    margin-bottom: 1rem;
+    gap: var(--space-2xl);
+    margin-bottom: var(--space-md);
 }
 
 .summary-stat {
@@ -388,7 +365,7 @@
 .summary-progress {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-md);
 }
 
 .summary-progress .progress-bar {
@@ -407,13 +384,13 @@
 
 /* Upload Messages */
 .upload-messages {
-    margin-top: 1.5rem;
+    margin-top: var(--space-lg);
 }
 
 .upload-message {
-    padding: 1rem 1.5rem;
-    border-radius: 12px;
-    margin-bottom: 1rem;
+    padding: var(--space-md) var(--space-lg);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-md);
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -460,110 +437,6 @@
     font-size: 0.875rem;
 }
 
-/* Embedded Upload Form (for directory listings) */
-.inline-upload {
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    transition: all 0.3s ease;
-}
-
-.inline-upload.collapsed {
-    padding: 1rem 1.5rem;
-}
-
-.upload-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    color: var(--text-primary);
-}
-
-.upload-toggle h3 {
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 0;
-}
-
-.toggle-icon {
-    transition: transform 0.2s ease;
-}
-
-.inline-upload.collapsed .toggle-icon {
-    transform: rotate(-90deg);
-}
-
-.upload-form {
-    margin-top: 1rem;
-    transition: all 0.3s ease;
-}
-
-.inline-upload.collapsed .upload-form {
-    display: none;
-}
-
-.form-row {
-    display: flex;
-    gap: 1rem;
-    align-items: flex-end;
-}
-
-.form-group {
-    flex: 1;
-}
-
-.form-label {
-    display: block;
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-    margin-bottom: 0.5rem;
-}
-
-.form-input {
-    width: 100%;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem;
-    color: var(--text-primary);
-    font-size: 0.875rem;
-    transition: all 0.2s ease;
-}
-
-.form-input:focus {
-    outline: none;
-    border-color: var(--text-accent);
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
-}
-
-.upload-button {
-    background: linear-gradient(135deg, var(--text-accent), #cccccc);
-    color: var(--bg-primary);
-    border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-}
-
-.upload-button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
-}
-
-.upload-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-
 /* Status Indicators */
 .status-uploading::after {
     content: '';
@@ -571,7 +444,7 @@
     height: 8px;
     background: #3b82f6;
     border-radius: 50%;
-    margin-left: 0.5rem;
+    margin-left: var(--space-sm);
     display: inline-block;
     animation: pulse 1.5s infinite;
 }
@@ -580,84 +453,58 @@
     content: '✓';
     color: #22c55e;
     font-weight: bold;
-    margin-left: 0.5rem;
+    margin-left: var(--space-sm);
 }
 
 .status-error::after {
     content: '✕';
     color: #ef4444;
     font-weight: bold;
-    margin-left: 0.5rem;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    margin-left: var(--space-sm);
 }
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-    .upload-title {
-        font-size: 2rem;
-    }
-    
     .drop-zone {
-        padding: 2.5rem 1rem;
-        margin: 1rem;
+        padding: 2.5rem var(--space-md);
+        margin: var(--space-md);
     }
-    
+
     .upload-queue {
-        margin: 0 1rem 1rem;
+        margin: 0 var(--space-md) var(--space-md);
     }
-    
+
     .summary-content {
-        gap: 1.5rem;
+        gap: var(--space-lg);
     }
-    
+
     .queue-item {
         flex-wrap: wrap;
-        gap: 1rem;
+        gap: var(--space-md);
     }
-    
+
     .file-progress {
         margin-left: 0;
         order: 3;
         flex-basis: 100%;
     }
-    
+
     .file-actions {
         margin-left: 0;
-    }
-    
-    .form-row {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .upload-button {
-        align-self: flex-start;
     }
 }
 
 @media (max-width: 480px) {
-    .container {
-        padding: 1rem;
-    }
-    
-    .upload-header {
-        margin-bottom: 1.5rem;
-    }
-    
     .summary-content {
         flex-direction: column;
-        gap: 1rem;
+        gap: var(--space-md);
     }
-    
+
     .summary-progress {
         flex-direction: column;
-        gap: 0.5rem;
+        gap: var(--space-sm);
     }
-    
+
     .progress-text {
         text-align: center;
     }

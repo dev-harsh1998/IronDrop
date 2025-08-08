@@ -70,6 +70,7 @@ impl UploadTestServer {
             enable_upload,
             max_upload_size,
             upload_dir: Some(upload_dir.path().to_path_buf()),
+            config_file: None,
         };
 
         let (shutdown_tx, shutdown_rx) = mpsc::channel();

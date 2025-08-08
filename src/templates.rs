@@ -15,6 +15,9 @@ const UPLOAD_STYLES_CSS: &str = include_str!("../templates/upload/styles.css");
 const UPLOAD_SCRIPT_JS: &str = include_str!("../templates/upload/script.js");
 const UPLOAD_FORM_HTML: &str = include_str!("../templates/upload/form.html");
 
+// Common base styles
+const BASE_CSS: &str = include_str!("../templates/common/base.css");
+
 // Embed favicon files at compile time
 const FAVICON_ICO: &[u8] = include_bytes!("../favicon.ico");
 const FAVICON_16X16_PNG: &[u8] = include_bytes!("../favicon-16x16.png");
@@ -57,10 +60,15 @@ impl TemplateEngine {
     /// Get embedded static asset content
     pub fn get_static_asset(&self, path: &str) -> Option<(&'static str, &'static str)> {
         match path {
+            // Common base styles
+            "common/base.css" => Some((BASE_CSS, "text/css")),
+            // Directory assets
             "directory/styles.css" => Some((DIRECTORY_STYLES_CSS, "text/css")),
             "directory/script.js" => Some((DIRECTORY_SCRIPT_JS, "application/javascript")),
+            // Error assets
             "error/styles.css" => Some((ERROR_STYLES_CSS, "text/css")),
             "error/script.js" => Some((ERROR_SCRIPT_JS, "application/javascript")),
+            // Upload assets
             "upload/styles.css" => Some((UPLOAD_STYLES_CSS, "text/css")),
             "upload/script.js" => Some((UPLOAD_SCRIPT_JS, "application/javascript")),
             _ => None,
@@ -170,9 +178,15 @@ impl TemplateEngine {
         description: &str,
     ) -> Result<String, AppError> {
         let mut variables = HashMap::new();
-        variables.insert("STATUS_CODE".to_string(), status_code.to_string());
-        variables.insert("STATUS_TEXT".to_string(), status_text.to_string());
-        variables.insert("DESCRIPTION".to_string(), description.to_string());
+        variables.insert("ERROR_CODE".to_string(), status_code.to_string());
+        variables.insert("ERROR_MESSAGE".to_string(), status_text.to_string());
+        variables.insert("ERROR_DESCRIPTION".to_string(), description.to_string());
+        
+        // Add additional variables for new template
+        variables.insert("REQUEST_ID".to_string(), 
+            format!("REQ-{:08X}", std::ptr::addr_of!(variables) as usize & 0xFFFFFFFF));
+        variables.insert("TIMESTAMP".to_string(), 
+            format!("{:?}", std::time::SystemTime::now()));
 
         self.render("error_page", &variables)
     }

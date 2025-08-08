@@ -58,6 +58,7 @@ impl TestServer {
             enable_upload: false,
             max_upload_size: 10240,
             upload_dir: None,
+            config_file: None,
         };
 
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -254,7 +255,7 @@ fn test_beautiful_error_pages() {
         .contains("text/html"));
     assert!(response.body.contains("404"));
     assert!(response.body.contains("Not Found"));
-    assert!(response.body.contains("irondrop/2.5.0"));
+    assert!(response.body.contains("IronDrop v2.5.0"));
 
     // Check for modular error page template structure
     assert!(
@@ -271,8 +272,8 @@ fn test_beautiful_error_pages() {
     );
 
     // Check for modern interaction elements
-    assert!(response.body.contains("back-link"));
-    assert!(response.body.contains("Back to Files"));
+    assert!(response.body.contains("error-button"));
+    assert!(response.body.contains("Go Home"));
 }
 
 #[test]
@@ -290,12 +291,12 @@ fn test_static_asset_serving() {
         .unwrap()
         .contains("text/css"));
     assert!(
-        css_response.body.contains("--bg-primary"),
-        "Should contain CSS custom properties"
+        css_response.body.contains("Professional Blackish Grey Design"),
+        "Should contain design system comment"
     );
     assert!(
-        css_response.body.contains("backdrop-filter"),
-        "Should contain modern CSS effects"
+        css_response.body.contains("directory-header"),
+        "Should contain directory-specific styles"
     );
 
     // Test JS file serving

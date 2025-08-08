@@ -1,57 +1,24 @@
+/* Error Page Specific Styles - Extends Base */
 /* Professional Blackish Grey Error Page Design */
-:root {
-    --bg-primary: #0a0a0a;           /* Deep black */
-    --bg-secondary: #1a1a1a;         /* Dark grey */
-    --bg-tertiary: #2a2a2a;          /* Medium grey */
-    --bg-glass: rgba(26, 26, 26, 0.4);
-    --text-primary: #e5e5e5;         /* Light grey */
-    --text-secondary: #b0b0b0;       /* Medium grey text */
-    --text-accent: #ffffff;          /* Pure white accent */
-    --text-muted: #666666;           /* Muted grey */
-    --border: rgba(64, 64, 64, 0.4);
-    --shadow: 0 25px 35px -5px rgba(0, 0, 0, 0.8), 0 15px 15px -5px rgba(0, 0, 0, 0.5);
-    --gradient: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-    --link-hover: #ffffff;           /* Pure white on hover */
-}
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    min-height: 100vh;
+/* Error Container - Centered with margins and some top spacing */
+.page-content {
     display: flex;
-    align-items: center;
     justify-content: center;
-    position: relative;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    align-items: flex-start;
+    min-height: 60vh;
+    padding-top: var(--space-2xl);
 }
 
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--gradient);
-    opacity: 0.05;
-    z-index: -1;
-}
-
+/* Error Container */
 .error-container {
     background: var(--bg-glass);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border);
-    border-radius: 24px;
-    padding: 3rem;
+    border-radius: var(--radius-xl);
+    padding: var(--space-2xl);
     text-align: center;
-    max-width: 500px;
+    max-width: 600px;
     width: 90%;
     position: relative;
     overflow: hidden;
@@ -67,84 +34,100 @@ body::before {
     left: 0;
     right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
 }
 
 .error-code {
     font-size: 5rem;
     font-weight: 800;
-    background: linear-gradient(135deg, var(--text-accent), #cccccc);
+    background: var(--gradient-accent);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 1rem;
+    margin-bottom: var(--space-md);
     line-height: 1;
     text-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+    font-family: var(--font-family);
 }
 
 .error-message {
     font-size: 1.5rem;
     color: var(--text-primary);
-    margin-bottom: 2rem;
+    margin-bottom: var(--space-xl);
     font-weight: 600;
 }
 
 .error-description {
     color: var(--text-secondary);
     font-size: 1rem;
-    margin-bottom: 2rem;
+    margin-bottom: var(--space-xl);
     line-height: 1.6;
 }
 
-.server-info {
+.error-info {
     background: var(--bg-glass);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1rem 1.5rem;
-    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    font-family: var(--font-family);
     font-size: 0.875rem;
     color: var(--text-secondary);
     backdrop-filter: blur(10px);
+    margin-bottom: var(--space-lg);
 }
 
-.back-link {
+.error-actions {
+    display: flex;
+    gap: var(--space-md);
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.error-button {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-sm);
     color: var(--text-accent);
     text-decoration: none;
     font-weight: 500;
     padding: 0.75rem 1.5rem;
     background: var(--bg-glass);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    transition: all 0.2s ease;
+    border-radius: var(--radius-md);
+    transition: var(--transition-fast);
     backdrop-filter: blur(10px);
-    margin-top: 1rem;
 }
 
-.back-link:hover {
+.error-button:hover {
     color: var(--link-hover);
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px -5px rgba(255, 255, 255, 0.2);
+    box-shadow: var(--shadow-hover);
     text-shadow: 0 2px 4px rgba(255, 255, 255, 0.3);
 }
 
+/* Mobile Responsiveness */
 @media (max-width: 768px) {
-    .error-container {
-        padding: 2rem;
-        margin: 1rem;
+    .page-content {
+        min-height: 50vh;
+        padding-top: var(--space-xl);
     }
-    
+
+    .error-container {
+        padding: var(--space-xl);
+        margin: var(--space-sm);
+        width: 95%;
+    }
+
     .error-code {
         font-size: 4rem;
     }
-    
+
     .error-message {
         font-size: 1.25rem;
     }
-}
 
-@keyframes fadeIn {
-    to { opacity: 1; }
+    .error-actions {
+        flex-direction: column;
+        align-items: center;
+    }
 }

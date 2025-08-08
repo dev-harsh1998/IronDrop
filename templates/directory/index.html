@@ -1,32 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{PATH}} - IronDrop</title>
+
+    <!-- Common Base Styles -->
+    <link rel="stylesheet" href="/_static/common/base.css">
+
+    <!-- Directory-specific Styles -->
     <link rel="stylesheet" href="/_static/directory/styles.css">
+
+    <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
-        <div class="listing">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Size</th>
-                        <th>Modified</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{ENTRIES}}
-                </tbody>
-            </table>
-        </div>
+        <!-- Application Header -->
+        <header class="app-header">
+            <a href="/" class="app-logo">
+                <div class="logo-text">IronDrop</div>
+            </a>
+            <div class="header-actions">
+                <a href="/upload" class="btn btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17,8 12,3 7,8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    Upload Files
+                </a>
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <main class="page-content">
+            <!-- Directory Header -->
+            <div class="directory-header">
+                <div class="directory-breadcrumb">
+                    <h1 class="directory-title">{{PATH}}</h1>
+                    <p class="directory-subtitle">{{ENTRY_COUNT}} items</p>
+                </div>
+            </div>
+
+            <!-- File Listing -->
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Size</th>
+                            <th>Modified</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{ENTRIES}}
+                    </tbody>
+                </table>
+            </div>
+        </main>
+
+        <!-- Application Footer -->
+        <footer class="app-footer">
+            <span class="footer-info">Powered by IronDrop v2.5.0</span>
+        </footer>
     </div>
-    
+
     <script src="/_static/directory/script.js"></script>
 </body>
+
 </html>

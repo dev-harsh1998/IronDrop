@@ -38,6 +38,7 @@
 //!     enable_upload: true,
 //!     max_upload_size: 10,
 //!     upload_dir: None,
+//!     config_file: None,
 //! };
 //! let mut upload_handler = UploadHandler::new(&cli)?;
 //! # Ok(())
@@ -870,6 +871,7 @@ mod tests {
             enable_upload: true,
             max_upload_size: 100, // 100MB for testing
             upload_dir: Some(upload_dir),
+            config_file: None,
         }
     }
 

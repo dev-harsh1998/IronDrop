@@ -1,13 +1,36 @@
 // Dark Mode Only Directory Listing Enhancements
-document.addEventListener('DOMContentLoaded', function() {
-    // Apply loading animation
-    document.querySelector('.container').classList.add('loading');
-    
+document.addEventListener('DOMContentLoaded', function () {
+    // Apply loading animation with staggered effect
+    const container = document.querySelector('.container');
+    const header = document.querySelector('.directory-header');
+    const listing = document.querySelector('.listing');
+    const footer = document.querySelector('.server-footer');
+
+    container.classList.add('loading');
+
+    // Staggered animation for different sections
+    setTimeout(() => {
+        if (header) header.style.opacity = '1';
+    }, 100);
+
+    setTimeout(() => {
+        if (listing) listing.style.opacity = '1';
+    }, 200);
+
+    setTimeout(() => {
+        if (footer) footer.style.opacity = '1';
+    }, 300);
+
+    // Initial opacity for sections
+    if (header) header.style.opacity = '0';
+    if (listing) listing.style.opacity = '0';
+    if (footer) footer.style.opacity = '0';
+
     // Smooth scrolling for large directories
     if (document.querySelectorAll('tbody tr').length > 50) {
         document.body.style.scrollBehavior = 'smooth';
     }
-    
+
     // Performance optimization for large directories
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
@@ -19,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
         threshold: 0.1,
         rootMargin: '50px'
     });
-    
+
     // Apply intersection observer for very large directories
     const rows = document.querySelectorAll('tbody tr');
     if (rows.length > 100) {
@@ -28,15 +51,15 @@ document.addEventListener('DOMContentLoaded', function() {
             observer.observe(row);
         });
     }
-    
+
     // Keyboard navigation enhancements
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         // Arrow key navigation
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault();
             navigateFiles(e.key === 'ArrowDown' ? 1 : -1);
         }
-        
+
         // Enter to follow link
         if (e.key === 'Enter') {
             const selected = document.querySelector('.file-link.selected');
@@ -44,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.location.href = selected.href;
             }
         }
-        
+
         // Home/End navigation
         if (e.key === 'Home') {
             e.preventDefault();
@@ -55,44 +78,44 @@ document.addEventListener('DOMContentLoaded', function() {
             selectFile(rows.length - 1);
         }
     });
-    
+
     let selectedIndex = -1;
-    
+
     function navigateFiles(direction) {
         const links = document.querySelectorAll('.file-link');
         if (links.length === 0) return;
-        
+
         // Remove current selection
         links.forEach(link => link.classList.remove('selected'));
-        
+
         // Update index
         selectedIndex += direction;
         if (selectedIndex < 0) selectedIndex = links.length - 1;
         if (selectedIndex >= links.length) selectedIndex = 0;
-        
+
         // Add selection to new file
         selectFile(selectedIndex);
     }
-    
+
     function selectFile(index) {
         const links = document.querySelectorAll('.file-link');
         if (index < 0 || index >= links.length) return;
-        
+
         // Remove all selections
         links.forEach(link => link.classList.remove('selected'));
-        
+
         // Add selection
         selectedIndex = index;
         const selected = links[selectedIndex];
         selected.classList.add('selected');
-        
+
         // Scroll into view
-        selected.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'center' 
+        selected.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
         });
     }
-    
+
     // Add selected file styling
     const style = document.createElement('style');
     style.textContent = `
@@ -104,12 +127,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     `;
     document.head.appendChild(style);
-    
+
     // File type detection for better visual indicators
     document.querySelectorAll('.file-link').forEach(link => {
         const fileName = link.querySelector('.name').textContent;
         const extension = fileName.split('.').pop().toLowerCase();
-        
+
         const fileType = link.querySelector('.file-type');
         if (fileType && !fileType.classList.contains('directory')) {
             // Add specific colors for different file types

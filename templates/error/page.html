@@ -1,28 +1,83 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Error {{STATUS_CODE}} - IronDrop</title>
+    <title>{{ERROR_CODE}} - IronDrop</title>
+
+    <!-- Common Base Styles -->
+    <link rel="stylesheet" href="/_static/common/base.css">
+
+    <!-- Error-specific Styles -->
     <link rel="stylesheet" href="/_static/error/styles.css">
+
+    <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
-    <div class="error-container">
-        <div class="error-code">{{STATUS_CODE}}</div>
-        <div class="error-message">{{STATUS_TEXT}}</div>
-        <div class="error-description">
-            {{DESCRIPTION}}
-        </div>
-        <div class="server-info">irondrop/2.5.0</div>
-        <a href="/" class="back-link">
-            <span>←</span>
-            <span>Back to Files</span>
-        </a>
+    <div class="container">
+        <!-- Application Header -->
+        <header class="app-header">
+            <a href="/" class="app-logo">
+                <div class="logo-text">IronDrop</div>
+            </a>
+            <div class="header-actions">
+                <!-- No upload button on error page -->
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <main class="page-content">
+            <div class="error-container">
+                <div class="error-code">{{ERROR_CODE}}</div>
+                <div class="error-message">{{ERROR_MESSAGE}}</div>
+                <div class="error-description">{{ERROR_DESCRIPTION}}</div>
+
+                <div class="error-info">
+                    <div>Server: IronDrop v2.5.0</div>
+                    <div>Request ID: {{REQUEST_ID}}</div>
+                    <div>Time: {{TIMESTAMP}}</div>
+                </div>
+
+                <div class="error-actions">
+                    <a href="/" class="error-button">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                            <polyline points="9,22 9,12 15,12 15,22" />
+                        </svg>
+                        Go Home
+                    </a>
+                    <a href="javascript:history.back()" class="error-button back-link">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="m12 19-7-7 7-7" />
+                            <path d="m19 12H5" />
+                        </svg>
+                        Go Back
+                    </a>
+                </div>
+            </div>
+        </main>
+
+        <!-- Application Footer -->
+        <footer class="app-footer">
+            <span class="footer-info">Powered by IronDrop v2.5.0</span>
+        </footer>
     </div>
 
     <script src="/_static/error/script.js"></script>
 </body>
+
 </html>

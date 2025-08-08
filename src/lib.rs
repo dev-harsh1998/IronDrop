@@ -5,6 +5,7 @@
 /// This library contains the core logic for the server. The `run` function
 /// initializes and starts the server based on command-line arguments.
 pub mod cli;
+pub mod config;
 pub mod error;
 pub mod fs;
 pub mod http;
@@ -16,6 +17,7 @@ pub mod upload;
 pub mod utils;
 
 use crate::cli::Cli;
+use crate::config::Config;
 use clap::Parser;
 use log::error;
 
@@ -27,9 +29,18 @@ use log::error;
 pub fn run() {
     let cli = Cli::parse();
 
-    let log_level = if cli.verbose {
+    // Load configuration with precedence: CLI > ENV > INI > Defaults
+    let config = match Config::load(&cli) {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("Configuration error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let log_level = if config.verbose {
         "debug"
-    } else if cli.detailed_logging {
+    } else if config.detailed_logging {
         "info"
     } else {
         "warn"
@@ -42,13 +53,18 @@ pub fn run() {
 
     log::debug!("Log level set to: {log_level}");
 
+    // Print configuration summary in debug mode
+    if config.verbose {
+        config.print_summary();
+    }
+
     // Validate CLI configuration before starting the server
     if let Err(e) = cli.validate() {
         error!("Configuration validation error: {e}");
         std::process::exit(1);
     }
 
-    if let Err(e) = server::run_server(cli, None, None) {
+    if let Err(e) = server::run_server_with_config(config) {
         error!("Server error: {e}");
         std::process::exit(1);
     }

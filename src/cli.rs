@@ -66,6 +66,10 @@ pub struct Cli {
     /// Upload target directory - Directory where uploaded files will be stored. If not specified, uses the OS default download directory. 📁
     #[arg(long, value_parser = validate_upload_dir)]
     pub upload_dir: Option<PathBuf>,
+
+    /// Configuration file path - Specify a custom configuration file (INI format). If not provided, looks for irondrop.ini in current directory or ~/.config/irondrop/config.ini 🛠️
+    #[arg(long, value_parser = validate_config_file)]
+    pub config_file: Option<String>,
 }
 
 /// Validate upload size is within safe bounds (1-10240 MB)
@@ -160,6 +164,31 @@ fn validate_upload_dir(s: &str) -> Result<PathBuf, String> {
     }
 
     Ok(canonical_path)
+}
+
+/// Validate config file path exists and is readable
+fn validate_config_file(s: &str) -> Result<String, String> {
+    if s.is_empty() {
+        return Err("Config file path cannot be empty".to_string());
+    }
+
+    let path = PathBuf::from(s);
+    
+    // Check if file exists
+    if !path.exists() {
+        return Err(format!("Config file does not exist: {}", s));
+    }
+
+    // Check if it's a file (not a directory)
+    if !path.is_file() {
+        return Err(format!("Config path is not a file: {}", s));
+    }
+
+    // Check if we can read the file
+    match std::fs::File::open(&path) {
+        Ok(_) => Ok(s.to_string()),
+        Err(e) => Err(format!("Cannot read config file {}: {}", s, e)),
+    }
 }
 
 impl Cli {
@@ -313,6 +342,7 @@ mod tests {
             enable_upload: false,
             max_upload_size: 100,
             upload_dir: None,
+            config_file: None,
         };
 
         // Test conversion
@@ -347,6 +377,7 @@ mod tests {
             enable_upload: true,
             max_upload_size: 100,
             upload_dir: Some(temp_dir.path().to_path_buf()),
+            config_file: None,
         };
 
         assert!(cli.validate().is_ok());

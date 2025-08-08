@@ -38,10 +38,10 @@ fn test_embedded_templates_functionality() {
 
     // Test error page template rendering
     let mut error_vars = HashMap::new();
-    error_vars.insert("STATUS_CODE".to_string(), "404".to_string());
-    error_vars.insert("STATUS_TEXT".to_string(), "Not Found".to_string());
+    error_vars.insert("ERROR_CODE".to_string(), "404".to_string());
+    error_vars.insert("ERROR_MESSAGE".to_string(), "Not Found".to_string());
     error_vars.insert(
-        "DESCRIPTION".to_string(),
+        "ERROR_DESCRIPTION".to_string(),
         "The requested resource was not found.".to_string(),
     );
 
@@ -78,7 +78,13 @@ fn test_embedded_static_assets() {
     let (css_content, css_type) = css.unwrap();
     assert_eq!(css_type, "text/css");
     assert!(css_content.contains("Professional Blackish Grey Design"));
-    assert!(css_content.contains("--bg-primary: #0a0a0a"));
+
+    // Test base CSS (contains the CSS variables)
+    let base_css = engine.get_static_asset("common/base.css");
+    assert!(base_css.is_some(), "Base CSS should be available");
+    let (base_css_content, base_css_type) = base_css.unwrap();
+    assert_eq!(base_css_type, "text/css");
+    assert!(base_css_content.contains("--bg-primary: #0a0a0a"));
 
     // Test directory JS
     let js = engine.get_static_asset("directory/script.js");
@@ -149,7 +155,7 @@ fn test_directory_listing_rendering() {
     assert!(html.contains("45.8 MB"), "Should contain large file size");
 
     // Should contain proper HTML structure
-    assert!(html.contains("<table>"), "Should contain table structure");
+    assert!(html.contains("<table"), "Should contain table structure");
     assert!(html.contains("file-link"), "Should contain styled links");
     assert!(
         html.contains("file-type directory"),

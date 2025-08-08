@@ -1,4 +1,5 @@
 use crate::cli::Cli;
+use crate::config::Config;
 use crate::error::AppError;
 use crate::http::handle_client;
 use glob::Pattern;
@@ -465,6 +466,30 @@ impl Worker {
             thread: Some(thread),
         }
     }
+}
+
+/// Run server with new configuration system
+pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
+    // Convert Config back to Cli for compatibility with existing code
+    // This is a transitional approach - eventually we could refactor to use Config throughout
+    let cli = Cli {
+        directory: config.directory,
+        listen: config.listen,
+        port: config.port,
+        allowed_extensions: config.allowed_extensions.join(","),
+        threads: config.threads,
+        chunk_size: config.chunk_size,
+        verbose: config.verbose,
+        detailed_logging: config.detailed_logging,
+        username: config.username,
+        password: config.password,
+        enable_upload: config.enable_upload,
+        max_upload_size: config.max_upload_size / (1024 * 1024), // Convert bytes back to MB
+        upload_dir: config.upload_dir,
+        config_file: None, // Not needed for server execution
+    };
+
+    run_server(cli, None, None)
 }
 
 pub fn run_server(

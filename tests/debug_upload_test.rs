@@ -90,6 +90,7 @@ fn test_upload_handler_creation() {
         enable_upload: true,
         max_upload_size: 10,
         upload_dir: Some(temp_dir.path().to_path_buf()),
+        config_file: None,
     };
 
     let handler_result = UploadHandler::new(&cli);
@@ -126,6 +127,7 @@ fn test_upload_handler_direct() {
         enable_upload: true,
         max_upload_size: 10,
         upload_dir: Some(temp_dir.path().to_path_buf()),
+        config_file: None,
     };
 
     let mut handler = UploadHandler::new(&cli).unwrap();
@@ -193,6 +195,7 @@ fn test_upload_handler_no_extension_restrictions() {
         enable_upload: true,
         max_upload_size: 10,
         upload_dir: Some(temp_dir.path().to_path_buf()),
+        config_file: None,
     };
 
     let mut handler = UploadHandler::new(&cli).unwrap();

@@ -45,6 +45,7 @@ fn setup_test_server(username: Option<String>, password: Option<String>) -> Test
         enable_upload: false,
         max_upload_size: 10240,
         upload_dir: None,
+        config_file: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
