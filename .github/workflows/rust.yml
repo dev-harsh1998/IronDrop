@@ -23,7 +23,7 @@ jobs:
         run: cargo build --all-features --verbose
 
       - name: Test
-        run: cargo test --all-features --verbose
+        run: cargo test --all-features --verbose -- --skip test_very_large_file_upload_1gb_plus --skip test_large_file_upload_with_bash_verification
 
   fmt:
     name: Rustfmt

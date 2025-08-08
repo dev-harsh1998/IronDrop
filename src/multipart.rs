@@ -636,14 +636,11 @@ impl<R: Read> MultipartIterator<R> {
         end_boundary.extend_from_slice(b"--");
 
         // Ensure we have enough buffer for boundary detection by loading ALL available data
-        let mut attempts = 0;
-        // Keep loading data until reader is exhausted to ensure we find end boundaries at the very end
-        while !self.reader_exhausted && attempts < 50 {
-            // Higher attempt limit for end-of-stream boundaries
+        // Load all remaining data from the reader to properly detect boundaries
+        while !self.reader_exhausted {
             if !self.fill_buffer()? {
                 break;
             }
-            attempts += 1;
         }
 
         if self.buffer_pos >= self.buffer.len() {
