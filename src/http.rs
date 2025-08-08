@@ -332,14 +332,25 @@ pub fn handle_client(
     );
 
     match response_result {
-        Ok(response) => {
-            if let Err(e) = send_response(&mut stream, response, &log_prefix) {
-                error!("{log_prefix} Failed to send response: {e}");
+        Ok(response) => match send_response(&mut stream, response, &log_prefix) {
+            Ok(body_bytes) => {
+                if let Some(stats) = stats {
+                    stats.record_request(true, body_bytes);
+                }
             }
-        }
+            Err(e) => {
+                error!("{log_prefix} Failed to send response: {e}");
+                if let Some(stats) = stats {
+                    stats.record_request(false, 0);
+                }
+            }
+        },
         Err(e) => {
             warn!("{log_prefix} Error processing request: {e}");
             send_error_response(&mut stream, e, &log_prefix);
+            if let Some(stats) = stats {
+                stats.record_request(false, 0);
+            }
         }
     }
 }
@@ -558,6 +569,30 @@ fn route_request(
         }
     }
 
+    // /monitor endpoint (HTML or JSON if ?json=1)
+    if request.path.starts_with("/monitor") {
+        if request.path.contains("json=1") {
+            return Ok(create_monitor_json(stats));
+        } else {
+            use crate::templates::TemplateEngine;
+            let engine = TemplateEngine::new();
+            if let Ok(html) = engine.render_monitor_page() {
+                return Ok(Response {
+                    status_code: 200,
+                    status_text: "OK".into(),
+                    headers: {
+                        let mut h = HashMap::new();
+                        h.insert("Content-Type".into(), "text/html; charset=utf-8".into());
+                        h
+                    },
+                    body: ResponseBody::Text(html),
+                });
+            } else {
+                return Ok(create_monitor_json(stats));
+            }
+        }
+    }
+
     // Handle health check endpoint
     if request.path == "/_health" || request.path == "/_status" {
         return Ok(create_health_check_response());
@@ -666,6 +701,49 @@ fn route_request(
     }
 }
 
+/// Build JSON stats snapshot for /monitor
+fn create_monitor_json(stats: Option<&crate::server::ServerStats>) -> Response {
+    if let Some(s) = stats {
+        let (total, successful, errors, bytes, uptime) = s.get_stats();
+        let up = s.get_upload_stats();
+        let json = format!(
+            r#"{{"requests":{{"total":{total},"successful":{successful},"errors":{errors}}},"downloads":{{"bytes_served":{bytes}}},"uptime_secs":{},"uploads":{{"total_uploads":{},"successful_uploads":{},"failed_uploads":{},"files_uploaded":{},"upload_bytes":{},"average_upload_size":{},"largest_upload":{},"concurrent_uploads":{},"average_processing_ms":{:.2},"success_rate":{:.2}}}}}"#,
+            uptime.as_secs(),
+            up.total_uploads,
+            up.successful_uploads,
+            up.failed_uploads,
+            up.files_uploaded,
+            up.upload_bytes,
+            up.average_upload_size,
+            up.largest_upload,
+            up.concurrent_uploads,
+            up.average_processing_time,
+            up.success_rate
+        );
+        return Response {
+            status_code: 200,
+            status_text: "OK".into(),
+            headers: {
+                let mut h = HashMap::new();
+                h.insert("Content-Type".into(), "application/json".into());
+                h.insert("Cache-Control".into(), "no-cache".into());
+                h
+            },
+            body: ResponseBody::Text(json),
+        };
+    }
+    Response {
+        status_code: 503,
+        status_text: "Service Unavailable".into(),
+        headers: {
+            let mut h = HashMap::new();
+            h.insert("Content-Type".into(), "application/json".into());
+            h
+        },
+        body: ResponseBody::Text("{\"error\":\"stats unavailable\"}".into()),
+    }
+}
+
 /// Checks the 'Authorization' header for valid credentials.
 fn is_authenticated(auth_header: Option<&String>, user: &str, pass: &str) -> bool {
     let header = match auth_header {
@@ -700,7 +778,7 @@ fn send_response(
     stream: &mut TcpStream,
     response: Response,
     log_prefix: &str,
-) -> Result<(), std::io::Error> {
+) -> Result<u64, std::io::Error> {
     info!(
         "{} {} {}",
         log_prefix, response.status_code, response.status_text
@@ -741,23 +819,28 @@ fn send_response(
 
     stream.write_all(response_str.as_bytes())?;
 
-    // Send body
+    // Send body and count only body bytes (exclude headers for stats)
+    let mut body_sent: u64 = 0;
     match response.body {
         ResponseBody::Text(_) | ResponseBody::Binary(_) => {
             stream.write_all(&body_bytes)?;
+            body_sent += body_bytes.len() as u64;
         }
         ResponseBody::Stream(mut file_details) => {
             let mut buffer = vec![0; file_details.chunk_size];
-            while let Ok(bytes_read) = file_details.file.read(&mut buffer) {
+            loop {
+                let bytes_read = file_details.file.read(&mut buffer)?;
                 if bytes_read == 0 {
                     break;
                 }
                 stream.write_all(&buffer[..bytes_read])?;
+                body_sent += bytes_read as u64;
             }
         }
     }
 
-    stream.flush()
+    stream.flush()?;
+    Ok(body_sent)
 }
 
 /// Sends a pre-canned error response using the new response system.

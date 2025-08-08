@@ -23,6 +23,7 @@ A lightweight, high-performance file server written in Rust featuring **bidirect
 - **Rate Limiting** – DoS protection with configurable requests per minute and concurrent connections per IP
 - **Server Statistics** – Real-time monitoring of requests, bytes served, uptime, and performance metrics
 - **Health Check Endpoints** – Built-in `/_health` and `/_status` endpoints for monitoring
+- **Unified Monitoring Dashboard** – NEW `/monitor` endpoint with live HTML dashboard and JSON API (`/monitor?json=1`) exposing request, download and upload metrics
 - **Path-Traversal Protection** – Canonicalises every request path and rejects any attempt that escapes the served directory
 - **Optional Basic Authentication** – Username and password can be supplied via CLI flags
 
@@ -116,6 +117,53 @@ IronDrop v2.5 introduces a **production-ready file upload system** with enterpri
 - **🛡️ Robust Validation**: Multi-layer security including extension filtering, size limits, and malformed data rejection
 - **🧪 Battle-Tested**: 101+ tests covering edge cases, security scenarios, and performance stress testing
 
+### 📊 **Integrated Monitoring Dashboard** (Added in v2.5)
+The new `/monitor` endpoint provides both an HTML dashboard and a JSON API for tooling integration. It auto-updates in the browser and can be scraped by observability agents.
+
+Example JSON (`GET /monitor?json=1`):
+
+```json
+{
+   "requests": {
+      "total": 42,
+      "successful": 40,
+      "errors": 2,
+      "bytes_served": 1048576,
+      "uptime_secs": 360
+   },
+   "downloads": {
+      "bytes_served": 1048576
+   },
+   "uploads": {
+      "total_uploads": 5,
+      "successful_uploads": 5,
+      "failed_uploads": 0,
+      "files_uploaded": 7,
+      "upload_bytes": 5242880,
+      "average_upload_size": 748982,
+      "largest_upload": 2097152,
+      "concurrent_uploads": 0,
+      "average_processing_time": 152.4,
+      "success_rate": 100.0
+   }
+}
+```
+
+HTML Dashboard (`GET /monitor`):
+- Lightweight embedded template (no external assets) served with caching disabled for freshness
+- Auto-refresh JavaScript polling (`?json=1`) to update counters
+- Shows cumulative bytes served (downloads) and upload metrics side-by-side
+
+Use cases:
+- Local debugging of throughput
+- Basic operational visibility without external APM
+- Simple integration point for external monitoring (curl + jq / cron)
+
+Planned extensions (open to contribution):
+- Active connection count
+- Per-endpoint breakdown & rolling window rates
+- Exporter mode (Prometheus/OpenMetrics formatting)
+
 ### 🏗️ **Architecture Improvements**
 - **Enhanced Multipart Parser**: Robust RFC-compliant parsing with streaming support
 - **Improved Error Handling**: Graceful handling of malformed requests and resource exhaustion
@@ -152,6 +200,7 @@ IronDrop v2.5 introduces a **production-ready file upload system** with enterpri
 | **Secure Corporate Share** | `irondrop -d ./private --username alice --password s3cret` | Authentication, audit logging, professional design |
 | **Development Server** | `irondrop -d . -v --detailed-logging` | Debug logging, template development, hot reload |
 | **Production Monitoring** | `irondrop -d /data -l 0.0.0.0` + health checks at `/_health` | Statistics, uptime monitoring, rate limiting |
+| **Monitoring Dashboard** | `irondrop -d .` then visit `/monitor` | Live HTML + JSON metrics |
 | **Secure Upload Server** | `irondrop -d ./shared --enable-upload --max-upload-size 5120 -a "*.txt,*.pdf,*.jpg"` | Controlled file uploads up to 5GB, extension filtering |
 | **Corporate File Share** | `irondrop -d /data --enable-upload --upload-dir /data/uploads --username admin` | Authenticated uploads, custom upload directory |
 
