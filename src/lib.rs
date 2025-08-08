@@ -33,7 +33,7 @@ pub fn run() {
     let config = match Config::load(&cli) {
         Ok(config) => config,
         Err(e) => {
-            eprintln!("Configuration error: {}", e);
+            eprintln!("Configuration error: {e}");
             std::process::exit(1);
         }
     };

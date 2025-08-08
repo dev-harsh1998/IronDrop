@@ -173,21 +173,21 @@ fn validate_config_file(s: &str) -> Result<String, String> {
     }
 
     let path = PathBuf::from(s);
-    
+
     // Check if file exists
     if !path.exists() {
-        return Err(format!("Config file does not exist: {}", s));
+        return Err(format!("Config file does not exist: {s}"));
     }
 
     // Check if it's a file (not a directory)
     if !path.is_file() {
-        return Err(format!("Config path is not a file: {}", s));
+        return Err(format!("Config path is not a file: {s}"));
     }
 
     // Check if we can read the file
     match std::fs::File::open(&path) {
         Ok(_) => Ok(s.to_string()),
-        Err(e) => Err(format!("Cannot read config file {}: {}", s, e)),
+        Err(e) => Err(format!("Cannot read config file {s}: {e}")),
     }
 }
 

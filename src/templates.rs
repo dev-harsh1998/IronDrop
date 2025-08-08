@@ -181,12 +181,19 @@ impl TemplateEngine {
         variables.insert("ERROR_CODE".to_string(), status_code.to_string());
         variables.insert("ERROR_MESSAGE".to_string(), status_text.to_string());
         variables.insert("ERROR_DESCRIPTION".to_string(), description.to_string());
-        
+
         // Add additional variables for new template
-        variables.insert("REQUEST_ID".to_string(), 
-            format!("REQ-{:08X}", std::ptr::addr_of!(variables) as usize & 0xFFFFFFFF));
-        variables.insert("TIMESTAMP".to_string(), 
-            format!("{:?}", std::time::SystemTime::now()));
+        variables.insert(
+            "REQUEST_ID".to_string(),
+            format!(
+                "REQ-{:08X}",
+                std::ptr::addr_of!(variables) as usize & 0xFFFFFFFF
+            ),
+        );
+        variables.insert(
+            "TIMESTAMP".to_string(),
+            format!("{:?}", std::time::SystemTime::now()),
+        );
 
         self.render("error_page", &variables)
     }

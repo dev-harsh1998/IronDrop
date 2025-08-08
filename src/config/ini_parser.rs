@@ -11,6 +11,12 @@ pub struct IniConfig {
     global: HashMap<String, String>,
 }
 
+impl Default for IniConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IniConfig {
     pub fn new() -> Self {
         Self {
@@ -21,8 +27,8 @@ impl IniConfig {
 
     /// Load configuration from file
     pub fn load_file<P: AsRef<Path>>(path: P) -> Result<Self, String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read config file: {}", e))?;
+        let content =
+            fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {e}"))?;
         Self::parse(&content)
     }
 
@@ -43,13 +49,13 @@ impl IniConfig {
             // Parse section headers [section]
             if line.starts_with('[') && line.ends_with(']') {
                 if line.len() < 3 {
-                    return Err(format!("Invalid section at line {}: {}", line_number, line));
+                    return Err(format!("Invalid section at line {line_number}: {line}"));
                 }
-                current_section = line[1..line.len()-1].trim().to_string();
+                current_section = line[1..line.len() - 1].trim().to_string();
                 if current_section.is_empty() {
-                    return Err(format!("Empty section name at line {}", line_number));
+                    return Err(format!("Empty section name at line {line_number}"));
                 }
-                config.sections.entry(current_section.clone()).or_insert_with(HashMap::new);
+                config.sections.entry(current_section.clone()).or_default();
                 continue;
             } else if line.starts_with('[') {
                 // Malformed section header - ignore it gracefully
@@ -62,7 +68,7 @@ impl IniConfig {
                 let mut value = line[eq_pos + 1..].trim();
 
                 if key.is_empty() {
-                    return Err(format!("Empty key at line {}: {}", line_number, line));
+                    return Err(format!("Empty key at line {line_number}: {line}"));
                 }
 
                 // Handle inline comments - remove everything after # or ;
@@ -80,12 +86,14 @@ impl IniConfig {
                     config.global.insert(key, value);
                 } else {
                     // Named section
-                    config.sections.get_mut(&current_section)
+                    config
+                        .sections
+                        .get_mut(&current_section)
                         .unwrap()
                         .insert(key, value);
                 }
             } else {
-                return Err(format!("Invalid syntax at line {}: {}", line_number, line));
+                return Err(format!("Invalid syntax at line {line_number}: {line}"));
             }
         }
 
@@ -104,7 +112,8 @@ impl IniConfig {
     /// Get string value with default fallback
     #[allow(dead_code)]
     pub fn get_string_or(&self, section: &str, key: &str, default: &str) -> String {
-        self.get_string(section, key).unwrap_or_else(|| default.to_string())
+        self.get_string(section, key)
+            .unwrap_or_else(|| default.to_string())
     }
 
     /// Get integer value
@@ -137,10 +146,12 @@ impl IniConfig {
     /// Get comma-separated list
     pub fn get_list(&self, section: &str, key: &str) -> Vec<String> {
         self.get_string(section, key)
-            .map(|s| s.split(',')
-                .map(|item| item.trim().to_string())
-                .filter(|item| !item.is_empty())
-                .collect())
+            .map(|s| {
+                s.split(',')
+                    .map(|item| item.trim().to_string())
+                    .filter(|item| !item.is_empty())
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -162,7 +173,8 @@ impl IniConfig {
         if section.is_empty() {
             self.global.contains_key(key)
         } else {
-            self.sections.get(section)
+            self.sections
+                .get(section)
                 .map(|s| s.contains_key(key))
                 .unwrap_or(false)
         }
@@ -178,7 +190,7 @@ impl IniConfig {
 /// Helper function to parse file sizes like "10GB", "500MB", etc.
 fn parse_file_size(value: &str) -> Option<u64> {
     let value = value.trim().to_uppercase();
-    
+
     if let Ok(num) = value.parse::<u64>() {
         return Some(num);
     }
@@ -198,17 +210,17 @@ fn parse_file_size(value: &str) -> Option<u64> {
     };
 
     let num_str = num_part.trim();
-    
+
     // Try parsing as integer first
     if let Ok(num) = num_str.parse::<u64>() {
         return Some(num * suffix);
     }
-    
+
     // Try parsing as float for decimal values like "1.5"
     if let Ok(num) = num_str.parse::<f64>() {
         return Some((num * suffix as f64) as u64);
     }
-    
+
     None
 }
 
@@ -222,9 +234,18 @@ mod tests {
         assert_eq!(parse_file_size("1KB"), Some(1024));
         assert_eq!(parse_file_size("1MB"), Some(1024 * 1024));
         assert_eq!(parse_file_size("10GB"), Some(10 * 1024 * 1024 * 1024));
-        assert_eq!(parse_file_size("2TB"), Some(2 * 1024u64 * 1024 * 1024 * 1024));
-        assert_eq!(parse_file_size("1.5GB"), Some((1.5 * 1024.0 * 1024.0 * 1024.0) as u64));
-        assert_eq!(parse_file_size("2.5MB"), Some((2.5 * 1024.0 * 1024.0) as u64));
+        assert_eq!(
+            parse_file_size("2TB"),
+            Some(2 * 1024u64 * 1024 * 1024 * 1024)
+        );
+        assert_eq!(
+            parse_file_size("1.5GB"),
+            Some((1.5 * 1024.0 * 1024.0 * 1024.0) as u64)
+        );
+        assert_eq!(
+            parse_file_size("2.5MB"),
+            Some((2.5 * 1024.0 * 1024.0) as u64)
+        );
         assert_eq!(parse_file_size("invalid"), None);
     }
 
@@ -245,9 +266,15 @@ max_size=10GB
 
         let config = IniConfig::parse(content).unwrap();
         assert_eq!(config.get_bool("", "debug"), Some(true));
-        assert_eq!(config.get_string("server", "host"), Some("127.0.0.1".to_string()));
+        assert_eq!(
+            config.get_string("server", "host"),
+            Some("127.0.0.1".to_string())
+        );
         assert_eq!(config.get_u16("server", "port"), Some(8080));
-        assert_eq!(config.get_file_size("upload", "max_size"), Some(10 * 1024 * 1024 * 1024));
+        assert_eq!(
+            config.get_file_size("upload", "max_size"),
+            Some(10 * 1024 * 1024 * 1024)
+        );
     }
 
     #[test]

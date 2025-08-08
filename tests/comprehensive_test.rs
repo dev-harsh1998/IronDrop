@@ -291,7 +291,9 @@ fn test_static_asset_serving() {
         .unwrap()
         .contains("text/css"));
     assert!(
-        css_response.body.contains("Professional Blackish Grey Design"),
+        css_response
+            .body
+            .contains("Professional Blackish Grey Design"),
         "Should contain design system comment"
     );
     assert!(

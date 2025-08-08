@@ -3,8 +3,8 @@
 
 pub mod ini_parser;
 
-use ini_parser::IniConfig;
 use crate::cli::Cli;
+use ini_parser::IniConfig;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -51,15 +51,15 @@ impl Config {
             threads: Self::get_threads(&ini, cli),
             chunk_size: Self::get_chunk_size(&ini, cli),
             directory: Self::get_directory(&ini, cli)?,
-            
+
             enable_upload: Self::get_enable_upload(&ini, cli),
             max_upload_size: Self::get_max_upload_size(&ini, cli),
             upload_dir: Self::get_upload_dir(&ini, cli),
-            
+
             username: Self::get_username(&ini, cli),
             password: Self::get_password(&ini, cli),
             allowed_extensions: Self::get_allowed_extensions(&ini, cli),
-            
+
             verbose: Self::get_verbose(&ini, cli),
             detailed_logging: Self::get_detailed_logging(&ini, cli),
         })
@@ -73,7 +73,9 @@ impl Config {
             if path.exists() {
                 return Ok(Some(path));
             } else {
-                return Err(format!("Config file specified but not found: {}", config_path));
+                return Err(format!(
+                    "Config file specified but not found: {config_path}"
+                ));
             }
         }
 
@@ -119,12 +121,12 @@ impl Config {
         if !cli.listen.is_empty() && cli.listen != "127.0.0.1" {
             return cli.listen.clone();
         }
-        
+
         // INI file
         if let Some(listen) = ini.get_string("server", "listen") {
             return listen;
         }
-        
+
         // Default
         "127.0.0.1".to_string()
     }
@@ -134,12 +136,12 @@ impl Config {
         if cli.port != 8080 {
             return cli.port;
         }
-        
+
         // INI file
         if let Some(port) = ini.get_u16("server", "port") {
             return port;
         }
-        
+
         // Default
         8080
     }
@@ -149,12 +151,12 @@ impl Config {
         if cli.threads != 8 {
             return cli.threads;
         }
-        
+
         // INI file
         if let Some(threads) = ini.get_usize("server", "threads") {
             return threads;
         }
-        
+
         // Default
         8
     }
@@ -164,19 +166,19 @@ impl Config {
         if cli.chunk_size != 1024 {
             return cli.chunk_size;
         }
-        
+
         // INI file
         if let Some(chunk_size) = ini.get_usize("server", "chunk_size") {
             return chunk_size;
         }
-        
+
         // Default
         1024
     }
 
     fn get_directory(_ini: &IniConfig, cli: &Cli) -> Result<PathBuf, String> {
         // CLI argument (always available since it's required)
-        return Ok(cli.directory.clone());
+        Ok(cli.directory.clone())
     }
 
     fn get_enable_upload(ini: &IniConfig, cli: &Cli) -> bool {
@@ -184,12 +186,12 @@ impl Config {
         if cli.enable_upload {
             return true;
         }
-        
+
         // INI file
         if let Some(enabled) = ini.get_bool("upload", "enabled") {
             return enabled;
         }
-        
+
         // Default
         false
     }
@@ -199,12 +201,12 @@ impl Config {
         if cli.max_upload_size != 10240 {
             return cli.max_upload_size * 1024 * 1024; // Convert MB to bytes
         }
-        
+
         // INI file (supports file size format like "10GB")
         if let Some(size_bytes) = ini.get_file_size("upload", "max_size") {
             return size_bytes;
         }
-        
+
         // Default: 10GB in bytes
         10240u64 * 1024 * 1024
     }
@@ -214,12 +216,12 @@ impl Config {
         if let Some(ref upload_dir) = cli.upload_dir {
             return Some(upload_dir.clone());
         }
-        
+
         // INI file
         if let Some(upload_dir) = ini.get_string("upload", "directory") {
             return Some(PathBuf::from(upload_dir));
         }
-        
+
         // Default: None (will use OS default download directory)
         None
     }
@@ -229,7 +231,7 @@ impl Config {
         if let Some(ref username) = cli.username {
             return Some(username.clone());
         }
-        
+
         // INI file
         ini.get_string("auth", "username")
     }
@@ -239,7 +241,7 @@ impl Config {
         if let Some(ref password) = cli.password {
             return Some(password.clone());
         }
-        
+
         // INI file
         ini.get_string("auth", "password")
     }
@@ -247,18 +249,20 @@ impl Config {
     fn get_allowed_extensions(ini: &IniConfig, cli: &Cli) -> Vec<String> {
         // CLI argument (check if not default)
         if cli.allowed_extensions != "*.zip,*.txt" {
-            return cli.allowed_extensions.split(',')
+            return cli
+                .allowed_extensions
+                .split(',')
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
         }
-        
+
         // INI file
         let ini_extensions = ini.get_list("security", "allowed_extensions");
         if !ini_extensions.is_empty() {
             return ini_extensions;
         }
-        
+
         // Default
         vec!["*.zip".to_string(), "*.txt".to_string()]
     }
@@ -268,7 +272,7 @@ impl Config {
         if cli.verbose {
             return true;
         }
-        
+
         // INI file
         ini.get_bool_or("logging", "verbose", false)
     }
@@ -278,7 +282,7 @@ impl Config {
         if cli.detailed_logging {
             return true;
         }
-        
+
         // INI file
         ini.get_bool_or("logging", "detailed", false)
     }
@@ -292,12 +296,22 @@ impl Config {
         log::info!("  Chunk Size: {} bytes", self.chunk_size);
         log::info!("  Upload Enabled: {}", self.enable_upload);
         if self.enable_upload {
-            log::info!("  Max Upload Size: {} MB", self.max_upload_size / (1024 * 1024));
+            log::info!(
+                "  Max Upload Size: {} MB",
+                self.max_upload_size / (1024 * 1024)
+            );
             if let Some(ref upload_dir) = self.upload_dir {
                 log::info!("  Upload Directory: {}", upload_dir.display());
             }
         }
-        log::info!("  Authentication: {}", if self.username.is_some() { "Enabled" } else { "Disabled" });
+        log::info!(
+            "  Authentication: {}",
+            if self.username.is_some() {
+                "Enabled"
+            } else {
+                "Disabled"
+            }
+        );
         log::info!("  Allowed Extensions: {:?}", self.allowed_extensions);
         log::info!("  Verbose Logging: {}", self.verbose);
         log::info!("  Detailed Logging: {}", self.detailed_logging);
@@ -307,8 +321,8 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     fn create_test_cli(directory: PathBuf) -> Cli {
         Cli {
@@ -332,10 +346,10 @@ mod tests {
     #[test]
     fn test_config_load_no_config_file() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let cli = create_test_cli(temp_dir.path().to_path_buf());
         let config = Config::load(&cli).unwrap();
-        
+
         // Should use CLI defaults when no config file exists
         assert_eq!(config.listen, "127.0.0.1");
         assert_eq!(config.port, 8080);
@@ -356,7 +370,7 @@ mod tests {
     fn test_config_load_with_ini_file() {
         let temp_dir = TempDir::new().unwrap();
         let config_file = temp_dir.path().join("test.ini");
-        
+
         let ini_content = r#"
 [server]
 listen = 0.0.0.0
@@ -379,14 +393,14 @@ allowed_extensions = *.pdf,*.doc
 verbose = true
 detailed = false
 "#;
-        
+
         fs::write(&config_file, ini_content).unwrap();
-        
+
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());
         cli.config_file = Some(config_file.to_string_lossy().to_string());
-        
+
         let config = Config::load(&cli).unwrap();
-        
+
         // Should use INI file values
         assert_eq!(config.listen, "0.0.0.0");
         assert_eq!(config.port, 9000);
@@ -405,29 +419,29 @@ detailed = false
     fn test_config_load_cli_overrides_ini() {
         let temp_dir = TempDir::new().unwrap();
         let config_file = temp_dir.path().join("test.ini");
-        
+
         let ini_content = r#"
 [server]
 listen = 0.0.0.0
 port = 9000
 threads = 16
 "#;
-        
+
         fs::write(&config_file, ini_content).unwrap();
-        
+
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());
         cli.config_file = Some(config_file.to_string_lossy().to_string());
         cli.listen = "192.168.1.1".to_string();
         cli.port = 7777;
         cli.verbose = true;
-        
+
         let config = Config::load(&cli).unwrap();
-        
+
         // CLI should override INI
         assert_eq!(config.listen, "192.168.1.1");
         assert_eq!(config.port, 7777);
         assert_eq!(config.verbose, true);
-        
+
         // INI should provide non-overridden values
         assert_eq!(config.threads, 16);
     }
@@ -435,13 +449,15 @@ threads = 16
     #[test]
     fn test_config_file_discovery_nonexistent() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());
         cli.config_file = Some("/nonexistent/path.ini".to_string());
-        
+
         let result = Config::load(&cli);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Config file specified but not found"));
+        assert!(result
+            .unwrap_err()
+            .contains("Config file specified but not found"));
     }
 
     #[test]
@@ -449,22 +465,25 @@ threads = 16
         let temp_dir = TempDir::new().unwrap();
         let upload_dir = temp_dir.path().join("uploads");
         fs::create_dir_all(&upload_dir).unwrap();
-        
+
         let config_file = temp_dir.path().join("test.ini");
-        let ini_content = format!(r#"
+        let ini_content = format!(
+            r#"
 [upload]
 enabled = true
 max_size = 2GB
 directory = {}
-"#, upload_dir.to_string_lossy());
-        
+"#,
+            upload_dir.to_string_lossy()
+        );
+
         fs::write(&config_file, ini_content).unwrap();
-        
+
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());
         cli.config_file = Some(config_file.to_string_lossy().to_string());
-        
+
         let config = Config::load(&cli).unwrap();
-        
+
         assert_eq!(config.enable_upload, true);
         assert_eq!(config.max_upload_size, 2 * 1024 * 1024 * 1024);
         assert_eq!(config.upload_dir, Some(upload_dir));
@@ -474,7 +493,7 @@ directory = {}
     fn test_config_max_upload_size_formats() {
         let temp_dir = TempDir::new().unwrap();
         let config_file = temp_dir.path().join("test.ini");
-        
+
         // Temporarily move any irondrop.ini in current directory to avoid interference
         let current_config = PathBuf::from("irondrop.ini");
         let backup_config = PathBuf::from("irondrop.ini.backup");
@@ -484,24 +503,27 @@ directory = {}
         } else {
             false
         };
-        
+
         let ini_content = r#"
 [upload]
 max_size = 1.5GB
 "#;
-        
+
         fs::write(&config_file, ini_content).unwrap();
-        
+
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());
         cli.config_file = Some(config_file.to_string_lossy().to_string());
         // Set CLI to use default value (10240 MB = 10GB) so INI takes precedence
         cli.max_upload_size = 10240;
-        
+
         let config = Config::load(&cli).unwrap();
-        
+
         // 1.5GB should be converted to bytes
-        assert_eq!(config.max_upload_size, (1.5 * 1024.0 * 1024.0 * 1024.0) as u64);
-        
+        assert_eq!(
+            config.max_upload_size,
+            (1.5 * 1024.0 * 1024.0 * 1024.0) as u64
+        );
+
         // Restore the config file if it existed
         if config_existed {
             std::fs::rename(&backup_config, &current_config).ok();
@@ -513,7 +535,7 @@ max_size = 1.5GB
         let temp_dir = TempDir::new().unwrap();
         let cli = create_test_cli(temp_dir.path().to_path_buf());
         let config = Config::load(&cli).unwrap();
-        
+
         // This should not panic
         config.print_summary();
     }
@@ -522,19 +544,19 @@ max_size = 1.5GB
     fn test_config_directory_always_from_cli() {
         let temp_dir = TempDir::new().unwrap();
         let config_file = temp_dir.path().join("test.ini");
-        
+
         // Even if INI has directory, CLI should always win (since it's required)
         let ini_content = r#"
 [server]
 directory = /some/other/path
 "#;
         fs::write(&config_file, ini_content).unwrap();
-        
+
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());
         cli.config_file = Some(config_file.to_string_lossy().to_string());
-        
+
         let config = Config::load(&cli).unwrap();
-        
+
         // Directory should always come from CLI
         assert_eq!(config.directory, temp_dir.path());
     }
