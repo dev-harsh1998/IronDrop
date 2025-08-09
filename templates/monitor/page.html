@@ -58,6 +58,15 @@
         <tr><th>Upload Success %</th><td id="upload_success_rate">-</td></tr>
       </table>
     </div>
+    <div class="card" id="memory_card">
+      <h2>Memory Usage</h2>
+      <table>
+        <tr><th>Current</th><td id="mem_current">-</td></tr>
+        <tr><th>Current (MB)</th><td id="mem_current_mb">-</td></tr>
+        <tr><th>Peak</th><td id="mem_peak">-</td></tr>
+        <tr><th>Peak (MB)</th><td id="mem_peak_mb">-</td></tr>
+      </table>
+    </div>
     <div class="card">
       <h2>Uptime</h2>
       <table>
@@ -76,7 +85,7 @@
         const res=await fetch('/monitor?json=1');
         if(!res.ok) throw new Error('HTTP '+res.status);
         const data=await res.json();
-        const r=data.requests, u=data.uploads, d=data.downloads;
+        const r=data.requests, u=data.uploads, d=data.downloads, m=data.memory;
         document.getElementById('req_total').textContent=r.total;
         document.getElementById('req_success').textContent=r.successful;
         document.getElementById('req_errors').textContent=r.errors;
@@ -95,6 +104,16 @@
         document.getElementById('concurrent_uploads').textContent=u.concurrent_uploads;
         document.getElementById('avg_processing').textContent=u.average_processing_ms?.toFixed?u.average_processing_ms.toFixed(1):u.average_processing_ms;
         document.getElementById('upload_success_rate').textContent=u.success_rate.toFixed?u.success_rate.toFixed(2)+'%':u.success_rate+'%';
+        const memoryCard = document.getElementById('memory_card');
+        if(m && m.available){
+          memoryCard.style.display = 'block';
+          document.getElementById('mem_current').textContent=m.current_bytes ? humanBytes(m.current_bytes) : 'N/A';
+          document.getElementById('mem_current_mb').textContent=m.current_mb !== null ? m.current_mb.toFixed(2) : 'N/A';
+          document.getElementById('mem_peak').textContent=m.peak_bytes ? humanBytes(m.peak_bytes) : 'N/A';
+          document.getElementById('mem_peak_mb').textContent=m.peak_mb !== null ? m.peak_mb.toFixed(2) : 'N/A';
+        } else {
+          memoryCard.style.display = 'none';
+        }
         document.getElementById('uptime_secs').textContent=data.uptime_secs;
         document.getElementById('uptime_pretty').textContent=prettyUptime(data.uptime_secs);
         document.getElementById('last_updated').textContent=new Date().toLocaleTimeString();
