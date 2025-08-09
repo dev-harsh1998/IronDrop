@@ -103,6 +103,8 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 const hadValue = searchInput.value.length > 0;
                 searchInput.value = '';
+                // Clear timeout to prevent any pending searches
+                clearTimeout(searchTimeout);
                 showAllRows();
                 searchInput.blur();
                 if (hadValue) {
@@ -320,14 +322,34 @@ document.addEventListener('DOMContentLoaded', function() {
         // Search engine
         let searchTimeout;
         
+        // Add keyup handler to catch delete/backspace events that clear the input
+        searchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Backspace' || e.key === 'Delete') {
+                const query = e.target.value.trim();
+                if (!query) {
+                    hideDropdown();
+                    showAllRows();
+                    searchStatus.classList.remove('loading', 'has-results');
+                    resetDropdownSelection();
+                }
+            }
+        });
+        
         // Search input handler with debouncing
         searchInput.addEventListener('input', function(e) {
             clearTimeout(searchTimeout);
             const query = e.target.value.trim();
             
+            // Immediately clear any existing dropdown and reset state
+            hideDropdown();
+            
             if (!query) {
+                // Ensure complete cleanup when search is cleared
                 showAllRows();
-                hideDropdown();
+                // Force cleanup of any remaining state
+                searchStatus.classList.remove('loading', 'has-results');
+                // Reset any selected dropdown state
+                resetDropdownSelection();
                 return;
             }
             
@@ -513,7 +535,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Use requestAnimationFrame for smooth DOM updates
             requestAnimationFrame(() => {
-                // Smooth hide/show transitions
                 // Batch DOM operations for better performance
                 const toShow = [];
                 const toHide = [];
@@ -526,27 +547,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
                 
-                // Hide rows first
+                // Apply changes simultaneously to prevent visual jumping
                 toHide.forEach(item => {
                     item.row.classList.add('hidden');
-                    item.row.classList.remove('visible');
+                    item.row.classList.remove('visible', 'search-match');
                     clearHighlight(item.nameEl);
                 });
                 
-                // Small delay before showing new results for smoother transition
-                setTimeout(() => {
-                    toShow.forEach(item => {
-                        item.row.classList.remove('hidden');
-                        item.row.classList.add('visible');
-                        // Add highlight animation for fewer results
-                        if (results.length < 15) {
+                toShow.forEach(item => {
+                    item.row.classList.remove('hidden');
+                    item.row.classList.add('visible');
+                    // Add subtle highlight animation for fewer results only
+                    if (results.length < 15) {
+                        // Use a shorter, less intrusive animation
+                        setTimeout(() => {
                             item.row.classList.add('search-match');
-                            // Remove animation class after animation completes
-                            setTimeout(() => item.row.classList.remove('search-match'), 400);
-                        }
-                        highlightMatch(item.nameEl, item.originalName, query);
-                    });
-                }, 50);
+                            setTimeout(() => item.row.classList.remove('search-match'), 300);
+                        }, 10);
+                    }
+                    highlightMatch(item.nameEl, item.originalName, query);
+                });
             });
         }
         
@@ -592,6 +612,9 @@ document.addEventListener('DOMContentLoaded', function() {
             searchStatus.textContent = `${totalFiles} items`;
             searchStatus.classList.remove('has-results', 'loading');
             
+            // Ensure dropdown is completely hidden
+            hideDropdown();
+            
             // Then update DOM with smooth transitions
             requestAnimationFrame(() => {
                 searchIndex.forEach(item => {
@@ -605,6 +628,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // API search for subdirectories
         async function performApiSearch(query) {
             try {
+                // Verify the query is still current before making API call
+                const currentQuery = searchInput.value.trim();
+                if (currentQuery !== query || !currentQuery) {
+                    console.log('Query changed during API search, aborting');
+                    return;
+                }
+                
                 const currentPath = window.location.pathname;
                 const response = await fetch(`/_api/search?q=${encodeURIComponent(query)}&path=${encodeURIComponent(currentPath)}`);
                 
@@ -615,6 +645,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const results = await response.json();
                 console.log(`API search found ${results.length} results`);
+                
+                // Double-check query is still current after API response
+                const finalQuery = searchInput.value.trim();
+                if (finalQuery !== query || !finalQuery) {
+                    console.log('Query changed after API response, ignoring results');
+                    return;
+                }
                 
                 // Show dropdown with results
                 if (results.length > 0) {
@@ -630,14 +667,30 @@ document.addEventListener('DOMContentLoaded', function() {
         // Note: dropdown and selectedDropdownIndex are now global variables
         
         function showDropdown(results, query) {
-            // Remove existing dropdown
-            hideDropdown();
-            
+            // Remove existing dropdown with proper cleanup
+            if (dropdown) {
+                hideDropdown();
+                // Wait for cleanup to complete before creating new dropdown
+                setTimeout(() => createDropdown(results, query), 160);
+            } else {
+                createDropdown(results, query);
+            }
+        }
+        
+        function createDropdown(results, query) {
             if (results.length === 0) return;
+            
+            // Verify query is still current
+            const currentQuery = searchInput.value.trim();
+            if (currentQuery !== query || !currentQuery) {
+                return;
+            }
             
             // Create dropdown
             dropdown = document.createElement('div');
             dropdown.className = 'search-dropdown';
+            dropdown.style.opacity = '0';
+            dropdown.style.transform = 'translateY(-10px)';
             dropdown.innerHTML = `
                 <div class="dropdown-header">
                     <span>Files in subdirectories (${results.length})</span>
@@ -674,13 +727,30 @@ document.addEventListener('DOMContentLoaded', function() {
             // Position dropdown
             const searchContainer = document.querySelector('.search-container');
             searchContainer.appendChild(dropdown);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                dropdown.style.opacity = '1';
+                dropdown.style.transform = 'translateY(0)';
+                dropdown.style.pointerEvents = 'auto';
+            });
         }
         
         function hideDropdown() {
             if (dropdown) {
-                dropdown.remove();
-                dropdown = null;
-                resetDropdownSelection();
+                // Add fade out animation before removal for smoother transition
+                dropdown.style.opacity = '0';
+                dropdown.style.transform = 'translateY(-10px)';
+                dropdown.style.pointerEvents = 'none';
+                
+                // Remove after animation completes
+                setTimeout(() => {
+                    if (dropdown && dropdown.parentNode) {
+                        dropdown.remove();
+                    }
+                    dropdown = null;
+                    resetDropdownSelection();
+                }, 150);
             }
         }
         

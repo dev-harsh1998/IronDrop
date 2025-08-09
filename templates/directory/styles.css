@@ -264,11 +264,11 @@ mark {
 
 tr.hidden {
     opacity: 0;
-    transform: translateY(-5px) scale(0.98);
+    transform: translateY(-2px) scale(0.99);
     pointer-events: none;
     /* Use visibility instead of display for smoother transitions */
     visibility: hidden;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     /* Prevent layout shift by collapsing smoothly */
     max-height: 0;
     overflow: hidden;
@@ -279,7 +279,7 @@ tr.hidden td {
     padding-bottom: 0;
     border: none;
     height: 0;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Visible state for smooth transitions */
@@ -287,7 +287,7 @@ tr.visible {
     opacity: 1;
     transform: translateY(0) scale(1);
     visibility: visible;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     max-height: 5rem;
 }
 
@@ -296,7 +296,7 @@ tr.visible td {
     height: 3.5rem;
     border-bottom: 1px solid var(--border);
     border-right: 1px solid var(--table-border);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 tr.visible td:last-child {
@@ -304,18 +304,18 @@ tr.visible td:last-child {
 }
 
 tr.search-match {
-    animation: searchHighlight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: searchHighlight 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes searchHighlight {
     0% { 
-        background: rgba(255, 255, 255, 0.08);
-        transform: translateX(3px) scale(1.01);
-        box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        transform: translateX(1px) scale(1.005);
+        box-shadow: 0 1px 4px rgba(255, 255, 255, 0.08);
     }
     50% {
-        background: rgba(255, 255, 255, 0.04);
-        transform: translateX(1px) scale(1.005);
+        background: rgba(255, 255, 255, 0.03);
+        transform: translateX(0.5px) scale(1.002);
     }
     100% { 
         background: transparent;
@@ -337,7 +337,8 @@ tr.search-match {
     z-index: var(--z-dropdown);
     max-height: 300px;
     overflow: hidden;
-    animation: dropdownSlide var(--transition-fast) ease-out;
+    /* Smooth transitions instead of animation */
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     /* Prevent layout shifts */
     will-change: transform, opacity;
     /* Ensure dropdown is always clickable */
@@ -349,16 +350,7 @@ tr.search-match {
     -webkit-backdrop-filter: blur(20px);
 }
 
-@keyframes dropdownSlide {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
+/* Remove animation keyframe as we're using CSS transitions now */
 
 .dropdown-header {
     padding: var(--spacing-md) var(--spacing-lg);
