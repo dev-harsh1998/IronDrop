@@ -26,7 +26,7 @@ The system emphasizes simplicity (no runtime parsing of template files from disk
 ```
  Request ─┬──────────────▶ Route Layer (http.rs)
          │                    │
-         │ (HTML Page Route)  │ (Static Asset Route /_static/...)
+         │ (HTML Page Route)  │ (Static Asset Route /_irondrop/static/...)
          ▼                    ▼
    TemplateEngine          get_static_asset()
          │                    │
@@ -132,13 +132,13 @@ Served through controlled paths (example mapping):
 
 | Request Path | Engine Key | MIME |
 |--------------|-----------|------|
-| `/_static/common/base.css` | `common/base.css` | `text/css` |
-| `/_static/directory/styles.css` | `directory/styles.css` | `text/css` |
-| `/_static/directory/script.js` | `directory/script.js` | `application/javascript` |
-| `/_static/error/styles.css` | `error/styles.css` | `text/css` |
-| `/_static/error/script.js` | `error/script.js` | `application/javascript` |
-| `/_static/upload/styles.css` | `upload/styles.css` | `text/css` |
-| `/_static/upload/script.js` | `upload/script.js` | `application/javascript` |
+| `/_irondrop/static/common/base.css` | `common/base.css` | `text/css` |
+| `/_irondrop/static/directory/styles.css` | `directory/styles.css` | `text/css` |
+| `/_irondrop/static/directory/script.js` | `directory/script.js` | `application/javascript` |
+| `/_irondrop/static/error/styles.css` | `error/styles.css` | `text/css` |
+| `/_irondrop/static/error/script.js` | `error/script.js` | `application/javascript` |
+| `/_irondrop/static/upload/styles.css` | `upload/styles.css` | `text/css` |
+| `/_irondrop/static/upload/script.js` | `upload/script.js` | `application/javascript` |
 
 Favicon assets are similarly handled (e.g. `/favicon.ico`).
 

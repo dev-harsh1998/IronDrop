@@ -6,27 +6,11 @@
     text-align: center;
 }
 
+/* Back link uses base btn-light styles with minimal customization */
 .back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-sm);
-    color: var(--text-primary);
-    text-decoration: none;
+    margin-bottom: var(--space-lg);
     font-size: 0.9rem;
     padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-md);
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-    transition: var(--transition-fast);
-    margin-bottom: var(--space-lg);
-}
-
-.back-link:hover {
-    background: rgba(255, 255, 255, 0.18);
-    border-color: rgba(255, 255, 255, 0.3);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .back-icon {
@@ -146,19 +130,19 @@
     gap: 0.75rem;
 }
 
-/* Danger modifier for light buttons */
+/* Danger modifier for light buttons - extends base btn-light */
 .btn-light.danger {
     color: #ff8a8a;
     border-color: rgba(255, 138, 138, 0.4);
     background: rgba(255, 107, 107, 0.08);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--shadow-button);
 }
 
 .btn-light.danger:hover {
     background: rgba(255, 107, 107, 0.15);
     border-color: rgba(255, 138, 138, 0.6);
     color: #ff6b6b;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--shadow-hover);
 }
 
 /* Queue Items */

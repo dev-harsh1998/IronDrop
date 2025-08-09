@@ -1,16 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{PATH}} - IronDrop</title>
-    <link rel="stylesheet" href="/_static/directory/styles.css">
+
+    <!-- Common Base Styles -->
+    <link rel="stylesheet" href="/_irondrop/static/common/base.css">
+
+    <!-- Directory-specific Styles -->
+    <link rel="stylesheet" href="/_irondrop/static/directory/styles.css">
+
+    <!-- Favicons -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
+        <!-- Search Container -->
         <div class="search-container" role="search">
             <label for="search" class="sr-only">Search files and directories</label>
             <input type="text" 
@@ -27,6 +44,8 @@
                   aria-live="polite"
                   aria-atomic="true"></span>
         </div>
+        
+        <!-- File Listing -->
         <div class="listing" role="main">
             <table role="table" aria-label="File and directory listing">
                 <thead>
@@ -43,6 +62,6 @@
         </div>
     </div>
     
-    <script src="/_static/directory/script.js"></script>
+    <script src="/_irondrop/static/directory/script.js"></script>
 </body>
 </html>

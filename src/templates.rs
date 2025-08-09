@@ -255,9 +255,60 @@ impl TemplateEngine {
                 .unwrap_or_default()
                 .as_millis()
         );
-        let timestamp = chrono::Utc::now()
-            .format("%Y-%m-%d %H:%M:%S UTC")
-            .to_string();
+        let timestamp = {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let since_epoch = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+
+            // Convert to UTC time components
+            const SECONDS_IN_DAY: u64 = 86400;
+            const SECONDS_IN_HOUR: u64 = 3600;
+            const SECONDS_IN_MINUTE: u64 = 60;
+
+            let days_since_epoch = since_epoch / SECONDS_IN_DAY;
+            let remaining_seconds = since_epoch % SECONDS_IN_DAY;
+
+            let hours = remaining_seconds / SECONDS_IN_HOUR;
+            let minutes = (remaining_seconds % SECONDS_IN_HOUR) / SECONDS_IN_MINUTE;
+            let seconds = remaining_seconds % SECONDS_IN_MINUTE;
+
+            // Simple epoch to date conversion (approximate)
+            // Start from 1970-01-01 and add days
+            let mut year = 1970;
+            let mut remaining_days = days_since_epoch;
+
+            // Handle leap years (simplified)
+            while remaining_days >= 365 {
+                let days_in_year = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
+                    366
+                } else {
+                    365
+                };
+
+                if remaining_days >= days_in_year {
+                    remaining_days -= days_in_year;
+                    year += 1;
+                } else {
+                    break;
+                }
+            }
+
+            // Simplified month/day calculation
+            let month = (remaining_days / 31) + 1;
+            let day = (remaining_days % 31) + 1;
+
+            format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC",
+                year,
+                month.min(12),
+                day.max(1),
+                hours,
+                minutes,
+                seconds
+            )
+        };
         variables.insert("REQUEST_ID".to_string(), request_id);
         variables.insert("TIMESTAMP".to_string(), timestamp);
 

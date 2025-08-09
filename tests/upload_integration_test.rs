@@ -1,6 +1,9 @@
 //! Comprehensive integration tests for IronDrop file upload functionality
 //!
 //! This test suite provides comprehensive coverage of upload functionality including:
+
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::expect_fun_call)]
 //! - Basic upload operations (single/multiple files)
 //! - Security validations (extension, filename sanitization, size limits)
 //! - Error handling (malformed requests, disk scenarios, network issues)
@@ -858,8 +861,7 @@ fn test_resource_exhaustion_protection() {
     let max_errors = if cfg!(target_os = "windows") { 5 } else { 2 };
     assert!(
         success_count + rejection_count + error_count == results.len() && error_count <= max_errors,
-        "All requests should either succeed or be gracefully rejected. Results: {:?}",
-        results
+        "All requests should either succeed or be gracefully rejected. Results: {results:?}"
     );
 }
 

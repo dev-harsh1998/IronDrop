@@ -187,7 +187,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 ### 🎨 **Modern Web Interface**
 - **Professional Blackish-Grey UI** – Clean, corporate-grade design with sophisticated glassmorphism effects
 - **Modular Template System** – Organized HTML/CSS/JS architecture with variable interpolation
-- **Static Asset Serving** – Efficient delivery of stylesheets and scripts via `/_static/` routes
+- **Static Asset Serving** – Efficient delivery of stylesheets and scripts via `/_irondrop/static/` routes
 - **Responsive Design** – Mobile-friendly interface with adaptive layouts
 
 ### 🔐 **Advanced Security & Monitoring**
@@ -823,7 +823,7 @@ Don't know where to start? Here are some **beginner-friendly test contributions:
 - **Path Traversal Prevention**: All paths are canonicalized and validated against the served directory
 - **Extension Filtering**: Configurable glob patterns restrict downloadable file types
 - **Basic Authentication**: Optional username/password protection with proper challenge responses
-- **Static Asset Protection**: Template files served only through controlled `/_static/` routes
+- **Static Asset Protection**: Template files served only through controlled `/_irondrop/static/` routes
 
 ### Advanced Protection
 - **Rate Limiting**: DoS protection with configurable requests per minute (default: 120)
@@ -889,7 +889,7 @@ templates/error/         # Error page templates
 ```
 
 ### Static Asset Delivery
-- **Optimized Serving**: CSS/JS files delivered via `/_static/` routes with proper caching headers
+- **Optimized Serving**: CSS/JS files delivered via `/_irondrop/static/` routes with proper caching headers
 - **MIME Detection**: Accurate Content-Type headers for all static assets
 - **Security**: Path traversal protection prevents access outside template directories
 - **Performance**: Efficient file streaming with conditional request support

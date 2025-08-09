@@ -1,3 +1,5 @@
+#![allow(clippy::uninlined_format_args)]
+
 #[cfg(test)]
 mod ultra_compact_tests {
     use irondrop::ultra_compact_search::*;
@@ -20,7 +22,7 @@ mod ultra_compact_tests {
         let mut dir_ids = Vec::new();
         for i in 0..dirs_per_level {
             let dir_id = index.add_entry(
-                &format!("dir_{:04}", i),
+                &format!("dir_{i:04}"),
                 0, // root parent
                 0,
                 true,
@@ -47,7 +49,7 @@ mod ultra_compact_tests {
                     }
 
                     index.add_entry(
-                        &format!("file_{:04}_{:06}.dat", level, j),
+                        &format!("file_{level:04}_{j:06}.dat"),
                         parent_id,
                         1024 * (j as u64 + 1),
                         false,
@@ -57,7 +59,7 @@ mod ultra_compact_tests {
 
                     // Progress indicator
                     if total_added % 100_000 == 0 {
-                        println!("Added {} entries...", total_added);
+                        println!("Added {total_added} entries...");
                     }
                 }
 
@@ -69,7 +71,7 @@ mod ultra_compact_tests {
                         }
 
                         let subdir_id = index.add_entry(
-                            &format!("subdir_{:04}_{:02}", level, k),
+                            &format!("subdir_{level:04}_{k:02}"),
                             parent_id,
                             0,
                             true,
@@ -97,7 +99,7 @@ mod ultra_compact_tests {
                     total_added += 1;
 
                     if total_added % 100_000 == 0 {
-                        println!("Added {} entries...", total_added);
+                        println!("Added {total_added} entries...");
                     }
                 }
             }

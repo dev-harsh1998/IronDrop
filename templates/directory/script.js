@@ -636,7 +636,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 const currentPath = window.location.pathname;
-                const response = await fetch(`/_api/search?q=${encodeURIComponent(query)}&path=${encodeURIComponent(currentPath)}`);
+                const response = await fetch(`/_irondrop/search?q=${encodeURIComponent(query)}&path=${encodeURIComponent(currentPath)}`);
                 
                 if (!response.ok) {
                     console.warn('API search failed:', response.status);

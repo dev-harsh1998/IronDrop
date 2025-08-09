@@ -23,7 +23,7 @@ The upload UI system consists of core components plus a shared design system:
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
 
 ### 🎨 Visual Design
-- **Shared Design System**: Inherits global tokens & components via `/_static/common/base.css`
+- **Shared Design System**: Inherits global tokens & components via `/_irondrop/static/common/base.css`
 - **Dark Theme Integration**: Professional blackish-grey palette (#0a0a0a → #ffffff)
 - **Glass Effects**: Backdrop blur & translucent surfaces
 - **Smooth Animations**: CSS transitions (no JS dependency)
@@ -57,9 +57,9 @@ pub fn get_upload_form(&self) -> Result<String, AppError>
 ### Static Asset Serving
 
 Upload assets are served via the static asset system:
-- `/_static/common/base.css` (shared foundation)
-- `/_static/upload/styles.css`
-- `/_static/upload/script.js`
+- `/_irondrop/static/common/base.css` (shared foundation)
+- `/_irondrop/static/upload/styles.css`
+- `/_irondrop/static/upload/script.js`
 
 ## Usage Examples
 
@@ -237,7 +237,7 @@ const allowedTypes = ['*']; // All types allowed
 
 - **Complete Upload System**: Production-ready file upload handling
 - **Professional UI**: Modern blackish-grey theme with glassmorphism effects
-- **Template Integration**: All templates embedded and served via `/_static/` routes
+- **Template Integration**: All templates embedded and served via `/_irondrop/static/` routes
 - **Security Integration**: Upload validation respects CLI security configurations
 - **Multi-file Support**: Concurrent upload handling with progress tracking
 - **Error Handling**: Comprehensive client and server-side error management

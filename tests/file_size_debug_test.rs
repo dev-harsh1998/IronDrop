@@ -87,16 +87,16 @@ fn test_debug_file_size_limits() {
                                         println!("✅ Size correct");
                                     }
                                 }
-                                Err(e) => println!("❌ Error reading data: {:?}", e),
+                                Err(e) => println!("❌ Error reading data: {e:?}"),
                             }
                         }
-                        Err(e) => println!("❌ Error with part: {:?}", e),
+                        Err(e) => println!("❌ Error with part: {e:?}"),
                     }
                 } else {
                     println!("❌ Expected 1 part, got {}", parts.len());
                 }
             }
-            Err(e) => println!("❌ Parser creation failed: {:?}", e),
+            Err(e) => println!("❌ Parser creation failed: {e:?}"),
         }
 
         println!("---");

@@ -334,13 +334,13 @@ mod tests {
         assert_eq!(config.threads, 8);
         assert_eq!(config.chunk_size, 1024);
         assert_eq!(config.directory, temp_dir.path());
-        assert_eq!(config.enable_upload, false);
+        assert!(!config.enable_upload);
         assert_eq!(config.max_upload_size, 10240 * 1024 * 1024);
         assert_eq!(config.username, None);
         assert_eq!(config.password, None);
         assert_eq!(config.allowed_extensions, vec!["*.zip", "*.txt"]);
-        assert_eq!(config.verbose, false);
-        assert_eq!(config.detailed_logging, false);
+        assert!(!config.verbose);
+        assert!(!config.detailed_logging);
     }
 
     #[test]
@@ -383,13 +383,13 @@ detailed = false
         assert_eq!(config.port, 9000);
         assert_eq!(config.threads, 16);
         assert_eq!(config.chunk_size, 2048);
-        assert_eq!(config.enable_upload, true);
+        assert!(config.enable_upload);
         assert_eq!(config.max_upload_size, 5 * 1024 * 1024 * 1024);
         assert_eq!(config.username, Some("testuser".to_string()));
         assert_eq!(config.password, Some("testpass".to_string()));
         assert_eq!(config.allowed_extensions, vec!["*.pdf", "*.doc"]);
-        assert_eq!(config.verbose, true);
-        assert_eq!(config.detailed_logging, false);
+        assert!(config.verbose);
+        assert!(!config.detailed_logging);
     }
 
     #[test]
@@ -417,7 +417,7 @@ threads = 16
         // CLI should override INI
         assert_eq!(config.listen, "192.168.1.1");
         assert_eq!(config.port, 7777);
-        assert_eq!(config.verbose, true);
+        assert!(config.verbose);
 
         // INI should provide non-overridden values
         assert_eq!(config.threads, 16);
@@ -455,7 +455,7 @@ max_upload_size = 2GB
 
         let config = Config::load(&cli).unwrap();
 
-        assert_eq!(config.enable_upload, true);
+        assert!(config.enable_upload);
         assert_eq!(config.max_upload_size, 2 * 1024 * 1024 * 1024);
     }
 

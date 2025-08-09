@@ -1,3 +1,6 @@
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::expect_fun_call)]
+
 use irondrop::cli::Cli;
 use irondrop::http::Request;
 use irondrop::upload::UploadHandler;

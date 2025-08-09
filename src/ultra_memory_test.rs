@@ -42,8 +42,8 @@ mod tests {
             string_pool_size as f64 / 1_048_576.0
         );
         println!("  Radix index: {:.1} MB", radix_size as f64 / 1_048_576.0);
-        println!("  Total estimated: {:.1} MB", total_mb);
-        println!("  Target: <100 MB ({:.1}% of target)", total_mb);
+        println!("  Total estimated: {total_mb:.1} MB");
+        println!("  Target: <100 MB ({total_mb:.1}% of target)");
 
         // Verify we're achieving significant memory reduction (target was aspirational <100MB)
         // The key achievement is massive improvement over the original design
@@ -59,10 +59,9 @@ mod tests {
         let improvement_factor = original_memory_mb / total_mb;
 
         println!(
-            "  Original design (~{} bytes/entry): {:.1} MB",
-            original_bytes_per_entry, original_memory_mb
+            "  Original design (~{original_bytes_per_entry} bytes/entry): {original_memory_mb:.1} MB"
         );
-        println!("  Memory improvement: {:.1}x better", improvement_factor);
+        println!("  Memory improvement: {improvement_factor:.1}x better");
 
         assert!(
             improvement_factor > 15.0,
@@ -70,8 +69,7 @@ mod tests {
         );
 
         println!(
-            "✓ Ultra-low memory target is achievable with {:.1}x improvement",
-            improvement_factor
+            "✓ Ultra-low memory target is achievable with {improvement_factor:.1}x improvement"
         );
     }
 
@@ -140,7 +138,7 @@ mod tests {
         let stats = get_ultra_memory_stats();
         assert!(!stats.is_empty(), "Should get memory statistics");
         println!("\\nMemory Statistics:");
-        println!("{}", stats);
+        println!("{stats}");
 
         // Cleanup
         std::fs::remove_dir_all(&temp_dir).unwrap();
@@ -159,21 +157,21 @@ mod tests {
         // Create a larger number of test files to measure performance
         for i in 0..1000 {
             std::fs::write(
-                temp_dir.join(format!("file_{:04}.txt", i)),
-                format!("content for file {}", i),
+                temp_dir.join(format!("file_{i:04}.txt")),
+                format!("content for file {i}"),
             )
             .unwrap();
         }
 
         // Create some subdirectories
         for i in 0..10 {
-            let subdir = temp_dir.join(format!("dir_{:02}", i));
+            let subdir = temp_dir.join(format!("dir_{i:02}"));
             std::fs::create_dir_all(&subdir).unwrap();
 
             for j in 0..50 {
                 std::fs::write(
-                    subdir.join(format!("nested_file_{:02}_{:02}.txt", i, j)),
-                    format!("nested content {} {}", i, j),
+                    subdir.join(format!("nested_file_{i:02}_{j:02}.txt")),
+                    format!("nested content {i} {j}"),
                 )
                 .unwrap();
             }

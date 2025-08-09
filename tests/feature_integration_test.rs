@@ -1,5 +1,7 @@
 //! Integration tests for newly merged features: search and monitoring
 
+#![allow(clippy::uninlined_format_args)]
+
 use irondrop::cli::Cli;
 use irondrop::server::run_server;
 use reqwest::blocking::Client;
@@ -94,7 +96,10 @@ fn test_search_endpoint_basic_functionality() {
 
     // Test search for files containing "document"
     let response = client
-        .get(format!("http://{}/_api/search?q=document", server.addr))
+        .get(format!(
+            "http://{}/_irondrop/search?q=document",
+            server.addr
+        ))
         .send()
         .unwrap();
 
@@ -123,7 +128,7 @@ fn test_search_endpoint_with_nested_files() {
 
     // Test search for nested files
     let response = client
-        .get(format!("http://{}/_api/search?q=guide", server.addr))
+        .get(format!("http://{}/_irondrop/search?q=guide", server.addr))
         .send()
         .unwrap();
 
@@ -142,7 +147,7 @@ fn test_search_endpoint_error_handling() {
 
     // Test search without query parameter - should return 400
     let response = client
-        .get(format!("http://{}/_api/search", server.addr))
+        .get(format!("http://{}/_irondrop/search", server.addr))
         .send()
         .unwrap();
 
@@ -150,7 +155,7 @@ fn test_search_endpoint_error_handling() {
 
     // Test search with very short query - should return 400
     let response = client
-        .get(format!("http://{}/_api/search?q=a", server.addr))
+        .get(format!("http://{}/_irondrop/search?q=a", server.addr))
         .send()
         .unwrap();
 
@@ -226,7 +231,7 @@ fn test_directory_listing_includes_search_functionality() {
     assert!(body.contains("search"));
 
     // Should load the enhanced JavaScript
-    assert!(body.contains("/_static/directory/script.js"));
+    assert!(body.contains("/_irondrop/static/directory/script.js"));
 }
 
 #[test]
@@ -251,7 +256,7 @@ fn test_bytes_served_accounting_across_endpoints() {
 
     // Make a search request
     let _search_response = client
-        .get(format!("http://{}/_api/search?q=config", server.addr))
+        .get(format!("http://{}/_irondrop/search?q=config", server.addr))
         .send()
         .unwrap();
 
@@ -305,7 +310,7 @@ fn test_feature_integration_no_regressions() {
     // 4. Static assets should work
     let css_response = client
         .get(format!(
-            "http://{}/_static/directory/styles.css",
+            "http://{}/_irondrop/static/directory/styles.css",
             server.addr
         ))
         .send()
@@ -314,7 +319,7 @@ fn test_feature_integration_no_regressions() {
 
     // 5. New search endpoint should work
     let search_response = client
-        .get(format!("http://{}/_api/search?q=README", server.addr))
+        .get(format!("http://{}/_irondrop/search?q=README", server.addr))
         .send()
         .unwrap();
     assert_eq!(search_response.status(), StatusCode::OK);

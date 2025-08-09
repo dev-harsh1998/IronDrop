@@ -72,7 +72,7 @@ fn test_embedded_static_assets() {
     assert!(css.is_some(), "Directory CSS should be available");
     let (css_content, css_type) = css.unwrap();
     assert_eq!(css_type, "text/css");
-    assert!(css_content.contains("Professional Blackish Grey Design"));
+    assert!(css_content.contains("Directory Page - Extends Base Styles"));
 
     // Test base CSS (contains the CSS variables)
     let base_css = engine.get_static_asset("common/base.css");
@@ -170,7 +170,7 @@ fn test_directory_listing_rendering() {
     );
 
     // Note: Search functionality is not yet integrated into the current template system
-    // The search features are planned/implemented in directory/index.html but the 
+    // The search features are planned/implemented in directory/index.html but the
     // template engine currently uses the modular base.html + directory/content.html approach
     // which doesn't include search elements yet.
 }

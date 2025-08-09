@@ -418,7 +418,7 @@ mod tests {
         // Add 10K test entries for realistic test
         for i in 0..10_000 {
             index.add_entry(
-                &format!("file_{:04}.txt", i),
+                &format!("file_{i:04}.txt"),
                 0,
                 1024 * (i as u64),
                 false,
@@ -461,7 +461,7 @@ mod tests {
         // Add test entries
         for i in 0..10000 {
             index.add_entry(
-                &format!("document_{}.pdf", i),
+                &format!("document_{i}.pdf"),
                 0,
                 1024 * i,
                 false,

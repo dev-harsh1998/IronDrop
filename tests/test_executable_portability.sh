@@ -41,7 +41,7 @@ if curl -s -f http://127.0.0.1:8082/ > /dev/null; then
     echo "✅ Test 1 PASSED: Server responds successfully from /tmp"
     
     # Test CSS asset
-    if curl -s -f http://127.0.0.1:8082/_static/directory/styles.css | grep -q "Professional Blackish Grey Design"; then
+    if curl -s -f http://127.0.0.1:8082/_irondrop/static/directory/styles.css | grep -q "Professional Blackish Grey Design"; then
         echo "✅ CSS asset test PASSED: Embedded CSS is served correctly"
     else
         echo "❌ CSS asset test FAILED: Embedded CSS not working"

@@ -5,46 +5,43 @@
   <title>Server Monitor</title>
   <link rel="icon" href="/favicon.ico" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body { font-family: system-ui,-apple-system,Arial,sans-serif; margin: 2rem; background:#0f1115; color:#e6e6e6; }
-    h1 { margin-top:0; font-size:1.9rem; }
-    .grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); margin-top:1rem; }
-    .card { background:#1a1d23; border:1px solid #2a2f37; border-radius:10px; padding:1rem 1.1rem; box-shadow:0 2px 4px rgba(0,0,0,0.4); }
-    .card h2 { margin:0 0 .6rem; font-size:1.05rem; letter-spacing:.5px; font-weight:600; color:#9cc8ff; }
-    table { width:100%; border-collapse:collapse; font-size:.85rem; }
-    th, td { padding:.35rem .5rem; text-align:left; border-bottom:1px solid #2a2f37; vertical-align:top; }
-    th { font-weight:600; color:#b8dafc; }
-    tr:last-child td { border-bottom:none; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.8rem; }
-    footer { margin-top:2rem; font-size:.7rem; opacity:.5; }
-    .ok { color:#4ade80; }
-    .warn { color:#fbbf24; }
-    .err { color:#f87171; }
-  </style>
+  
+  <!-- Base Styles -->
+  <link rel="stylesheet" href="/_irondrop/static/common/base.css">
+  <!-- Monitor Specific Styles -->
+  <link rel="stylesheet" href="/_irondrop/static/monitor/styles.css">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <h1>Server Monitor</h1>
-  <div id="status" class="mono"></div>
-  <div class="grid">
-    <div class="card">
+  <div class="container">
+    <div class="page-header">
+      <h1 class="page-title">Server Monitor</h1>
+    </div>
+    <div id="status" class="monitor-status"></div>
+    <div class="monitor-grid">
+    <div class="monitor-card">
       <h2>Requests</h2>
-      <table>
+      <table class="monitor-table">
         <tr><th>Total</th><td id="req_total">-</td></tr>
         <tr><th>Successful</th><td id="req_success">-</td></tr>
         <tr><th>Errors</th><td id="req_errors">-</td></tr>
         <tr><th>Success Rate</th><td id="req_success_rate">-</td></tr>
       </table>
     </div>
-    <div class="card">
+    <div class="monitor-card">
       <h2>Downloads</h2>
-      <table>
+      <table class="monitor-table">
         <tr><th>Bytes Served</th><td id="bytes_served">-</td></tr>
         <tr><th>Served (MB)</th><td id="mb_served">-</td></tr>
       </table>
     </div>
-    <div class="card">
+    <div class="monitor-card">
       <h2>Uploads</h2>
-      <table>
+      <table class="monitor-table">
         <tr><th>Total Uploads</th><td id="up_total">-</td></tr>
         <tr><th>Successful</th><td id="up_success">-</td></tr>
         <tr><th>Failed</th><td id="up_failed">-</td></tr>
@@ -58,25 +55,26 @@
         <tr><th>Upload Success %</th><td id="upload_success_rate">-</td></tr>
       </table>
     </div>
-    <div class="card" id="memory_card">
+    <div class="monitor-card" id="memory_card">
       <h2>Memory Usage</h2>
-      <table>
+      <table class="monitor-table">
         <tr><th>Current</th><td id="mem_current">-</td></tr>
         <tr><th>Current (MB)</th><td id="mem_current_mb">-</td></tr>
         <tr><th>Peak</th><td id="mem_peak">-</td></tr>
         <tr><th>Peak (MB)</th><td id="mem_peak_mb">-</td></tr>
       </table>
     </div>
-    <div class="card">
+    <div class="monitor-card">
       <h2>Uptime</h2>
-      <table>
+      <table class="monitor-table">
         <tr><th>Seconds</th><td id="uptime_secs">-</td></tr>
         <tr><th>Pretty</th><td id="uptime_pretty">-</td></tr>
         <tr><th>Last Updated</th><td id="last_updated">-</td></tr>
       </table>
     </div>
+    </div>
+    <footer class="monitor-footer">Auto-refreshes every 30s. &copy; IronDrop Monitor</footer>
   </div>
-  <footer>Auto-refreshes every 30s. &copy; IronDrop Monitor</footer>
   <script>
     function humanBytes(b){ if(b<1024) return b+" B"; const u=['KB','MB','GB','TB']; let i=-1; do{ b/=1024; i++; }while(b>=1024 && i<u.length-1); return b.toFixed(2)+' '+u[i]; }
     function prettyUptime(s){ const d=Math.floor(s/86400); s%=86400; const h=Math.floor(s/3600); s%=3600; const m=Math.floor(s/60); const sec=s%60; let out=[]; if(d) out.push(d+'d'); if(h) out.push(h+'h'); if(m) out.push(m+'m'); out.push(sec+'s'); return out.join(' '); }
@@ -118,10 +116,10 @@
         document.getElementById('uptime_pretty').textContent=prettyUptime(data.uptime_secs);
         document.getElementById('last_updated').textContent=new Date().toLocaleTimeString();
         document.getElementById('status').textContent='OK';
-        document.getElementById('status').className='mono ok';
+        document.getElementById('status').className='monitor-status status-ok';
       }catch(e){
         document.getElementById('status').textContent='Error: '+e.message;
-        document.getElementById('status').className='mono err';
+        document.getElementById('status').className='monitor-status status-error';
       }
     }
     load();

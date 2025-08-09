@@ -1,11 +1,11 @@
-/* Professional Blackish Grey Design */
+/* Directory Page - Extends Base Styles */
 
 /* Directory Header */
 .directory-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    margin-bottom: var(--spacing-xl);
+    margin-bottom: var(--space-xl);
 }
 
 .directory-breadcrumb {
@@ -14,10 +14,10 @@
 
 .directory-title {
     font-size: 1.65rem;
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--text-accent);
     margin: 0;
-    line-height: 1.2;
+    line-height: var(--line-height-tight);
     background: var(--gradient-accent);
     background-clip: text;
     -webkit-background-clip: text;
@@ -43,108 +43,13 @@
     border: 0;
 }
 
-:root {
-    --bg-primary: #0a0a0a;           /* Deep black */
-    --bg-secondary: #1a1a1a;         /* Dark grey */
-    --bg-tertiary: #2a2a2a;          /* Medium grey */
-    --bg-glass: rgba(26, 26, 26, 0.4);
-    --text-primary: #e5e5e5;         /* Light grey */
-    --text-secondary: #b0b0b0;       /* Medium grey text */
-    --text-accent: #ffffff;          /* Pure white accent */
-    --text-muted: #666666;           /* Muted grey */
-    --border: rgba(64, 64, 64, 0.4);
-    --shadow: var(--shadow-xl);
-    --gradient: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-    --hover-bg: rgba(255, 255, 255, 0.08);
-    --table-header: #333333;         /* Dark header grey */
-    --table-stripe: rgba(255, 255, 255, 0.03);
-    --table-border: rgba(64, 64, 64, 0.5);
-    --link-hover: #ffffff;           /* Pure white on hover */
-    /* Standardized border radius values */
-    --radius-small: 4px;             /* Small elements (marks, badges) */
-    --radius-medium: 8px;            /* Medium elements (buttons, inputs) */
-    --radius-large: 12px;            /* Large elements (cards, dropdowns) */
-    --radius-xlarge: 16px;           /* Extra large elements (main containers) */
-    --radius-round: 50%;             /* Circular elements */
-    /* Standardized spacing values */
-    --spacing-xs: 0.25rem;           /* 4px - Very small gaps */
-    --spacing-sm: 0.5rem;            /* 8px - Small gaps */
-    --spacing-md: 0.75rem;           /* 12px - Medium gaps */
-    --spacing-lg: 1rem;              /* 16px - Large gaps */
-    --spacing-xl: 1.5rem;            /* 24px - Extra large gaps */
-    --spacing-2xl: 2rem;             /* 32px - Double extra large gaps */
-    --spacing-3xl: 2.5rem;           /* 40px - Triple extra large gaps */
-    /* Standardized shadow styles */
-    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);                    /* Small subtle shadow */
-    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);                   /* Medium shadow for inputs */
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);                   /* Large shadow for hover states */
-    --shadow-xl: 0 25px 35px -5px rgba(0, 0, 0, 0.8), 0 15px 15px -5px rgba(0, 0, 0, 0.5); /* Extra large dramatic shadow */
-    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.2);           /* Inset shadow for depth */
-    --shadow-focus: 0 0 0 3px rgba(96, 165, 250, 0.3);            /* Focus ring shadow */
-    /* Standardized typography */
-    --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-family-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
-    --font-size-xs: 0.65rem;         /* 10px - Very small text */
-    --font-size-sm: 0.7rem;          /* 11px - Small text */
-    --font-size-base: 0.8rem;        /* 13px - Base small text */
-    --font-size-md: 0.875rem;        /* 14px - Medium text */
-    --font-size-lg: 0.95rem;         /* 15px - Large text */
-    --font-size-xl: 1rem;            /* 16px - Extra large text */
-    --font-weight-normal: 400;
-    --font-weight-medium: 500;
-    --font-weight-semibold: 600;
-    --font-weight-bold: 700;
-    --line-height-tight: 1.2;
-    --line-height-normal: 1.6;
-    --letter-spacing-tight: -0.025em;
-    --letter-spacing-normal: 0;
-    --letter-spacing-wide: 0.05em;
-    --letter-spacing-wider: 0.1em;
-    /* Standardized z-index values */
-    --z-background: -1;               /* Background elements */
-    --z-base: 1;                      /* Base level elements */
-    --z-elevated: 10;                 /* Elevated elements like sticky headers */
-    --z-modal: 100;                   /* Modal overlays */
-    --z-dropdown: 1000;               /* Dropdowns and tooltips */
-    --z-top: 9999;                    /* Always on top elements */
-    /* Standardized transitions */
-    --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);      /* Fast interactions */
-    --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);     /* Normal interactions */
-    --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);       /* Slow animations */
-    --transition-bounce: 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Bouncy effect */
-}
+/* Directory variables extend base.css - only define directory-specific overrides here */
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+/* Base styles are handled by base.css */
 
-body {
-    font-family: var(--font-family-primary);
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    min-height: 100vh;
-    line-height: var(--line-height-normal);
-    transition: all var(--transition-normal);
-}
-
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--gradient);
-    opacity: 0.03;
-    z-index: var(--z-background);
-}
-
+/* Directory-specific container adjustments */
 .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: var(--spacing-2xl);
+    padding: var(--space-2xl);
     display: flex;
     flex-direction: column;
     position: relative;
@@ -152,7 +57,7 @@ body::before {
 }
 
 .search-container {
-    margin-bottom: var(--spacing-2xl);
+    margin-bottom: var(--space-2xl);
     position: relative;
     animation: fadeIn 0.5s ease forwards;
     /* Prevent layout shifts from status text changes */
@@ -166,11 +71,11 @@ body::before {
 
 .search-input {
     width: 100%;
-    padding: var(--spacing-lg) 9rem var(--spacing-lg) var(--spacing-xl); /* Reserve space for status text */
+    padding: var(--space-lg) 9rem var(--space-lg) var(--space-xl); /* Reserve space for status text */
     background: var(--bg-glass);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border);
-    border-radius: var(--radius-large);
+    border-radius: var(--radius-lg);
     color: var(--text-primary);
     font-size: var(--font-size-xl);
     font-family: var(--font-family-primary);
@@ -199,7 +104,7 @@ body::before {
 
 .search-status {
     position: absolute;
-    right: var(--spacing-xl);
+    right: var(--space-xl);
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-muted);
@@ -236,10 +141,10 @@ body::before {
     display: inline-block;
     width: 0.6rem;
     height: 0.6rem;
-    margin-left: var(--spacing-sm);
+    margin-left: var(--space-sm);
     border: 2px solid transparent;
     border-top: 2px solid currentColor;
-    border-radius: var(--radius-round);
+    border-radius: 50%;
     animation: searchSpinner 0.8s linear infinite;
     vertical-align: middle;
 }
@@ -253,7 +158,7 @@ mark {
     background: rgba(255, 255, 255, 0.15);
     color: var(--text-accent);
     padding: 0.1em 0.2em;
-    border-radius: var(--radius-small);
+    border-radius: var(--radius-sm);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -292,7 +197,7 @@ tr.visible {
 }
 
 tr.visible td {
-    padding: var(--spacing-xl) var(--spacing-3xl);
+    padding: var(--space-xl) var(--space-3xl);
     height: 3.5rem;
     border-bottom: 1px solid var(--border);
     border-right: 1px solid var(--table-border);
@@ -332,7 +237,7 @@ tr.search-match {
     right: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: var(--radius-large);
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xl), var(--shadow-inset);
     z-index: var(--z-dropdown);
     max-height: 300px;
@@ -353,7 +258,7 @@ tr.search-match {
 /* Remove animation keyframe as we're using CSS transitions now */
 
 .dropdown-header {
-    padding: var(--spacing-md) var(--spacing-lg);
+    padding: var(--space-md) var(--space-lg);
     background: var(--bg-tertiary);
     border-bottom: 1px solid var(--border);
     font-size: var(--font-size-base);
@@ -373,11 +278,11 @@ tr.search-match {
 .dropdown-item {
     display: flex;
     align-items: center;
-    padding: var(--spacing-md) var(--spacing-lg);
+    padding: var(--space-md) var(--space-lg);
     cursor: pointer;
     border-bottom: 1px solid rgba(64, 64, 64, 0.3);
     transition: all var(--transition-normal);
-    gap: var(--spacing-md);
+    gap: var(--space-md);
     position: relative;
     /* Ensure proper clickability */
     user-select: none;
@@ -449,7 +354,7 @@ tr.search-match {
 .dropdown-name {
     font-weight: var(--font-weight-medium);
     color: var(--text-primary);
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--space-xs);
     word-break: break-all;
 }
 
@@ -457,7 +362,7 @@ tr.search-match {
     background: rgba(255, 255, 255, 0.2);
     color: var(--text-accent);
     padding: 0.1em 0.2em;
-    border-radius: var(--radius-small);
+    border-radius: var(--radius-sm);
     font-weight: var(--font-weight-semibold);
 }
 
@@ -485,9 +390,9 @@ tr.search-match {
     background: var(--bg-glass);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border);
-    border-radius: var(--radius-xlarge);
+    border-radius: var(--radius-xl);
     overflow: hidden;
-    box-shadow: var(--shadow);
+    box-shadow: var(--shadow-xl);
     position: relative;
     /* Prevent layout shifts during search operations */
     min-height: 200px;
@@ -507,7 +412,7 @@ table {
 th {
     background: var(--table-header);
     color: var(--text-primary);
-    padding: 1.8rem var(--spacing-3xl);
+    padding: 1.8rem var(--space-3xl);
     font-weight: var(--font-weight-bold);
     font-size: var(--font-size-base);
     text-transform: uppercase;
@@ -543,7 +448,7 @@ th::after {
 }
 
 td {
-    padding: var(--spacing-xl) var(--spacing-3xl);
+    padding: var(--space-xl) var(--space-3xl);
     border-bottom: 1px solid var(--border);
     border-right: 1px solid var(--table-border);
     transition: all var(--transition-normal);
@@ -584,7 +489,7 @@ tr:last-child td {
     font-weight: var(--font-weight-medium);
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
+    gap: var(--space-md);
     transition: all var(--transition-fast);
     position: relative;
 }
@@ -644,8 +549,8 @@ tr:last-child td {
     .directory-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: var(--spacing-md);
-        margin-bottom: var(--spacing-lg);
+        gap: var(--space-md);
+        margin-bottom: var(--space-lg);
     }
 
     .directory-title {
@@ -653,21 +558,21 @@ tr:last-child td {
     }
     
     .container {
-        padding: var(--spacing-lg);
+        padding: var(--space-lg);
     }
     
     .search-container {
-        margin-bottom: var(--spacing-xl);
+        margin-bottom: var(--space-xl);
         min-height: 3.5rem; /* Adjust for mobile */
     }
     
     .search-input {
-        padding: 0.875rem 6rem 0.875rem var(--spacing-lg); /* Adjusted padding for mobile status */
+        padding: 0.875rem 6rem 0.875rem var(--space-lg); /* Adjusted padding for mobile status */
         font-size: var(--font-size-lg);
     }
     
     .search-status {
-        right: var(--spacing-lg);
+        right: var(--space-lg);
         font-size: var(--font-size-sm);
         width: 4.5rem; /* Smaller width for mobile */
         height: 1rem;
@@ -680,13 +585,13 @@ tr:last-child td {
     }
     
     th, td {
-        padding: var(--spacing-lg) var(--spacing-xl);
+        padding: var(--space-lg) var(--space-xl);
     }
     
     th {
         height: 3.5rem; /* Smaller header height on mobile */
         font-size: var(--font-size-sm);
-        padding: 1.2rem var(--spacing-xl);
+        padding: 1.2rem var(--space-xl);
     }
     
     .file-size,
@@ -701,8 +606,8 @@ tr:last-child td {
     }
     
     .dropdown-item {
-        padding: var(--spacing-sm) var(--spacing-md);
-        gap: var(--spacing-sm);
+        padding: var(--space-sm) var(--space-md);
+        gap: var(--space-sm);
     }
     
     .dropdown-name {
@@ -722,37 +627,37 @@ tr:last-child td {
 /* Extra small screens */
 @media (max-width: 480px) {
     .container {
-        padding: var(--spacing-md);
+        padding: var(--space-md);
     }
     
     .search-input {
-        padding: var(--spacing-md) 5rem var(--spacing-md) 0.875rem;
+        padding: var(--space-md) 5rem var(--space-md) 0.875rem;
         font-size: var(--font-size-lg);
     }
     
     .search-status {
-        right: var(--spacing-md);
+        right: var(--space-md);
         font-size: var(--font-size-sm);
         width: 4rem;
     }
     
     th, td {
-        padding: var(--spacing-md) var(--spacing-lg);
+        padding: var(--space-md) var(--space-lg);
     }
     
     th {
         height: 3rem;
         font-size: var(--font-size-xs);
-        padding: var(--spacing-lg);
+        padding: var(--space-lg);
     }
     
     .file-link {
         font-size: var(--font-size-lg);
-        gap: var(--spacing-sm);
+        gap: var(--space-sm);
     }
     
     .listing {
-        border-radius: var(--radius-xlarge);
+        border-radius: var(--radius-xl);
     }
     
     /* Optimize animations for smaller screens */
@@ -762,7 +667,7 @@ tr:last-child td {
     
     .search-dropdown {
         max-height: 200px;
-        border-radius: var(--radius-medium);
+        border-radius: var(--radius-md);
     }
     
     tbody tr {
@@ -775,7 +680,7 @@ tr:last-child td {
     
     tr.visible td {
         height: 2.5rem;
-        padding: var(--spacing-md) var(--spacing-lg);
+        padding: var(--space-md) var(--space-lg);
     }
 }
 

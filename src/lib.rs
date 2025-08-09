@@ -1,3 +1,15 @@
+// Allow some clippy lints for tests and debug code
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::useless_format)]
+#![allow(clippy::needless_as_bytes)]
+#![allow(clippy::expect_fun_call)]
+#![allow(clippy::items_after_test_module)]
+#![allow(clippy::bool_assert_comparison)]
+#![allow(clippy::empty_line_after_doc_comments)]
+#![allow(clippy::assertions_on_result_states)]
+#![allow(clippy::needless_return)]
+#![allow(clippy::redundant_closure_for_method_calls)]
+
 /// # IronDrop
 ///
 /// A lightweight, configurable file download server written in Rust.

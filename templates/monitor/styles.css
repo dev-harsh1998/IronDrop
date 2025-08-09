@@ -1,132 +1,101 @@
-/* Monitor Page Specific Styles - Extends Base */
+/* Monitor Page - Extends Base Styles */
 
-/* Monitor Status - Uses base card class + status-specific styling */
-.monitor-status {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--space-xl);
-}
-
-.status-indicator {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-}
-
-.status-text {
-    color: var(--text-primary);
-    font-weight: 500;
-}
-
-.last-updated {
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-}
-
-/* Metrics Grid Layout */
-.metrics-grid {
+/* Monitor specific grid layout */
+.monitor-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-    gap: var(--space-xl);
-    margin-bottom: var(--space-2xl);
+    gap: var(--space-md);
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    margin-top: var(--space-md);
 }
 
-/* Metric Cards - Uses base card class + metric-specific styling */
-.metric-card {
-    text-align: center;
-    padding: var(--space-2xl);
-    opacity: 0;
-    animation: fadeIn 0.5s ease forwards;
-}
-
-.metric-title {
-    font-size: 1.5rem;
-    color: var(--text-primary);
-    margin-bottom: var(--space-xl);
-    font-weight: 600;
-}
-
-.metric-info {
-    background: var(--bg-glass);
+/* Monitor cards - extending base card system */
+.monitor-card {
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: var(--space-md) var(--space-lg);
-    font-family: var(--font-family);
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-card);
+    transition: var(--transition-smooth);
+}
+
+.monitor-card:hover {
+    box-shadow: var(--shadow-hover);
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+}
+
+.monitor-card h2 {
+    margin: 0 0 0.6rem;
+    font-size: 1.05rem;
+    letter-spacing: 0.5px;
+    font-weight: var(--font-weight-semibold);
+    color: #9cc8ff;
+}
+
+/* Monitor tables - extending base table system */
+.monitor-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-md);
+}
+
+.monitor-table th,
+.monitor-table td {
+    padding: 0.35rem var(--space-sm);
     text-align: left;
-    line-height: 1.8;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
 }
 
-.metric-info div {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-xs) 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+.monitor-table th {
+    font-weight: var(--font-weight-semibold);
+    color: #b8dafc;
 }
 
-.metric-info div:last-child {
+.monitor-table tr:last-child td {
     border-bottom: none;
 }
 
-.metric-info span {
-    color: var(--text-primary);
-    font-weight: 500;
+/* Status indicators */
+.status-ok {
+    color: #4ade80;
 }
 
-/* Animation */
-@keyframes fadeIn {
-    to {
-        opacity: 1;
-    }
+.status-warn {
+    color: #fbbf24;
 }
 
-/* Status Animation */
-@keyframes pulse-subtle {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.7;
-    }
+.status-error {
+    color: #f87171;
 }
 
-.status-indicator.refreshing {
-    animation: pulse-subtle 1.5s ease-in-out infinite;
+/* Monitor status display */
+.monitor-status {
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    margin-bottom: var(--space-md);
 }
 
-/* Loading States */
-.loading-data .metric-card {
-    opacity: 0.6;
-    pointer-events: none;
+/* Monitor footer */
+.monitor-footer {
+    margin-top: var(--space-xl);
+    font-size: var(--font-size-xs);
+    opacity: 0.5;
+    text-align: left;
 }
 
-/* Mobile Responsiveness */
+/* Mobile responsiveness */
 @media (max-width: 768px) {
-    .metrics-grid {
+    .monitor-grid {
         grid-template-columns: 1fr;
-        gap: var(--space-lg);
-    }
-
-    .metric-card {
-        padding: var(--space-xl);
-        margin: var(--space-sm);
-    }
-
-    .monitor-status {
-        flex-direction: column;
         gap: var(--space-sm);
-        text-align: center;
-        padding: var(--space-md);
     }
-
-    .metric-title {
-        font-size: 1.25rem;
+    
+    .monitor-card {
+        padding: var(--space-sm) var(--space-md);
+    }
+    
+    .monitor-table {
+        font-size: var(--font-size-sm);
     }
 }

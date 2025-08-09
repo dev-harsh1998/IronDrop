@@ -1333,8 +1333,8 @@ mod tests {
         // Debug: print the actual data we got
         println!("Expected data length: {}", binary_data.len());
         println!("Actual data length: {}", data.len());
-        println!("Expected: {:?}", binary_data);
-        println!("Actual: {:?}", data);
+        println!("Expected: {binary_data:?}");
+        println!("Actual: {data:?}");
 
         assert_eq!(data, binary_data);
     }

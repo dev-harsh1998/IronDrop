@@ -1,5 +1,7 @@
 //! Comprehensive tests for the enhanced file server without external dependencies.
 
+#![allow(clippy::uninlined_format_args)]
+
 use irondrop::cli::Cli;
 use irondrop::server::run_server;
 use std::fs::{self, File};
@@ -299,7 +301,7 @@ fn test_static_asset_serving() {
     assert!(
         css_response
             .body
-            .contains("Professional Blackish Grey Design"),
+            .contains("Directory Page - Extends Base Styles"),
         "Should contain design system comment"
     );
     assert!(

@@ -378,13 +378,13 @@ GET /api/search?q=readme&path=/docs
 
 ### 5. Static Assets
 
-#### `GET /_static/<asset-path>`
+#### `GET /_irondrop/static/<asset-path>`
 Serves template assets (CSS, JavaScript, images).
 
 **Examples:**
-- `GET /_static/directory/styles.css`
-- `GET /_static/upload/script.js`
-- `GET /_static/error/styles.css`
+- `GET /_irondrop/static/directory/styles.css`
+- `GET /_irondrop/static/upload/script.js`
+- `GET /_irondrop/static/error/styles.css`
 
 **Response:**
 ```http
@@ -650,7 +650,7 @@ X-RateLimit-Reset: 1704110400
 <html>
 <head>
     <title>Error 404 - Not Found</title>
-    <link rel="stylesheet" href="/_static/error/styles.css">
+    <link rel="stylesheet" href="/_irondrop/static/error/styles.css">
 </head>
 <body>
     <div class="error-container">

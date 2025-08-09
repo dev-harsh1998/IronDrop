@@ -310,7 +310,7 @@ Request → Cache Check → Hit: Return Cached Results
 
 The native template engine provides:
 - **Variable Interpolation**: `{{VARIABLE}}` syntax with HTML escaping
-- **Static Asset Serving**: Organized CSS/JS delivery via `/_static/` routes
+- **Static Asset Serving**: Organized CSS/JS delivery via `/_irondrop/static/` routes
 - **Modular Templates**: Separated concerns (HTML structure, CSS styling, JS behavior)
 - **Caching**: In-memory template storage for performance
 

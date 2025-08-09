@@ -6,7 +6,7 @@
   [![Rust CI](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml/badge.svg)](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml)
 </div>
 
-A lightweight, high-performance file server written in Rust with **zero external dependencies**.
+A lightweight, high-performance file server written in Rust with **zero external dependencies**. Production-ready with comprehensive upload functionality, dual-mode search engine, and enterprise-grade security.
 
 ## 🚀 Features
 
@@ -82,7 +82,7 @@ cargo fmt && cargo clippy
 
 ## 📋 Current Version
 
-**v2.5** - Latest stable release with advanced search system and monitoring dashboard
+**v2.5.0** - Latest stable release with advanced search system, comprehensive file upload functionality, and monitoring dashboard
 
 ## 📖 Documentation
 

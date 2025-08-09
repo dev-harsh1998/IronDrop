@@ -6,6 +6,24 @@
     </div>
 </div>
 
+<!-- Search Container -->
+<div class="search-container" role="search">
+    <label for="search" class="sr-only">Search files and directories</label>
+    <input type="text" 
+           id="search" 
+           class="search-input" 
+           placeholder="Search files..."
+           autocomplete="off"
+           spellcheck="false"
+           aria-describedby="search-status"
+           aria-label="Search files and directories">
+    <span class="search-status" 
+          id="search-status" 
+          role="status" 
+          aria-live="polite"
+          aria-atomic="true"></span>
+</div>
+
 <!-- File Listing -->
 <div class="table-container">
     <table class="table" role="table" aria-label="File and directory listing">

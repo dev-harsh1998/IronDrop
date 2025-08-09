@@ -1,3 +1,7 @@
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::useless_format)]
+#![allow(clippy::expect_fun_call)]
+
 use irondrop::multipart::{MultipartConfig, MultipartParser};
 use std::io::Cursor;
 
@@ -117,7 +121,7 @@ fn test_boundary_at_exact_403kb() {
 
     // Verify data integrity
     for (i, &byte) in data.iter().enumerate() {
-        assert_eq!(byte, (i % 256) as u8, "Data corruption at byte {}", i);
+        assert_eq!(byte, (i % 256) as u8, "Data corruption at byte {i}");
     }
 }
 

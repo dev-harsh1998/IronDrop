@@ -83,7 +83,7 @@ async function loadMetrics() {
 }
 
 function updateMetrics(data) {
-    const { requests: r, uploads: u, downloads: d } = data;
+    const { requests: r, uploads: u, downloads: d, memory: m } = data;
 
     // Request metrics
     document.getElementById('req_total').textContent = r.total;
@@ -121,6 +121,29 @@ function updateMetrics(data) {
     // Uptime metrics
     document.getElementById('uptime_secs').textContent = data.uptime_secs;
     document.getElementById('uptime_pretty').textContent = prettyUptime(data.uptime_secs);
+
+    // Memory metrics
+    if (m && m.available) {
+        // Show memory data
+        document.getElementById('memory_current').textContent = m.current_mb.toFixed(2) + ' MB';
+        document.getElementById('memory_peak').textContent = m.peak_mb.toFixed(2) + ' MB';
+        document.getElementById('memory_unavailable').style.display = 'none';
+        
+        // Show the individual metric lines
+        const memoryInfo = document.querySelector('#memory_card .metric-info');
+        const memoryDivs = memoryInfo.querySelectorAll('div:not(.memory-unavailable)');
+        memoryDivs.forEach(div => div.style.display = 'block');
+    } else {
+        // Hide memory data and show unavailable message
+        document.getElementById('memory_current').textContent = '-';
+        document.getElementById('memory_peak').textContent = '-';
+        document.getElementById('memory_unavailable').style.display = 'block';
+        
+        // Hide the individual metric lines
+        const memoryInfo = document.querySelector('#memory_card .metric-info');
+        const memoryDivs = memoryInfo.querySelectorAll('div:not(.memory-unavailable)');
+        memoryDivs.forEach(div => div.style.display = 'none');
+    }
 }
 
 function clearMetrics() {
@@ -131,13 +154,21 @@ function clearMetrics() {
         'up_total', 'up_success', 'up_failed', 'files_uploaded',
         'up_bytes', 'up_mb', 'avg_file_size', 'largest_upload',
         'concurrent_uploads', 'avg_processing', 'upload_success_rate',
-        'uptime_secs', 'uptime_pretty'
+        'uptime_secs', 'uptime_pretty',
+        'memory_current', 'memory_peak'
     ];
 
     metricElements.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.textContent = '-';
     });
+    
+    // Hide memory unavailable message on error
+    document.getElementById('memory_unavailable').style.display = 'none';
+    // Show the individual metric lines
+    const memoryInfo = document.querySelector('#memory_card .metric-info');
+    const memoryDivs = memoryInfo.querySelectorAll('div:not(.memory-unavailable)');
+    memoryDivs.forEach(div => div.style.display = 'block');
 }
 
 function updateTimestamp() {

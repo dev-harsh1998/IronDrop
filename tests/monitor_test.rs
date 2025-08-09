@@ -1,5 +1,7 @@
 //! Tests for /_irondrop/monitor endpoint and bytes_served accounting.
 
+#![allow(clippy::needless_as_bytes)]
+
 use irondrop::cli::Cli;
 use irondrop::server::run_server;
 use reqwest::blocking::Client;

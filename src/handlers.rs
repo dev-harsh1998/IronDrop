@@ -6,8 +6,11 @@ use std::sync::Arc;
 
 use crate::error::AppError;
 use crate::http::{Request, Response, ResponseBody};
+use crate::search::{perform_search, SearchParams, SearchResult};
 use crate::upload::UploadHandler;
 use crate::utils::parse_query_params;
+use log::debug;
+use std::time::Instant;
 
 /// Register all internal routes under /_irondrop/.
 pub fn register_internal_routes(
@@ -27,6 +30,22 @@ pub fn register_internal_routes(
         "/_irondrop/status",
         Box::new(|_| Ok(create_health_check_response())),
     );
+
+    // Compatibility routes for legacy endpoints
+    router.register_exact(
+        "GET",
+        "/_health",
+        Box::new(|_| Ok(create_health_check_response())),
+    );
+
+    // Legacy monitor endpoint compatibility
+    if let Some(stats_arc) = stats.clone() {
+        router.register_exact(
+            "GET",
+            "/monitor",
+            Box::new(move |req: &Request| handle_monitor_request(req, Some(stats_arc.as_ref()))),
+        );
+    }
 
     // Static assets (new namespace)
     router.register_prefix(
@@ -86,6 +105,15 @@ pub fn register_internal_routes(
             "GET",
             "/_irondrop/monitor",
             Box::new(move |req: &Request| handle_monitor_request(req, Some(stats_arc.as_ref()))),
+        );
+    }
+
+    // Search endpoint
+    if let Some(base_arc) = base_dir {
+        router.register_exact(
+            "GET",
+            "/_irondrop/search",
+            Box::new(move |req: &Request| handle_search_api_request(req, &base_arc)),
         );
     }
 }
@@ -498,4 +526,124 @@ fn normalize_path(path: &std::path::Path) -> Result<std::path::PathBuf, AppError
         }
     }
     Ok(components.iter().collect())
+}
+
+/// URL decode function for parsing query parameters
+fn url_decode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '%' {
+            let hex: String = chars.by_ref().take(2).collect();
+            if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                result.push(byte as char);
+            } else {
+                result.push(ch);
+            }
+        } else if ch == '+' {
+            result.push(' ');
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
+/// Handle search API requests with optimizations
+pub fn handle_search_api_request(
+    request: &Request,
+    base_dir: &Arc<std::path::PathBuf>,
+) -> Result<Response, AppError> {
+    let start_time = Instant::now();
+
+    // Parse query parameters manually
+    let query_params: HashMap<String, String> =
+        if let Some(query_string) = request.path.split('?').nth(1) {
+            query_string
+                .split('&')
+                .filter_map(|param| {
+                    let mut parts = param.splitn(2, '=');
+                    match (parts.next(), parts.next()) {
+                        (Some(key), Some(value)) => Some((url_decode(key), url_decode(value))),
+                        _ => None,
+                    }
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        };
+
+    let search_query = query_params.get("q").ok_or(AppError::BadRequest)?;
+
+    // Validate query length for performance
+    if search_query.len() < 2 {
+        return Err(AppError::BadRequest);
+    }
+    if search_query.len() > 100 {
+        return Err(AppError::BadRequest);
+    }
+
+    let search_path = query_params.get("path").map_or("/", |v| v);
+    let limit = query_params
+        .get("limit")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(50)
+        .min(200); // Cap at 200 results
+    let offset = query_params
+        .get("offset")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(0);
+
+    let params = SearchParams {
+        query: search_query.clone(),
+        path: search_path.to_string(),
+        limit,
+        offset,
+        case_sensitive: false,
+    };
+
+    // Perform optimized search with caching and indexing
+    let mut results = perform_search(base_dir, &params)?;
+
+    // Sort by relevance score
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Apply pagination
+    let _total_count = results.len();
+    let paginated_results: Vec<SearchResult> =
+        results.into_iter().skip(offset).take(limit).collect();
+
+    let _elapsed_ms = start_time.elapsed().as_millis();
+
+    // Create simple JSON manually to avoid serde dependency
+    let json_items: Vec<String> = paginated_results
+        .iter()
+        .map(|result| {
+            format!(
+                r#"{{"name":"{}","path":"{}","size":"{}","type":"{}"}}"#,
+                result.name.replace('"', r#"\""#),
+                result.path.replace('"', r#"\""#),
+                result.size,
+                result.file_type
+            )
+        })
+        .collect();
+
+    let json_response = format!("[{}]", json_items.join(","));
+
+    Ok(Response {
+        status_code: 200,
+        status_text: "OK".to_string(),
+        headers: {
+            let mut map = HashMap::new();
+            map.insert("Content-Type".to_string(), "application/json".to_string());
+            map.insert("Access-Control-Allow-Origin".to_string(), "*".to_string());
+            map
+        },
+        body: ResponseBody::Text(json_response),
+    })
 }

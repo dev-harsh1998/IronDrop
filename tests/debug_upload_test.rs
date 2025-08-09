@@ -1,6 +1,9 @@
 //! Debug test for upload functionality
 //! This test attempts to isolate and debug the upload functionality issues.
 
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::expect_fun_call)]
+
 use irondrop::cli::Cli;
 use irondrop::http::Request;
 use irondrop::multipart::{MultipartConfig, MultipartParser};

@@ -32,38 +32,109 @@
     --gradient-primary: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
     --gradient-accent: linear-gradient(135deg, var(--text-accent), #cccccc);
 
-    /* Shadows - Even More Minimal */
+    /* Shadows - Unified System */
     --shadow-minimal: 0 1px 2px rgba(0, 0, 0, 0.02);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
     --shadow-hover: 0 1px 3px rgba(0, 0, 0, 0.04);
     --shadow-button: 0 1px 2px rgba(0, 0, 0, 0.03);
     --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.03);
+    
+    /* Enhanced shadows from directory styles */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0 25px 35px -5px rgba(0, 0, 0, 0.8), 0 15px 15px -5px rgba(0, 0, 0, 0.5);
+    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-focus: 0 0 0 3px rgba(96, 165, 250, 0.3);
 
     /* Additional solid color variables */
     --border-hover: #555555;
+    
+    /* Enhanced design tokens from directory styles */
+    --gradient: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+    --table-header: #333333;         /* Dark header grey */
+    --table-stripe: rgba(255, 255, 255, 0.03);
+    --table-border: rgba(64, 64, 64, 0.5);
+    --link-hover: #ffffff;           /* Pure white on hover */
 
-    /* Typography */
+    /* Typography - Unified System */
     --font-family: 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
     --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    
+    /* Typography aliases for compatibility */
+    --font-family-primary: var(--font-body);
+    --font-family-mono: var(--font-family);
+    
+    /* Font sizes - unified system */
+    --font-size-xs: 0.65rem;         /* 10px - Very small text */
+    --font-size-sm: 0.7rem;          /* 11px - Small text */
+    --font-size-base: 0.8rem;        /* 13px - Base small text */
+    --font-size-md: 0.875rem;        /* 14px - Medium text */
+    --font-size-lg: 0.95rem;         /* 15px - Large text */
+    --font-size-xl: 1rem;            /* 16px - Extra large text */
+    
+    /* Font weights */
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    
+    /* Line heights */
+    --line-height-tight: 1.2;
+    --line-height-normal: 1.6;
+    
+    /* Letter spacing */
+    --letter-spacing-tight: -0.025em;
+    --letter-spacing-normal: 0;
+    --letter-spacing-wide: 0.05em;
+    --letter-spacing-wider: 0.1em;
 
-    /* Spacing */
-    --space-xs: 0.25rem;
-    --space-sm: 0.5rem;
-    --space-md: 1rem;
-    --space-lg: 1.5rem;
-    --space-xl: 2rem;
-    --space-2xl: 3rem;
+    /* Spacing - Unified with directory styles */
+    --space-xs: 0.25rem;            /* 4px - Very small gaps */
+    --space-sm: 0.5rem;             /* 8px - Small gaps */
+    --space-md: 0.75rem;            /* 12px - Medium gaps (unified) */
+    --space-lg: 1rem;               /* 16px - Large gaps */
+    --space-xl: 1.5rem;             /* 24px - Extra large gaps */
+    --space-2xl: 2rem;              /* 32px - Double extra large gaps */
+    --space-3xl: 2.5rem;            /* 40px - Triple extra large gaps */
 
-    /* Border Radius */
-    --radius-sm: 6px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 24px;
+    /* Legacy spacing aliases for backward compatibility */
+    --spacing-xs: var(--space-xs);
+    --spacing-sm: var(--space-sm);
+    --spacing-md: var(--space-md);
+    --spacing-lg: var(--space-lg);
+    --spacing-xl: var(--space-xl);
+    --spacing-2xl: var(--space-2xl);
+    --spacing-3xl: var(--space-3xl);
 
-    /* Transitions - Very Subtle */
-    --transition-fast: 0.15s ease;
+    /* Border Radius - Unified system */
+    --radius-sm: 6px;               /* Small elements (marks, badges) */
+    --radius-md: 12px;              /* Medium elements (buttons, inputs) */
+    --radius-lg: 16px;              /* Large elements (cards, dropdowns) */
+    --radius-xl: 24px;              /* Extra large elements (main containers) */
+    
+    /* Legacy radius aliases */
+    --radius-small: var(--radius-sm);
+    --radius-medium: var(--radius-md);
+    --radius-large: var(--radius-lg);
+    --radius-xlarge: var(--radius-xl);
+    --radius-round: 50%;
+
+    /* Transitions - Unified System */
+    --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-smooth: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-subtle: 0.1s ease;
+    --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    
+    /* Z-index system */
+    --z-background: -1;
+    --z-base: 1;
+    --z-elevated: 10;
+    --z-modal: 100;
+    --z-dropdown: 1000;
+    --z-top: 9999;
 }
 
 /* Reset */
@@ -229,21 +300,6 @@ body::before {
 .btn-primary:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-hover);
-}
-
-/* Light Button (improved styling with dark shadows) */
-.btn-light {
-    background: rgba(255, 255, 255, 0.12);
-    color: var(--text-primary);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-}
-
-.btn-light:hover {
-    background: rgba(255, 255, 255, 0.18);
-    border-color: rgba(255, 255, 255, 0.3);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .btn-secondary {
