@@ -3,8 +3,7 @@
 use crate::error::AppError;
 use crate::fs::{generate_directory_listing, FileDetails};
 use crate::response::{create_error_response, get_mime_type};
-use crate::upload::UploadHandler;
-use base64::Engine;
+use crate::router::Router;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::io::prelude::*;
@@ -308,6 +307,7 @@ pub fn handle_client(
     chunk_size: usize,
     cli_config: Option<&crate::cli::Cli>,
     stats: Option<&crate::server::ServerStats>,
+    router: &Arc<Router>,
 ) {
     let log_prefix = format!("[{}]", stream.peer_addr().unwrap());
 
@@ -329,6 +329,7 @@ pub fn handle_client(
         chunk_size,
         cli_config,
         stats,
+        router,
     );
 
     match response_result {
@@ -363,178 +364,9 @@ fn normalize_path(path: &Path) -> Result<PathBuf, AppError> {
     Ok(components.iter().collect())
 }
 
-/// Handle static asset requests for CSS/JS files using embedded resources
-fn handle_static_asset(path: &str) -> Result<Response, AppError> {
-    use crate::templates::TemplateEngine;
+// Static asset, favicon, upload, and health handlers moved to handlers.rs
 
-    // Map /_static/ URLs to embedded templates
-    let asset_path = path.strip_prefix("/_static/").unwrap_or("");
-
-    let engine = TemplateEngine::new();
-    let (content, content_type) = engine
-        .get_static_asset(asset_path)
-        .ok_or(AppError::NotFound)?;
-
-    Ok(Response {
-        status_code: 200,
-        status_text: "OK".to_string(),
-        headers: {
-            let mut map = HashMap::new();
-            map.insert("Content-Type".to_string(), content_type.to_string());
-            map.insert(
-                "Cache-Control".to_string(),
-                "public, max-age=3600".to_string(),
-            );
-            map
-        },
-        body: ResponseBody::Text(content.to_string()),
-    })
-}
-
-/// Handle favicon requests using embedded favicon files
-fn handle_favicon_request(path: &str) -> Result<Response, AppError> {
-    use crate::templates::TemplateEngine;
-
-    // Strip leading slash for favicon lookup
-    let favicon_path = path.strip_prefix('/').unwrap_or(path);
-
-    let engine = TemplateEngine::new();
-    let (content, content_type) = engine.get_favicon(favicon_path).ok_or(AppError::NotFound)?;
-
-    Ok(Response {
-        status_code: 200,
-        status_text: "OK".to_string(),
-        headers: {
-            let mut map = HashMap::new();
-            map.insert("Content-Type".to_string(), content_type.to_string());
-            map.insert(
-                "Cache-Control".to_string(),
-                "public, max-age=86400".to_string(),
-            ); // Cache for 24 hours
-            map.insert("Content-Length".to_string(), content.len().to_string());
-            map
-        },
-        body: ResponseBody::Binary(content.to_vec()),
-    })
-}
-
-/// Handle GET requests for upload form
-fn handle_upload_form_request(
-    _request: &Request,
-    cli_config: Option<&crate::cli::Cli>,
-) -> Result<Response, AppError> {
-    let cli = cli_config.ok_or_else(|| {
-        AppError::InternalServerError(
-            "CLI configuration not available for upload handling".to_string(),
-        )
-    })?;
-
-    if !cli.enable_upload {
-        return Err(AppError::upload_disabled());
-    }
-
-    // Load and render the upload template
-    let template_engine = crate::templates::TemplateEngine::new();
-    let mut variables = HashMap::new();
-    variables.insert("PATH".to_string(), "/".to_string());
-
-    let html_content = template_engine.render("upload_page", &variables)?;
-
-    Ok(Response {
-        status_code: 200,
-        status_text: "OK".to_string(),
-        headers: {
-            let mut map = HashMap::new();
-            map.insert(
-                "Content-Type".to_string(),
-                "text/html; charset=utf-8".to_string(),
-            );
-            map.insert("Cache-Control".to_string(), "no-cache".to_string());
-            map
-        },
-        body: ResponseBody::Text(html_content),
-    })
-}
-
-/// Handle file upload requests
-fn handle_upload_request(
-    request: &Request,
-    cli_config: Option<&crate::cli::Cli>,
-    stats: Option<&crate::server::ServerStats>,
-) -> Result<Response, AppError> {
-    let cli = cli_config.ok_or_else(|| {
-        AppError::InternalServerError(
-            "CLI configuration not available for upload handling".to_string(),
-        )
-    })?;
-
-    if !cli.enable_upload {
-        return Err(AppError::upload_disabled());
-    }
-
-    // Create upload handler
-    let mut upload_handler = UploadHandler::new(cli)?;
-
-    // Process the upload with statistics tracking
-    let http_response = upload_handler.handle_upload_with_stats(request, stats)?;
-
-    // Convert HttpResponse to Response
-    let mut headers = HashMap::new();
-    for (key, value) in http_response.headers {
-        headers.insert(key, value);
-    }
-
-    let body = ResponseBody::Text(String::from_utf8_lossy(&http_response.body).to_string());
-
-    Ok(Response {
-        status_code: http_response.status_code,
-        status_text: http_response.status_text,
-        headers,
-        body,
-    })
-}
-
-/// Create a health check response with server status
-fn create_health_check_response() -> Response {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    let health_info = format!(
-        r#"{{
-    "status": "healthy",
-    "service": "irondrop",
-    "version": "2.5.0",
-    "timestamp": {timestamp},
-    "features": [
-        "rate_limiting",
-        "statistics", 
-        "native_mime_detection",
-        "enhanced_security",
-        "beautiful_ui",
-        "http11_compliance",
-        "request_timeouts",
-        "panic_recovery"
-    ]
-}}"#
-    );
-
-    Response {
-        status_code: 200,
-        status_text: "OK".to_string(),
-        headers: {
-            let mut map = HashMap::new();
-            map.insert(
-                "Content-Type".to_string(),
-                "application/json; charset=utf-8".to_string(),
-            );
-            map.insert("Cache-Control".to_string(), "no-cache".to_string());
-            map
-        },
-        body: ResponseBody::Text(health_info),
-    }
-}
+// Static asset, favicon, upload, and health handlers moved to handlers.rs
 
 /// Determines the correct response based on the request.
 #[allow(clippy::too_many_arguments)]
@@ -542,49 +374,22 @@ fn route_request(
     request: &Request,
     base_dir: &Arc<PathBuf>,
     allowed_extensions: &Arc<Vec<glob::Pattern>>,
-    username: &Arc<Option<String>>,
-    password: &Arc<Option<String>>,
+    _username: &Arc<Option<String>>,
+    _password: &Arc<Option<String>>,
     chunk_size: usize,
-    cli_config: Option<&crate::cli::Cli>,
-    stats: Option<&crate::server::ServerStats>,
+    _cli_config: Option<&crate::cli::Cli>,
+    _stats: Option<&crate::server::ServerStats>,
+    router: &Arc<Router>,
 ) -> Result<Response, AppError> {
-    if let (Some(expected_user), Some(expected_pass)) = (username.as_ref(), password.as_ref()) {
-        if !is_authenticated(
-            request.headers.get("authorization"),
-            expected_user,
-            expected_pass,
-        ) {
-            return Err(AppError::Unauthorized);
-        }
+    // Authentication is now handled by middleware in the router
+    // Consult shared router (runs middleware internally including auth)
+    if let Some(router_response) = router.route(request) {
+        return router_response;
     }
 
-    // Handle health check endpoint
-    if request.path == "/_health" || request.path == "/_status" {
-        return Ok(create_health_check_response());
-    }
-
-    // Handle static assets for templates
-    if request.path.starts_with("/_static/") {
-        return handle_static_asset(&request.path);
-    }
-
-    // Handle favicon requests
-    if request.path == "/favicon.ico"
-        || request.path == "/favicon-16x16.png"
-        || request.path == "/favicon-32x32.png"
-    {
-        return handle_favicon_request(&request.path);
-    }
-
-    // Handle upload requests (strip query parameters for matching)
-    let path_without_query = request.path.split('?').next().unwrap_or(&request.path);
-    let normalized_path = path_without_query.trim_end_matches('/');
-    if normalized_path == "/upload" {
-        if request.method == "POST" {
-            return handle_upload_request(request, cli_config, stats);
-        } else if request.method == "GET" {
-            return handle_upload_form_request(request, cli_config);
-        }
+    // All non-internal paths (not starting with /_irondrop/) are treated as file / directory lookup
+    if request.path.starts_with("/_irondrop/") {
+        return Err(AppError::NotFound);
     }
 
     // Handle different methods appropriately
@@ -621,7 +426,29 @@ fn route_request(
             return Err(AppError::MethodNotAllowed);
         }
 
-        let html_content = generate_directory_listing(&full_path, &request.path)?;
+        // Create a config from CLI if available
+        let config = _cli_config.map(|cli| crate::config::Config {
+            listen: "127.0.0.1".to_string(),
+            port: 8080,
+            threads: 8,
+            chunk_size: 1024,
+            directory: cli.directory.clone(),
+            enable_upload: cli.enable_upload.unwrap_or(false),
+            max_upload_size: cli.max_upload_size_bytes(),
+            username: cli.username.clone(),
+            password: cli.password.clone(),
+            allowed_extensions: cli
+                .allowed_extensions
+                .as_ref()
+                .unwrap_or(&"*".to_string())
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect(),
+            verbose: cli.verbose.unwrap_or(false),
+            detailed_logging: cli.detailed_logging.unwrap_or(false),
+        });
+
+        let html_content = generate_directory_listing(&full_path, &request.path, config.as_ref())?;
         Ok(Response {
             status_code: 200,
             status_text: "OK".to_string(),
@@ -666,34 +493,9 @@ fn route_request(
     }
 }
 
-/// Checks the 'Authorization' header for valid credentials.
-fn is_authenticated(auth_header: Option<&String>, user: &str, pass: &str) -> bool {
-    let header = match auth_header {
-        Some(h) => h,
-        None => return false,
-    };
+// Router building moved to handlers.rs
 
-    let credentials = match header.strip_prefix("Basic ") {
-        Some(c) => c,
-        None => return false,
-    };
-
-    let decoded = match base64::engine::general_purpose::STANDARD.decode(credentials) {
-        Ok(d) => d,
-        Err(_) => return false,
-    };
-
-    let decoded_str = match String::from_utf8(decoded) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
-
-    if let Some((provided_user, provided_pass)) = decoded_str.split_once(':') {
-        provided_user == user && provided_pass == pass
-    } else {
-        false
-    }
-}
+// Authentication moved to middleware
 
 /// Sends a fully formed `Response` to the client with enhanced headers.
 fn send_response(

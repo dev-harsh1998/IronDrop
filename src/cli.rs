@@ -1,7 +1,6 @@
 use crate::error::AppError;
 use clap::Parser;
-use log::{error, warn};
-use std::fs;
+use log::warn;
 use std::path::PathBuf;
 
 // Defines the command-line interface using clap. 🎉
@@ -19,33 +18,33 @@ pub struct Cli {
     pub directory: PathBuf,
 
     /// Host address to listen on (e.g., "127.0.0.1" for local, "0.0.0.0" for everyone on the network). 👂
-    #[arg(short, long, default_value = "127.0.0.1")]
-    pub listen: String,
+    #[arg(short, long)]
+    pub listen: Option<String>,
 
     /// Port number to listen on -  Like a door number for the server to receive requests. 🚪
-    #[arg(short, long, default_value_t = 8080)]
-    pub port: u16,
+    #[arg(short, long)]
+    pub port: Option<u16>,
 
     /// Allowed file extensions for download (comma-separated, supports wildcards like *.zip, *.txt) -  Security measure to only share certain file types. 🔒
-    #[arg(short, long, default_value = "*.zip,*.txt")]
-    pub allowed_extensions: String,
+    #[arg(short, long)]
+    pub allowed_extensions: Option<String>,
 
     /// Number of threads in the thread pool -  More threads = handle more downloads at once, up to a point. 🧵🧵🧵
-    #[arg(short, long, default_value_t = 8)]
-    pub threads: usize,
+    #[arg(short, long)]
+    pub threads: Option<usize>,
 
     /// Chunk size for reading files (in bytes) -  How much data we read from a file at a time when sending it. Smaller chunks are gentler on memory. 📦
     /// This is the size of the buffer used to read files in chunks
-    #[arg(short, long, default_value_t = 1024)]
-    pub chunk_size: usize,
+    #[arg(short, long)]
+    pub chunk_size: Option<usize>,
 
     /// Enable verbose logging for debugging (log level: debug) -  For super detailed logs, useful when things go wrong or you're developing. 🐛
-    #[arg(short, long, default_value_t = false)]
-    pub verbose: bool,
+    #[arg(short, long)]
+    pub verbose: Option<bool>,
 
     /// Enable more detailed logging (log level: info if verbose=false, debug if verbose=true) -  More logs than usual, but not *too* much. Good for general monitoring. ℹ️
-    #[arg(long, default_value_t = false)]
-    pub detailed_logging: bool,
+    #[arg(long)]
+    pub detailed_logging: Option<bool>,
 
     /// Username for basic authentication.
     #[arg(long)]
@@ -56,16 +55,12 @@ pub struct Cli {
     pub password: Option<String>,
 
     /// Enable file upload functionality - Allows clients to upload files to the server. Upload endpoint will be available at /upload. 📤
-    #[arg(long, default_value_t = false)]
-    pub enable_upload: bool,
+    #[arg(long)]
+    pub enable_upload: Option<bool>,
 
     /// Maximum upload file size in MB - Limits the size of files that can be uploaded to prevent abuse and manage storage. 📏
-    #[arg(long, default_value_t = 10240, value_parser = validate_upload_size)]
-    pub max_upload_size: u64,
-
-    /// Upload target directory - Directory where uploaded files will be stored. If not specified, uses the OS default download directory. 📁
-    #[arg(long, value_parser = validate_upload_dir)]
-    pub upload_dir: Option<PathBuf>,
+    #[arg(long, value_parser = validate_upload_size)]
+    pub max_upload_size: Option<u64>,
 
     /// Configuration file path - Specify a custom configuration file (INI format). If not provided, looks for irondrop.ini in current directory or ~/.config/irondrop/config.ini 🛠️
     #[arg(long, value_parser = validate_config_file)]
@@ -89,81 +84,6 @@ fn validate_upload_size(s: &str) -> Result<u64, String> {
     }
 
     Ok(size)
-}
-
-/// Validate upload directory path for security
-fn validate_upload_dir(s: &str) -> Result<PathBuf, String> {
-    let path = PathBuf::from(s);
-
-    // Check for empty path
-    if s.is_empty() {
-        return Err("Upload directory path cannot be empty".to_string());
-    }
-
-    // Canonicalize the path to resolve any .. or . components
-    let canonical_path = match path.canonicalize() {
-        Ok(p) => p,
-        Err(_) => {
-            // If path doesn't exist yet, try to canonicalize the parent
-            if let Some(parent) = path.parent() {
-                if parent.exists() {
-                    match parent.canonicalize() {
-                        Ok(parent_canonical) => parent_canonical
-                            .join(path.file_name().ok_or("Invalid path components")?),
-                        Err(e) => return Err(format!("Cannot resolve parent directory: {e}")),
-                    }
-                } else {
-                    return Err("Parent directory does not exist".to_string());
-                }
-            } else {
-                return Err("Invalid path: no parent directory".to_string());
-            }
-        }
-    };
-
-    // Ensure the path is absolute
-    if !canonical_path.is_absolute() {
-        return Err("Upload directory must be an absolute path".to_string());
-    }
-
-    // Check for suspicious patterns that might indicate path traversal
-    let path_str = canonical_path.to_string_lossy();
-    if path_str.contains("..") {
-        return Err("Path traversal patterns detected in resolved path".to_string());
-    }
-
-    // On Linux systems, check if trying to write to system directories
-    #[cfg(target_os = "linux")]
-    {
-        let forbidden_prefixes = ["/etc", "/sys", "/proc", "/dev", "/boot"];
-        for prefix in &forbidden_prefixes {
-            if path_str.starts_with(prefix) {
-                return Err(format!(
-                    "Cannot use system directory {prefix} as upload directory"
-                ));
-            }
-        }
-    }
-
-    // On Windows, check for system directories
-    #[cfg(windows)]
-    {
-        let path_to_check = path_str.strip_prefix(r"\\?\").unwrap_or(&path_str);
-        let forbidden_patterns = [
-            "C:\\Windows",
-            "C:\\Program Files",
-            "C:\\Program Files (x86)",
-        ];
-        for pattern in &forbidden_patterns {
-            if path_to_check.len() >= pattern.len()
-                && path_to_check[..pattern.len()].eq_ignore_ascii_case(pattern)
-            {
-                return Err("Cannot use Windows system directory as upload directory".to_string());
-            }
-        }
-    }
-
-    Ok(canonical_path)
 }
 
 /// Validate config file path exists and is readable
@@ -195,45 +115,12 @@ impl Cli {
     /// Validate the CLI configuration for security and consistency
     pub fn validate(&self) -> Result<(), AppError> {
         // Validate upload configuration consistency
-        if self.enable_upload {
-            // Additional runtime validation for upload directory
-            if let Some(ref upload_dir) = self.upload_dir {
-                // Check if directory exists or can be created
-                if !upload_dir.exists() {
-                    // Try to create it
-                    if let Err(e) = fs::create_dir_all(upload_dir) {
-                        error!("Failed to create upload directory {upload_dir:?}: {e}");
-                        return Err(AppError::DirectoryNotFound(format!(
-                            "Cannot create upload directory: {e}"
-                        )));
-                    }
-                }
-
-                // Verify it's a directory
-                if !upload_dir.is_dir() {
-                    return Err(AppError::InvalidPath);
-                }
-
-                // Check write permissions by attempting to create a test file
-                let test_file = upload_dir.join(".irondrop_test");
-                match fs::File::create(&test_file) {
-                    Ok(_) => {
-                        let _ = fs::remove_file(&test_file);
-                    }
-                    Err(e) => {
-                        error!("Upload directory {upload_dir:?} is not writable: {e}");
-                        return Err(AppError::InternalServerError(format!(
-                            "Upload directory is not writable: {e}"
-                        )));
-                    }
-                }
-            }
-
+        if self.enable_upload.unwrap_or(false) {
             // Warn if upload size is very large
-            if self.max_upload_size > 2048 {
+            let max_size = self.max_upload_size.unwrap_or(10240);
+            if max_size > 2048 {
                 warn!(
-                    "Large upload size limit configured: {} MB. Ensure adequate server resources.",
-                    self.max_upload_size
+                    "Large upload size limit configured: {max_size} MB. Ensure adequate server resources."
                 );
             }
         }
@@ -256,19 +143,14 @@ impl Cli {
     pub fn max_upload_size_bytes(&self) -> u64 {
         // Safe conversion from u64 MB to u64 bytes
         // Since we limit to 10240 MB max, this can't overflow
-        self.max_upload_size * 1024 * 1024
+        self.max_upload_size.unwrap_or(10240) * 1024 * 1024
     }
 
     /// Get the resolved upload directory, using OS defaults if not specified
     pub fn get_upload_directory(&self) -> Result<PathBuf, AppError> {
-        match &self.upload_dir {
-            Some(dir) => Ok(dir.clone()),
-            None => {
-                // This will be handled by UploadHandler::detect_os_download_directory()
-                // We just return an error here to indicate it needs resolution
-                Err(AppError::InvalidPath)
-            }
-        }
+        // Always return an error since we no longer support pre-configured upload directories
+        // Upload directories are now determined dynamically from the current URL
+        Err(AppError::InvalidPath)
     }
 }
 
@@ -294,67 +176,33 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_upload_dir() {
-        let temp_dir = TempDir::new().unwrap();
-        let temp_path = temp_dir.path().to_str().unwrap();
-
-        // Valid directory
-        assert!(validate_upload_dir(temp_path).is_ok());
-
-        // Empty path
-        assert!(validate_upload_dir("").is_err());
-
-        // Non-existent path with valid parent
-        let new_dir = temp_dir.path().join("newdir");
-        assert!(validate_upload_dir(new_dir.to_str().unwrap()).is_ok());
-
-        // System directories (Linux)
-        #[cfg(target_os = "linux")]
-        {
-            assert!(validate_upload_dir("/etc").is_err());
-            assert!(validate_upload_dir("/sys").is_err());
-            assert!(validate_upload_dir("/proc").is_err());
-            assert!(validate_upload_dir("/dev").is_err());
-            assert!(validate_upload_dir("/boot").is_err());
-        }
-
-        // System directories (Windows)
-        #[cfg(windows)]
-        {
-            assert!(validate_upload_dir("C:\\Windows").is_err());
-            assert!(validate_upload_dir("C:\\Program Files").is_err());
-        }
-    }
-
-    #[test]
     fn test_max_upload_size_bytes() {
         let mut cli = Cli {
             directory: PathBuf::from("."),
-            listen: "127.0.0.1".to_string(),
-            port: 8080,
-            allowed_extensions: "*".to_string(),
-            threads: 4,
-            chunk_size: 1024,
-            verbose: false,
-            detailed_logging: false,
+            listen: Some("127.0.0.1".to_string()),
+            port: Some(8080),
+            allowed_extensions: Some("*".to_string()),
+            threads: Some(4),
+            chunk_size: Some(1024),
+            verbose: Some(false),
+            detailed_logging: Some(false),
             username: None,
             password: None,
-            enable_upload: false,
-            max_upload_size: 100,
-            upload_dir: None,
+            enable_upload: Some(false),
+            max_upload_size: Some(100),
             config_file: None,
         };
 
         // Test conversion
         assert_eq!(cli.max_upload_size_bytes(), 100 * 1024 * 1024);
 
-        cli.max_upload_size = 1;
+        cli.max_upload_size = Some(1);
         assert_eq!(cli.max_upload_size_bytes(), 1024 * 1024);
 
-        cli.max_upload_size = 1024;
+        cli.max_upload_size = Some(1024);
         assert_eq!(cli.max_upload_size_bytes(), 1024 * 1024 * 1024);
 
-        cli.max_upload_size = 10240;
+        cli.max_upload_size = Some(10240);
         assert_eq!(cli.max_upload_size_bytes(), 10240 * 1024 * 1024);
     }
 
@@ -365,18 +213,17 @@ mod tests {
         // Valid configuration
         let cli = Cli {
             directory: temp_dir.path().to_path_buf(),
-            listen: "127.0.0.1".to_string(),
-            port: 8080,
-            allowed_extensions: "*".to_string(),
-            threads: 4,
-            chunk_size: 1024,
-            verbose: false,
-            detailed_logging: false,
+            listen: Some("127.0.0.1".to_string()),
+            port: Some(8080),
+            allowed_extensions: Some("*".to_string()),
+            threads: Some(4),
+            chunk_size: Some(1024),
+            verbose: Some(false),
+            detailed_logging: Some(false),
             username: None,
             password: None,
-            enable_upload: true,
-            max_upload_size: 100,
-            upload_dir: Some(temp_dir.path().to_path_buf()),
+            enable_upload: Some(true),
+            max_upload_size: Some(100),
             config_file: None,
         };
 
@@ -393,24 +240,5 @@ mod tests {
         let mut file_cli = cli.clone();
         file_cli.directory = file_path;
         assert!(file_cli.validate().is_err());
-    }
-
-    #[test]
-    fn test_path_traversal_detection() {
-        // Various path traversal attempts
-        let traversal_attempts = vec!["../etc/passwd", "./../../etc/passwd", "/tmp/../etc/passwd"];
-
-        for path in traversal_attempts {
-            let result = validate_upload_dir(path);
-            if result.is_ok() {
-                let canonical = result.unwrap();
-                let canonical_str = canonical.to_string_lossy();
-                // Ensure no ".." in resolved path
-                assert!(
-                    !canonical_str.contains(".."),
-                    "Path traversal not properly resolved: {canonical_str}"
-                );
-            }
-        }
     }
 }

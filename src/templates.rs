@@ -22,6 +22,16 @@ const BASE_CSS: &str = include_str!("../templates/common/base.css");
 const FAVICON_ICO: &[u8] = include_bytes!("../favicon.ico");
 const FAVICON_16X16_PNG: &[u8] = include_bytes!("../favicon-16x16.png");
 const FAVICON_32X32_PNG: &[u8] = include_bytes!("../favicon-32x32.png");
+// Logo image
+const IRONDROP_LOGO_PNG: &[u8] = include_bytes!("../irondrop-logo.png");
+
+// Icon partials
+const FOLDER_ICON_SVG: &str = include_str!("../templates/directory/folder_icon.svg");
+const FILE_ICON_SVG: &str = include_str!("../templates/directory/file_icon.svg");
+const BACK_ICON_SVG: &str = include_str!("../templates/directory/back_icon.svg");
+const ZIP_ICON_SVG: &str = include_str!("../templates/directory/zip_icon.svg");
+const IMAGE_ICON_SVG: &str = include_str!("../templates/directory/image_icon.svg");
+const VIDEO_ICON_SVG: &str = include_str!("../templates/directory/video_icon.svg");
 
 /// Template loader and renderer for modular HTML templates
 pub struct TemplateEngine {
@@ -49,6 +59,21 @@ impl TemplateEngine {
         templates.insert("upload_form".to_string(), UPLOAD_FORM_HTML.to_string());
 
         Self { templates }
+    }
+
+    /// Get appropriate icon SVG based on file extension
+    fn get_file_icon(filename: &str) -> &'static str {
+        let extension = filename.split('.').last().unwrap_or("").to_lowercase();
+        match extension.as_str() {
+            // Archive formats
+            "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" => ZIP_ICON_SVG,
+            // Image formats
+            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "svg" | "ico" | "tiff" => IMAGE_ICON_SVG,
+            // Video formats
+            "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" | "webm" | "m4v" => VIDEO_ICON_SVG,
+            // Default file icon
+            _ => FILE_ICON_SVG,
+        }
     }
 
     /// Load all templates - now uses embedded templates
@@ -81,11 +106,12 @@ impl TemplateEngine {
             "favicon.ico" => Some((FAVICON_ICO, "image/x-icon")),
             "favicon-16x16.png" => Some((FAVICON_16X16_PNG, "image/png")),
             "favicon-32x32.png" => Some((FAVICON_32X32_PNG, "image/png")),
+            "irondrop-logo.png" => Some((IRONDROP_LOGO_PNG, "image/png")),
             _ => None,
         }
     }
 
-    /// Render a template with variables
+    /// Render a template with variables, supporting conditionals
     pub fn render(
         &self,
         template_name: &str,
@@ -97,6 +123,9 @@ impl TemplateEngine {
 
         let mut rendered = template.clone();
 
+        // Handle conditional blocks {{#if VARIABLE}}...{{/if}}
+        rendered = self.process_conditionals(&rendered, variables);
+
         // Replace variables in the format {{VARIABLE_NAME}}
         for (key, value) in variables {
             let placeholder = format!("{{{{{key}}}}}");
@@ -106,37 +135,127 @@ impl TemplateEngine {
         Ok(rendered)
     }
 
+    /// Process conditional blocks in templates
+    fn process_conditionals(&self, template: &str, variables: &HashMap<String, String>) -> String {
+        let mut result = template.to_string();
+
+        // Find and process {{#if VARIABLE}}...{{/if}} blocks
+        while let Some(start) = result.find("{{#if ") {
+            if let Some(var_end) = result[start..].find("}}") {
+                let var_start = start + 6; // "{{#if ".len()
+                let variable = &result[var_start..start + var_end];
+
+                if let Some(block_end) = result.find("{{/if}}") {
+                    let block_start = start + var_end + 2; // "}}"
+                    let block_content = &result[block_start..block_end];
+
+                    // Check if variable is true
+                    let should_include = variables
+                        .get(variable)
+                        .map(|v| v == "true")
+                        .unwrap_or(false);
+
+                    let replacement = if should_include {
+                        block_content.to_string()
+                    } else {
+                        String::new()
+                    };
+
+                    // Replace entire conditional block
+                    let full_block = &result[start..block_end + 7]; // "{{/if}}".len()
+                    result = result.replace(full_block, &replacement);
+                } else {
+                    break; // Malformed template
+                }
+            } else {
+                break; // Malformed template
+            }
+        }
+
+        result
+    }
+
     /// Generate directory listing HTML using template
     pub fn render_directory_listing(
         &self,
         path: &str,
         entries: &[(String, String, String)], // (name, size, date)
         entry_count: usize,
+        upload_enabled: bool,
+        current_path: &str,
     ) -> Result<String, AppError> {
         let mut variables = HashMap::new();
         variables.insert("PATH".to_string(), path.to_string());
         variables.insert("ENTRY_COUNT".to_string(), entry_count.to_string());
+        variables.insert("UPLOAD_ENABLED".to_string(), upload_enabled.to_string());
+        variables.insert("CURRENT_PATH".to_string(), current_path.to_string());
 
-        // Generate entries HTML
-        let mut entries_html = String::new();
+        // Build a clean query suffix for the upload link (omit for root)
+    let clean = current_path.trim_start_matches('/').trim_end_matches('/');
+        let query_suffix = if clean.is_empty() {
+            String::new()
+        } else {
+            // Percent-encode minimal set for URLs
+            let encoded = percent_encode(clean);
+            format!("?upload_to={encoded}")
+        };
+        variables.insert("QUERY_UPLOAD_SUFFIX".to_string(), query_suffix);
 
+        // Add template variables for icons
+        variables.insert("FOLDER_ICON".to_string(), FOLDER_ICON_SVG.to_string());
+        variables.insert("FILE_ICON".to_string(), FILE_ICON_SVG.to_string());
+        variables.insert("BACK_ICON".to_string(), BACK_ICON_SVG.to_string());
+
+        // Generate entries data as JSON-like structure for template
+        let mut entries_data = Vec::new();
+        
         // Add parent directory link if not at root
         if path != "/" && !path.is_empty() {
-            entries_html.push_str(
-                r#"<tr>
-                    <td>
-                        <a href="../" class="file-link">
-                            <span class="file-type directory"></span>
-                            <span class="name">..</span>
-                        </a>
-                    </td>
-                    <td class="size">-</td>
-                    <td class="date">-</td>
-                </tr>"#,
-            );
+            entries_data.push(format!(
+                r#"{{"href": "../", "type": "back", "name": "Back", "size": "", "date": ""}}"#
+            ));
         }
 
         // Add file/directory entries
+        for (name, size, date) in entries {
+            let is_directory = name.ends_with('/');
+            let entry_type = if is_directory { "directory" } else { "file" };
+            let display_name = if is_directory {
+                name.trim_end_matches('/')
+            } else {
+                name
+            };
+
+            entries_data.push(format!(
+                r#"{{"href": "{}", "type": "{}", "name": "{}", "size": "{}", "date": "{}"}}"#,
+                percent_encode(name),
+                entry_type,
+                html_escape(display_name),
+                size,
+                date
+            ));
+        }
+
+        // For now, still generate HTML but use template variables for icons
+        let mut entries_html = String::new();
+        
+        // Add parent directory link if not at root (as table row)
+        if path != "/" && !path.is_empty() {
+            entries_html.push_str(&format!(
+                r#"<tr>
+                    <td>
+                        <a href="../" class="file-link">
+                            <span class="file-type directory">{}</span>
+                            <span class="name">Back</span>
+                        </a>
+                    </td>
+                    <td class="size" colspan="2"></td>
+                </tr>"#,
+                BACK_ICON_SVG
+            ));
+        }
+
+        // Add file/directory entries with template-based icons
         for (name, size, date) in entries {
             let is_directory = name.ends_with('/');
             let type_class = if is_directory { "directory" } else { "file" };
@@ -146,11 +265,17 @@ impl TemplateEngine {
                 name
             };
 
+            let icon_svg = if is_directory {
+                FOLDER_ICON_SVG
+            } else {
+                Self::get_file_icon(name)
+            };
+
             entries_html.push_str(&format!(
                 r#"<tr>
                     <td>
                         <a href="{}" class="file-link">
-                            <span class="file-type {}"></span>
+                            <span class="file-type {}">{}</span>
                             <span class="name">{}</span>
                         </a>
                     </td>
@@ -159,6 +284,7 @@ impl TemplateEngine {
                 </tr>"#,
                 percent_encode(name),
                 type_class,
+                icon_svg,
                 html_escape(display_name),
                 size,
                 date

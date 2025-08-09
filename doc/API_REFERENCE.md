@@ -291,6 +291,7 @@ Content-Type: text/html
 Serves template assets (CSS, JavaScript, images).
 
 **Examples:**
+- `GET /_static/common/base.css` (shared design system)
 - `GET /_static/directory/styles.css`
 - `GET /_static/upload/script.js`
 - `GET /_static/error/styles.css`
@@ -359,6 +360,8 @@ Detailed server status and statistics.
   }
 }
 ```
+
+Note: Configuration values reflect effective merged settings after precedence resolution (CLI > INI > defaults). The raw source (e.g., whether a value came from INI or CLI) is not currently exposed.
 
 ### 6. API Information
 
@@ -501,20 +504,23 @@ X-RateLimit-Reset: 1704110400
 }
 ```
 
-**HTML Error Response:**
+**HTML Error Response (Variables Updated in v2.5):**
 ```html
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Error 404 - Not Found</title>
-    <link rel="stylesheet" href="/_static/error/styles.css">
+  <title>{{ERROR_CODE}} - {{ERROR_MESSAGE}}</title>
+  <link rel="stylesheet" href="/_static/common/base.css">
+  <link rel="stylesheet" href="/_static/error/styles.css">
 </head>
 <body>
-    <div class="error-container">
-        <h1>404 - Not Found</h1>
-        <p>The requested resource could not be found.</p>
-        <a href="/">← Back to Home</a>
-    </div>
+  <div class="error-container">
+    <div class="error-code">{{ERROR_CODE}}</div>
+    <div class="error-message">{{ERROR_MESSAGE}}</div>
+    <div class="error-description">{{ERROR_DESCRIPTION}}</div>
+    <div class="error-meta">Request: {{REQUEST_ID}} • {{TIMESTAMP}}</div>
+    <a href="/" class="back-link">Back to Files</a>
+  </div>
 </body>
 </html>
 ```

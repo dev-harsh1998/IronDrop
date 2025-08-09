@@ -1,8 +1,8 @@
-# IronDrop Architecture Documentation v2.5
+# IronDrop Architecture Documentation v2.5 (Updated)
 
 ## Overview
 
-IronDrop is a lightweight, high-performance file server written in Rust featuring bidirectional file sharing, modular template architecture, and professional UI design. This document provides a comprehensive overview of the system architecture, component interactions, and implementation details.
+IronDrop is a lightweight, high-performance file server written in Rust featuring bidirectional file sharing, a hierarchical configuration system, modular template & UI architecture, and professional dark theme design. This document provides a comprehensive overview of the system architecture, component interactions, configuration precedence, and implementation details.
 
 ## System Architecture
 
@@ -34,9 +34,11 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
 ## Core Modules
 
 ### 1. **Entry Point & Configuration**
-- **`main.rs`** (6 lines): Simple entry point that calls `irondrop::run()`
-- **`lib.rs`** (56 lines): Library initialization, logging setup, and server bootstrap
-- **`cli.rs`** (200+ lines): Command-line interface with comprehensive validation
+- **`main.rs`**: Entry point calling `irondrop::run()`
+- **`lib.rs`**: Library initialization, logging setup, configuration load, server bootstrap
+- **`cli.rs`**: Command-line interface with validation (adds `--config-file` flag)
+- **`config/ini_parser.rs`**: Zero‑dependency INI parser (sections, booleans, lists, file sizes)
+- **`config/mod.rs`**: Precedence resolver (CLI > INI > defaults) producing strongly typed `Config`
 
 ### 2. **HTTP Processing Layer**
 - **`server.rs`**: Custom thread pool implementation with rate limiting
@@ -48,11 +50,12 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
 - **`upload.rs`**: Secure file upload handling with atomic operations
 - **`multipart.rs`**: RFC 7578 compliant multipart/form-data parser
 
-### 4. **Template System**
-- **`templates.rs`**: Native template engine with variable interpolation
+### 4. **Template & UI System**
+- **`templates.rs`**: Native template engine with variable interpolation & static asset registry
+- **`templates/common/base.css`**: Unified design system (tokens, components, utilities)
 - **`templates/directory/`**: Directory listing templates (HTML, CSS, JS)
-- **`templates/upload/`**: File upload templates (HTML, CSS, JS)  
-- **`templates/error/`**: Error page templates (HTML, CSS, JS)
+- **`templates/upload/`**: Upload templates (HTML, CSS, JS, form component)
+- **`templates/error/`**: Error templates using new variables (`ERROR_CODE`, `ERROR_MESSAGE`, `ERROR_DESCRIPTION`, `REQUEST_ID`, `TIMESTAMP`)
 
 ### 5. **Support Systems**
 - **`error.rs`**: Custom error types and error handling
@@ -146,6 +149,35 @@ tests/
 └── template_embedding_test.rs # Template system tests
 ```
 
+## Configuration Architecture
+
+### Precedence Model
+Order of resolution (highest first):
+1. Explicit CLI flags (non-default values)
+2. INI file values (if discovered / specified)
+3. Built‑in defaults
+
+### Discovery Order (when `--config-file` not provided)
+1. `./irondrop.ini`
+2. `./irondrop.conf`
+3. `$HOME/.config/irondrop/config.ini`
+4. `/etc/irondrop/config.ini` (Unix)
+
+### Normalization Highlights
+| Field | CLI Unit | Internal Storage | INI Formats |
+|-------|----------|------------------|------------|
+| max_upload_size | MB | Bytes (u64) | `500MB`, `1.5GB`, `2048` (bytes) |
+| allowed_extensions | Comma string | Vec<String> | Comma list |
+| verbose/detailed | Flags | bool | true/false/yes/no/on/off/1/0 |
+
+### Safety
+* Upload size bounded (1MB – 10GB default) with overflow avoidance
+* Serve directory always sourced from CLI (prevents relocation via config)
+* Graceful parse of malformed section headers; strict on empty keys/sections
+
+### Transitional Adapter
+`run_server_with_config` converts `Config` → legacy `Cli` struct to minimize internal churn.
+
 ## Security Architecture
 
 ### Defense in Depth
@@ -215,12 +247,12 @@ tests/
 - **Directory Size**: Efficient handling of large directories
 - **Template Complexity**: Sub-millisecond variable interpolation
 
-## Template System Architecture
+## Template & UI System Architecture
 
 ### Template Engine Design
 
 The native template engine provides:
-- **Variable Interpolation**: `{{VARIABLE}}` syntax with HTML escaping
+- **Variable Interpolation**: `{{VARIABLE}}` syntax with HTML escaping (error variables renamed to `ERROR_CODE`, `ERROR_MESSAGE`, `ERROR_DESCRIPTION` + metadata `REQUEST_ID`, `TIMESTAMP`)
 - **Static Asset Serving**: Organized CSS/JS delivery via `/_static/` routes
 - **Modular Templates**: Separated concerns (HTML structure, CSS styling, JS behavior)
 - **Caching**: In-memory template storage for performance
@@ -264,31 +296,30 @@ Static Asset Request → Asset Router → Direct File Serving → CSS/JS Respons
 - **Concurrent Testing**: Multi-threaded test scenarios
 - **Security Validation**: Path traversal and injection testing
 
-## Configuration System
-
-### CLI Configuration
+## CLI Configuration (Snapshot)
 ```rust
 pub struct Cli {
-    directory: PathBuf,           // Required: directory to serve
-    listen: String,               // Default: "127.0.0.1"
-    port: u16,                    // Default: 8080
-    allowed_extensions: String,    // Default: "*.zip,*.txt"
-    threads: usize,               // Default: 8
-    chunk_size: usize,            // Default: 1024
-    verbose: bool,                // Default: false
-    detailed_logging: bool,       // Default: false
-    username: Option<String>,     // Optional: basic auth
-    password: Option<String>,     // Optional: basic auth
-    enable_upload: bool,          // Default: false
-    max_upload_size: u32,         // Default: 10240 (10GB)
-    upload_dir: Option<PathBuf>,  // Optional: custom upload dir
+   pub directory: PathBuf,          // Required: serve root
+   pub listen: String,              // Default: 127.0.0.1
+   pub port: u16,                   // Default: 8080
+   pub allowed_extensions: String,  // Default: "*.zip,*.txt"
+   pub threads: usize,              // Default: 8
+   pub chunk_size: usize,           // Default: 1024 (bytes)
+   pub verbose: bool,               // Debug logging
+   pub detailed_logging: bool,      // Info logging
+   pub username: Option<String>,    // Basic auth (optional)
+   pub password: Option<String>,    // Basic auth (optional)
+   pub enable_upload: bool,         // Upload toggle
+   pub max_upload_size: u32,        // MB (converted to bytes in Config)
+   pub upload_dir: Option<PathBuf>, // Upload target dir (optional)
+   pub config_file: Option<String>, // INI path override
 }
 ```
 
-### Validation Pipeline
-1. **Parse-time Validation**: Clap value parsers and constraints
-2. **Runtime Validation**: Additional checks during server initialization
-3. **Operation Validation**: Per-request validation and security checks
+### Validation Layers
+1. Parse-time (clap parsers: numeric bounds, path existence for config file)
+2. Config assembly (unit conversions, precedence application, list parsing, file size parsing)
+3. Request-time (path traversal prevention, extension filtering, auth, rate limits, range validation)
 
 ## Error Handling System
 

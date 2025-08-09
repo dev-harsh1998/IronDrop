@@ -115,6 +115,13 @@ body::before {
     color: var(--text-primary);
 }
 
+.logo-img {
+    height: 120px;
+    width: auto;
+    display: block;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+}
+
 .logo-text {
     font-family: var(--font-family);
     font-size: 1.5rem;

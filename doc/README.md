@@ -69,6 +69,11 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 - Comprehensive troubleshooting guide
 
 ## 🔧 Specialized Component Documentation
+### 🧩 [Configuration System](./CONFIGURATION_SYSTEM.md)
+Hierarchical configuration (CLI > INI > defaults) with zero‑dep INI parser, secure size parsing, auth provisioning, deterministic startup.
+
+### 🎨 [Template & UI System](./TEMPLATE_SYSTEM.md)
+Native zero-dependency template engine: variables, conditionals, embedded assets, security model, theming & roadmap.
 
 ### 📤 [Upload Integration Guide](./UPLOAD_INTEGRATION.md)
 **Audience**: Frontend Developers, UI/UX Implementers  

@@ -26,18 +26,17 @@
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let cli = Cli {
 //!     directory: PathBuf::from("/tmp"),
-//!     listen: "127.0.0.1".to_string(),
-//!     port: 8080,
-//!     allowed_extensions: "*.txt,*.pdf".to_string(),
-//!     threads: 4,
-//!     chunk_size: 1024,
-//!     verbose: false,
-//!     detailed_logging: false,
+//!     listen: Some("127.0.0.1".to_string()),
+//!     port: Some(8080),
+//!     allowed_extensions: Some("*.txt,*.pdf".to_string()),
+//!     threads: Some(4),
+//!     chunk_size: Some(1024),
+//!     verbose: Some(false),
+//!     detailed_logging: Some(false),
 //!     username: None,
 //!     password: None,
-//!     enable_upload: true,
-//!     max_upload_size: 10,
-//!     upload_dir: None,
+//!     enable_upload: Some(true),
+//!     max_upload_size: Some(10),
 //!     config_file: None,
 //! };
 //! let mut upload_handler = UploadHandler::new(&cli)?;
@@ -140,15 +139,20 @@ pub struct UploadHandler {
 impl UploadHandler {
     /// Create a new upload handler from CLI configuration
     pub fn new(cli: &Cli) -> Result<Self, AppError> {
-        if !cli.enable_upload {
+        if !cli.enable_upload.unwrap_or(false) {
             return Err(AppError::upload_disabled());
         }
 
-        // Determine target directory
-        let target_dir = match &cli.upload_dir {
-            Some(dir) => dir.clone(),
-            None => Self::detect_os_download_directory()?,
-        };
+        // Always use the directory being served as the base for uploads
+        // Individual upload directories will be determined dynamically
+        Self::new_with_directory(cli, cli.directory.clone())
+    }
+
+    /// Create upload handler with custom target directory
+    pub fn new_with_directory(cli: &Cli, target_dir: PathBuf) -> Result<Self, AppError> {
+        if !cli.enable_upload.unwrap_or(false) {
+            return Err(AppError::upload_disabled());
+        }
 
         // Ensure target directory exists
         Self::ensure_directory_exists(&target_dir)?;
@@ -156,6 +160,8 @@ impl UploadHandler {
         // Parse allowed extensions from CLI
         let allowed_extensions = cli
             .allowed_extensions
+            .as_deref()
+            .unwrap_or("*")
             .split(',')
             .map(|ext| ext.trim())
             .filter(|ext| !ext.is_empty())
@@ -858,19 +864,19 @@ mod tests {
 
     fn create_test_cli(upload_dir: PathBuf) -> Cli {
         Cli {
-            directory: PathBuf::from("/tmp"),
-            listen: "127.0.0.1".to_string(),
-            port: 8080,
-            allowed_extensions: "*.txt,*.pdf".to_string(),
-            threads: 4,
-            chunk_size: 1024,
-            verbose: false,
-            detailed_logging: false,
+            // Use the provided temp directory as the server base directory
+            directory: upload_dir,
+            listen: Some("127.0.0.1".to_string()),
+            port: Some(8080),
+            allowed_extensions: Some("*.txt,*.pdf".to_string()),
+            threads: Some(4),
+            chunk_size: Some(1024),
+            verbose: Some(false),
+            detailed_logging: Some(false),
             username: None,
             password: None,
-            enable_upload: true,
-            max_upload_size: 100, // 100MB for testing
-            upload_dir: Some(upload_dir),
+            enable_upload: Some(true),
+            max_upload_size: Some(100), // 100MB for testing
             config_file: None,
         }
     }
@@ -893,7 +899,7 @@ mod tests {
     fn test_upload_disabled() {
         let temp_dir = TempDir::new().unwrap();
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());
-        cli.enable_upload = false;
+        cli.enable_upload = Some(false);
 
         let result = UploadHandler::new(&cli);
         assert!(matches!(result, Err(AppError::UploadDisabled)));

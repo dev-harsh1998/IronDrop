@@ -14,15 +14,15 @@
 }
 
 .directory-title {
-    font-size: 2.5rem;
-    font-weight: 700;
+    font-size: 1.65rem;
+    font-weight: 600;
     color: var(--text-accent);
-    margin-bottom: var(--space-sm);
+    margin: 0;
+    line-height: 1.2;
     background: var(--gradient-accent);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    line-height: 1.1;
 }
 
 .directory-subtitle {
@@ -49,21 +49,35 @@
     text-shadow: 0 2px 4px rgba(255, 255, 255, 0.2);
 }
 
+/* Icon wrapper replacing colored bullet */
 .file-type {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
+    background: none !important;
+    background-color: transparent !important;
+    border: none;
+    outline: none;
 }
 
-.file-type.directory {
-    background: var(--gradient-accent);
-    box-shadow: 0 2px 4px rgba(255, 255, 255, 0.3);
+.file-type svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor !important;
+    stroke: none;
+    background: none !important;
+    background-color: transparent !important;
 }
 
-.file-type.file {
-    background: linear-gradient(135deg, #888888, #555555);
-    box-shadow: 0 2px 4px rgba(136, 136, 136, 0.3);
+.file-type.directory svg {
+    color: var(--text-accent);
+}
+
+.file-type.file svg {
+    color: var(--text-secondary);
 }
 
 .file-size {
@@ -89,8 +103,7 @@
     }
 
     .directory-title {
-        font-size: 2rem;
-        margin-bottom: 0.25rem;
+        font-size: 1.4rem;
     }
 
     .file-size,

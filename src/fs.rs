@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::error::AppError;
 use crate::templates::TemplateEngine;
 use log::debug;
@@ -7,7 +8,11 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 /// Enhanced directory listing using modular templates - dark mode only
-pub fn generate_directory_listing(path: &Path, request_path: &str) -> Result<String, AppError> {
+pub fn generate_directory_listing(
+    path: &Path,
+    request_path: &str,
+    config: Option<&Config>,
+) -> Result<String, AppError> {
     debug!("Generating directory listing for: '{}'", path.display());
 
     let mut entries = Vec::new();
@@ -72,8 +77,14 @@ pub fn generate_directory_listing(path: &Path, request_path: &str) -> Result<Str
     // Create template engine with embedded templates
     let engine = TemplateEngine::new();
 
-    // Render using template
-    engine.render_directory_listing(display_path, &template_entries, template_entries.len())
+    // Render using template with conditional upload button
+    engine.render_directory_listing(
+        display_path,
+        &template_entries,
+        template_entries.len(),
+        config.map(|c| c.enable_upload).unwrap_or(false),
+        request_path,
+    )
 }
 
 /// Format file size in human-readable format

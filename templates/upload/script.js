@@ -391,7 +391,8 @@ class UploadManager {
         });
 
         // Send request
-        xhr.open('POST', '/upload?upload=true');
+        const uploadPath = this.getUploadPath();
+        xhr.open('POST', uploadPath);
 
 
         xhr.send(formData);
@@ -401,6 +402,18 @@ class UploadManager {
         // Extract path from URL or use root
         const path = window.location.pathname;
         return path.endsWith('/') ? path : path + '/';
+    }
+
+    getUploadPath() {
+        // Get upload_to parameter from current URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const uploadTo = urlParams.get('upload_to');
+
+        if (uploadTo) {
+            return `/_irondrop/upload?upload_to=${encodeURIComponent(uploadTo)}`;
+        } else {
+            return '/_irondrop/upload';
+        }
     }
 
     updateSummary() {

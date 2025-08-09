@@ -1,7 +1,10 @@
 use crate::cli::Cli;
 use crate::config::Config;
 use crate::error::AppError;
+use crate::handlers::register_internal_routes;
 use crate::http::handle_client;
+use crate::middleware::AuthMiddleware;
+use crate::router::Router;
 use glob::Pattern;
 use log::{error, info, warn};
 use std::collections::HashMap;
@@ -474,18 +477,17 @@ pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
     // This is a transitional approach - eventually we could refactor to use Config throughout
     let cli = Cli {
         directory: config.directory,
-        listen: config.listen,
-        port: config.port,
-        allowed_extensions: config.allowed_extensions.join(","),
-        threads: config.threads,
-        chunk_size: config.chunk_size,
-        verbose: config.verbose,
-        detailed_logging: config.detailed_logging,
+        listen: Some(config.listen),
+        port: Some(config.port),
+        allowed_extensions: Some(config.allowed_extensions.join(",")),
+        threads: Some(config.threads),
+        chunk_size: Some(config.chunk_size),
+        verbose: Some(config.verbose),
+        detailed_logging: Some(config.detailed_logging),
         username: config.username,
         password: config.password,
-        enable_upload: config.enable_upload,
-        max_upload_size: config.max_upload_size / (1024 * 1024), // Convert bytes back to MB
-        upload_dir: config.upload_dir,
+        enable_upload: Some(config.enable_upload),
+        max_upload_size: Some(config.max_upload_size / (1024 * 1024)), // Convert bytes back to MB
         config_file: None, // Not needed for server execution
     };
 
@@ -507,12 +509,18 @@ pub fn run_server(
 
     let allowed_extensions = Arc::new(
         cli.allowed_extensions
+            .as_ref()
+            .unwrap_or(&"*".to_string())
             .split(',')
             .map(|ext| Pattern::new(ext.trim()))
             .collect::<Result<Vec<Pattern>, _>>()?,
     );
 
-    let bind_address = format!("{}:{}", cli.listen, cli.port);
+    let bind_address = format!(
+        "{}:{}",
+        cli.listen.as_ref().unwrap_or(&"127.0.0.1".to_string()),
+        cli.port.unwrap_or(8080)
+    );
     let listener = TcpListener::bind(&bind_address)?;
     let local_addr = listener.local_addr()?;
     listener.set_nonblocking(true)?;
@@ -538,10 +546,26 @@ pub fn run_server(
     info!("⚡ Security: Rate limiting enabled (120 req/min, 10 concurrent per IP)");
     info!("📊 Monitoring: Statistics collection enabled");
 
-    let pool = ThreadPool::new(cli.threads);
+    let pool = ThreadPool::new(cli.threads.unwrap_or(8));
     let username = Arc::new(cli.username.clone());
     let password = Arc::new(cli.password.clone());
     let cli_arc = Arc::new(cli);
+
+    // Build shared internal router once (with middleware)
+    let mut router = Router::new();
+    if cli_arc.username.is_some() && cli_arc.password.is_some() {
+        router.add_middleware(Box::new(AuthMiddleware::new(
+            cli_arc.username.clone(),
+            cli_arc.password.clone(),
+        )));
+    }
+    register_internal_routes(
+        &mut router,
+        Some(cli_arc.clone()),
+        Some(stats.clone()),
+        Some(base_dir.clone()),
+    );
+    let shared_router = Arc::new(router);
 
     // Start background cleanup task for rate limiter
     let rate_limiter_cleanup = rate_limiter.clone();
@@ -619,15 +643,17 @@ pub fn run_server(
                     rate_limiter,
                     stats,
                     cli_ref,
+                    router,
                 ) = (
                     base_dir.clone(),
                     allowed_extensions.clone(),
                     username.clone(),
                     password.clone(),
-                    cli_arc.chunk_size,
+                    cli_arc.chunk_size.unwrap_or(1024),
                     rate_limiter.clone(),
                     stats.clone(),
                     cli_arc.clone(),
+                    shared_router.clone(),
                 );
 
                 pool.execute(move || {
@@ -641,6 +667,7 @@ pub fn run_server(
                         chunk_size,
                         &stats,
                         Some(cli_ref.as_ref()),
+                        &router,
                     );
 
                     // Release rate limit connection
@@ -702,6 +729,7 @@ fn handle_client_with_stats(
     chunk_size: usize,
     stats: &ServerStats,
     cli_config: Option<&crate::cli::Cli>,
+    router: &Arc<crate::router::Router>,
 ) -> Result<(), AppError> {
     let start = Instant::now();
     let bytes_sent = 0u64;
@@ -717,6 +745,7 @@ fn handle_client_with_stats(
             chunk_size,
             cli_config,
             Some(stats),
+            router,
         );
     }));
 

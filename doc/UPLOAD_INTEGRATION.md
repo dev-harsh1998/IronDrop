@@ -6,10 +6,10 @@ This document provides guidance on integrating the modern upload UI templates in
 
 ## Overview
 
-The upload UI system consists of four main components:
+The upload UI system consists of core components plus a shared design system:
 
 1. **Upload Page Template** (`/templates/upload/page.html`) - Dedicated upload page with drag-and-drop interface
-2. **Upload Styles** (`/templates/upload/styles.css`) - Modern CSS styling matching the existing theme  
+2. **Upload Styles** (`/templates/upload/styles.css`) - Page-specific layer extending shared `common/base.css`  
 3. **Upload Script** (`/templates/upload/script.js`) - JavaScript for drag-drop, AJAX uploads, and progress tracking
 4. **Inline Upload Form** (`/templates/upload/form.html`) - Reusable component for directory listings
 
@@ -23,9 +23,10 @@ The upload UI system consists of four main components:
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
 
 ### 🎨 Visual Design
-- **Dark Theme Integration**: Matches existing professional blackish-grey theme
-- **Glass Morphism**: Uses backdrop filters and translucent elements
-- **Smooth Animations**: CSS transitions and hover effects
+- **Shared Design System**: Inherits global tokens & components via `/_static/common/base.css`
+- **Dark Theme Integration**: Professional blackish-grey palette (#0a0a0a → #ffffff)
+- **Glass Effects**: Backdrop blur & translucent surfaces
+- **Smooth Animations**: CSS transitions (no JS dependency)
 - **Status Indicators**: Color-coded progress states (pending, uploading, completed, error)
 
 ### ⚙️ Technical Features
@@ -55,7 +56,8 @@ pub fn get_upload_form(&self) -> Result<String, AppError>
 
 ### Static Asset Serving
 
-Upload assets are served via the existing static asset system:
+Upload assets are served via the static asset system:
+- `/_static/common/base.css` (shared foundation)
 - `/_static/upload/styles.css`
 - `/_static/upload/script.js`
 
@@ -137,7 +139,7 @@ templates/
 ## Styling Guidelines
 
 ### CSS Custom Properties
-The upload UI uses the same CSS custom properties as the main theme:
+The upload UI inherits global CSS custom properties from `common/base.css` and may override or extend:
 
 ```css
 :root {
@@ -152,11 +154,11 @@ The upload UI uses the same CSS custom properties as the main theme:
 ```
 
 ### Component Structure
-Upload components follow the existing design patterns:
-- Glass morphism effects with `backdrop-filter: blur(20px)`
-- Rounded corners with `border-radius: 24px` for containers
-- Consistent spacing using `2rem` padding
-- Hover effects with `transform` and `box-shadow`
+Upload components align with global primitives:
+- Glass morphism effects via `backdrop-filter: blur(20px)`
+- Rounded corners (design tokens for radii)
+- Consistent spacing using shared spacing scale
+- Hover effects with elevation & subtle transforms
 
 ## JavaScript API
 
@@ -208,7 +210,7 @@ The upload system emits various events for integration:
 ## Customization
 
 ### Theming
-Upload styles can be customized by modifying the CSS custom properties in `upload/styles.css`.
+Prefer customizing global tokens in `common/base.css` for broad changes; use `upload/styles.css` only for page‑specific overrides.
 
 ### File Type Icons
 Add custom file type detection in the JavaScript:
