@@ -275,7 +275,7 @@ fn test_beautiful_error_pages() {
     );
 
     // Check for modern interaction elements
-    assert!(response.body.contains("error-button"));
+    assert!(response.body.contains("btn btn-light"));
     assert!(response.body.contains("Go Home"));
 }
 

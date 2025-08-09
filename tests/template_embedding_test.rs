@@ -197,7 +197,7 @@ fn test_error_page_rendering() {
         html.contains("error-code"),
         "Should contain error code styling"
     );
-    assert!(html.contains("back-link"), "Should contain back link");
+    assert!(html.contains("Go Back"), "Should contain back link");
 
     // Should reference embedded assets
     assert!(

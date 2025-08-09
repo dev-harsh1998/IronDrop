@@ -1,4 +1,4 @@
-//! Tests for /monitor endpoint and bytes_served accounting.
+//! Tests for /_irondrop/monitor endpoint and bytes_served accounting.
 
 use irondrop::cli::Cli;
 use irondrop::server::run_server;
@@ -96,7 +96,7 @@ fn test_monitor_json_and_bytes_served_accounting() {
 
     // First monitor fetch (baseline)
     let res1 = client
-        .get(format!("http://{}/monitor?json=1", server.addr))
+        .get(format!("http://{}/_irondrop/monitor?json=1", server.addr))
         .send()
         .unwrap();
     assert_eq!(res1.status(), StatusCode::OK);
@@ -120,7 +120,7 @@ fn test_monitor_json_and_bytes_served_accounting() {
 
     // Second monitor fetch
     let res2 = client
-        .get(format!("http://{}/monitor?json=1", server.addr))
+        .get(format!("http://{}/_irondrop/monitor?json=1", server.addr))
         .send()
         .unwrap();
     assert_eq!(res2.status(), StatusCode::OK);
@@ -142,7 +142,7 @@ fn test_monitor_json_and_bytes_served_accounting() {
 
     // Third monitor fetch to ensure monotonic increase
     let res3 = client
-        .get(format!("http://{}/monitor?json=1", server.addr))
+        .get(format!("http://{}/_irondrop/monitor?json=1", server.addr))
         .send()
         .unwrap();
     assert_eq!(res3.status(), StatusCode::OK);
@@ -157,7 +157,7 @@ fn test_monitor_html_served() {
     let client = Client::new();
 
     let res = client
-        .get(format!("http://{}/monitor", server.addr))
+        .get(format!("http://{}/_irondrop/monitor", server.addr))
         .send()
         .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
