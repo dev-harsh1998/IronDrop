@@ -191,7 +191,7 @@ fn handle_logo_request() -> Result<Response, AppError> {
 fn handle_upload_form_request(
     request: &Request,
     cli_config: Option<&crate::cli::Cli>,
-    base_dir: Option<&std::path::PathBuf>,
+    _base_dir: Option<&std::path::PathBuf>,
 ) -> Result<Response, AppError> {
     let cli = cli_config.ok_or_else(|| {
         AppError::InternalServerError(
@@ -207,24 +207,9 @@ fn handle_upload_form_request(
     let upload_to = query_params.get("upload_to").map(String::as_str);
 
     let engine = crate::templates::TemplateEngine::new();
-    let mut vars = HashMap::new();
-    vars.insert("PATH".to_string(), upload_to.unwrap_or("/").to_string());
-    vars.insert(
-        "UPLOAD_TO".to_string(),
-        upload_to.unwrap_or("/").to_string(),
-    );
+    let path = upload_to.unwrap_or("/");
 
-    // Add target directory information for display
-    if let Some(base) = base_dir {
-        if let Ok(target_dir) = crate::utils::resolve_upload_directory(base, upload_to) {
-            vars.insert(
-                "TARGET_DIR".to_string(),
-                target_dir.to_string_lossy().to_string(),
-            );
-        }
-    }
-
-    let html = engine.render("upload_page", &vars)?;
+    let html = engine.render_upload_page(path)?;
     Ok(Response {
         status_code: 200,
         status_text: "OK".into(),

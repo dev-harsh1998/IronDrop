@@ -166,18 +166,17 @@ verbose = false
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "192.168.1.1".to_string(), // CLI override
-        port: 8888,                        // CLI override
-        allowed_extensions: "*.zip,*.txt".to_string(),
-        threads: 4, // CLI override (non-default value)
-        chunk_size: 1024,
-        verbose: true, // CLI override
-        detailed_logging: false,
+        listen: Some("192.168.1.1".to_string()), // CLI override
+        port: Some(8888),                        // CLI override
+        allowed_extensions: Some("*.zip,*.txt".to_string()),
+        threads: Some(4), // CLI override (non-default value)
+        chunk_size: Some(1024),
+        verbose: Some(true), // CLI override
+        detailed_logging: Some(false),
         username: None,
         password: None,
-        enable_upload: false,
-        max_upload_size: 10240,
-        upload_dir: None,
+        enable_upload: Some(false),
+        max_upload_size: Some(10240),
         config_file: Some(config_file.to_string_lossy().to_string()),
     };
 
@@ -201,8 +200,8 @@ port = 5555
 threads = 4
 
 [upload]
-enabled = true
-max_size = 1GB
+enable_upload = true
+max_upload_size = 1GB
 "#;
 
     // Test explicit config file path
@@ -211,18 +210,17 @@ max_size = 1GB
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "*.zip,*.txt".to_string(),
-        threads: 8,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: None,
+        port: None,
+        allowed_extensions: None,
+        threads: None,
+        chunk_size: None,
+        verbose: None,
+        detailed_logging: None,
         username: None,
         password: None,
-        enable_upload: false,
-        max_upload_size: 10240,
-        upload_dir: None,
+        enable_upload: None,
+        max_upload_size: None,
         config_file: Some(explicit_config.to_string_lossy().to_string()),
     };
 
@@ -240,18 +238,17 @@ fn test_config_defaults() {
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "*.zip,*.txt".to_string(),
-        threads: 8,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(8080),
+        allowed_extensions: Some("*.zip,*.txt".to_string()),
+        threads: Some(8),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
         username: None,
         password: None,
-        enable_upload: false,
-        max_upload_size: 10240,
-        upload_dir: None,
+        enable_upload: Some(false),
+        max_upload_size: Some(10240),
         config_file: None,
     };
 
@@ -264,7 +261,6 @@ fn test_config_defaults() {
     assert_eq!(config.chunk_size, 1024);
     assert_eq!(config.enable_upload, false);
     assert_eq!(config.max_upload_size, 10240 * 1024 * 1024); // 10GB in bytes
-    assert_eq!(config.upload_dir, None);
     assert_eq!(config.username, None);
     assert_eq!(config.password, None);
     assert_eq!(config.allowed_extensions, vec!["*.zip", "*.txt"]);
@@ -279,18 +275,17 @@ fn test_config_file_load_error() {
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "*.zip,*.txt".to_string(),
-        threads: 8,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(8080),
+        allowed_extensions: Some("*.zip,*.txt".to_string()),
+        threads: Some(8),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
         username: None,
         password: None,
-        enable_upload: false,
-        max_upload_size: 10240,
-        upload_dir: None,
+        enable_upload: Some(false),
+        max_upload_size: Some(10240),
         config_file: Some(nonexistent_config.to_string_lossy().to_string()),
     };
 
@@ -328,8 +323,8 @@ fn test_config_upload_settings() {
         format!(
             r#"
 [upload]
-enabled = true
-max_size = 500MB
+enable_upload = true
+max_upload_size = 500MB
 directory = {}
 
 [server]
@@ -343,18 +338,17 @@ directory = {}
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "*.zip,*.txt".to_string(),
-        threads: 8,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: None,
+        port: None,
+        allowed_extensions: None,
+        threads: None,
+        chunk_size: None,
+        verbose: None,
+        detailed_logging: None,
         username: None,
         password: None,
-        enable_upload: false,
-        max_upload_size: 10240,
-        upload_dir: None,
+        enable_upload: None,
+        max_upload_size: None,
         config_file: Some(config_file.to_string_lossy().to_string()),
     };
 
@@ -362,7 +356,6 @@ directory = {}
 
     assert_eq!(config.enable_upload, true);
     assert_eq!(config.max_upload_size, 500 * 1024 * 1024); // 500MB in bytes
-    assert_eq!(config.upload_dir, Some(upload_dir));
 }
 
 #[test]
@@ -385,18 +378,17 @@ port = 9999
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "*.zip,*.txt".to_string(),
-        threads: 8,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: None,
+        port: None,
+        allowed_extensions: None,
+        threads: None,
+        chunk_size: None,
+        verbose: None,
+        detailed_logging: None,
         username: None,
         password: None,
-        enable_upload: false,
-        max_upload_size: 10240,
-        upload_dir: None,
+        enable_upload: None,
+        max_upload_size: None,
         config_file: Some(config_file.to_string_lossy().to_string()),
     };
 

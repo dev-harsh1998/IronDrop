@@ -33,18 +33,17 @@ fn setup_test_server(username: Option<String>, password: Option<String>) -> Test
 
     let cli = Cli {
         directory: dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 0, // Port 0 lets the OS pick a free port.
-        allowed_extensions: "*.txt".to_string(),
-        threads: 4,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(0), // Port 0 lets the OS pick a free port.
+        allowed_extensions: Some("*.txt".to_string()),
+        threads: Some(4),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
         username,
         password,
-        enable_upload: false,
-        max_upload_size: 10240,
-        upload_dir: None,
+        enable_upload: Some(false),
+        max_upload_size: Some(10240),
         config_file: None,
     };
 

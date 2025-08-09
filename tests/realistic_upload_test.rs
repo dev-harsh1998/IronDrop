@@ -8,19 +8,18 @@ use tempfile::TempDir;
 
 fn create_test_cli(upload_dir: PathBuf) -> Cli {
     Cli {
-        directory: PathBuf::from("/tmp"),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "*".to_string(), // Allow all files for testing
-        threads: 4,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        directory: upload_dir,
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(8080),
+        allowed_extensions: Some("*".to_string()), // Allow all files for testing
+        threads: Some(4),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
         username: None,
         password: None,
-        enable_upload: true,
-        max_upload_size: 10, // 10MB
-        upload_dir: Some(upload_dir),
+        enable_upload: Some(true),
+        max_upload_size: Some(10), // 10MB
         config_file: None,
     }
 }

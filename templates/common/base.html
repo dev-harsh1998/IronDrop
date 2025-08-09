@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IronDrop | {{PAGE_TITLE}}</title>
+
+    <!-- Common Base Styles -->
+    <link rel="stylesheet" href="/_irondrop/static/common/base.css">
+
+    <!-- Page-specific Styles -->
+    {{PAGE_STYLES}}
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Application Header -->
+        <header class="app-header">
+            <a href="/" class="app-logo" aria-label="IronDrop Home">
+                <img src="/_irondrop/logo" alt="IronDrop" class="logo-img" />
+            </a>
+            <div class="header-actions">
+                {{HEADER_ACTIONS}}
+            </div>
+        </header>
+
+        <!-- Page Content -->
+        <main class="page-content">
+            {{PAGE_CONTENT}}
+        </main>
+
+        <!-- Application Footer -->
+        <footer class="app-footer">
+            <span class="footer-info">Powered by IronDrop v2.5.0</span>
+        </footer>
+    </div>
+
+    <!-- Page-specific Scripts -->
+    {{PAGE_SCRIPTS}}
+</body>
+
+</html>

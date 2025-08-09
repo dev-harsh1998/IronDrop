@@ -58,18 +58,17 @@ impl UploadTestServer {
 
         let cli = Cli {
             directory: server_dir.path().to_path_buf(),
-            listen: "127.0.0.1".to_string(),
-            port: 0,
-            allowed_extensions: allowed_extensions.to_string(),
-            threads: 8,
-            chunk_size: 1024,
-            verbose: false,
-            detailed_logging: false,
+            listen: Some("127.0.0.1".to_string()),
+            port: Some(0),
+            allowed_extensions: Some(allowed_extensions.to_string()),
+            threads: Some(8),
+            chunk_size: Some(1024),
+            verbose: Some(false),
+            detailed_logging: Some(false),
             username,
             password,
-            enable_upload,
-            max_upload_size,
-            upload_dir: Some(upload_dir.path().to_path_buf()),
+            enable_upload: Some(enable_upload),
+            max_upload_size: Some(max_upload_size),
             config_file: None,
         };
 
@@ -93,9 +92,9 @@ impl UploadTestServer {
         }
     }
 
-    /// Get upload directory path
+    /// Get upload directory path (same as server directory in IronDrop)
     fn upload_dir(&self) -> PathBuf {
-        self._upload_dir.path().to_path_buf()
+        self._temp_dir.path().to_path_buf()
     }
 }
 
@@ -357,7 +356,7 @@ struct HttpResponse {
 #[test]
 fn test_single_file_upload() {
     let server = UploadTestServer::new(true, 10, "", None, None); // No extension restrictions
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     let files = vec![("file", "test.txt", b"Hello, World!".to_vec())];
     let response = UploadHttpClient::upload_multipart(&url, files, vec![], None);
@@ -377,7 +376,7 @@ fn test_single_file_upload() {
 #[test]
 fn test_multiple_files_upload() {
     let server = UploadTestServer::new(true, 10, "*.txt,*.pdf", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     let files = vec![
         ("file1", "document1.txt", b"First document content".to_vec()),
@@ -402,7 +401,7 @@ fn test_multiple_files_upload() {
 #[test]
 fn test_empty_upload_request() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     let files = vec![];
     let response = UploadHttpClient::upload_multipart(&url, files, vec![], None);
@@ -422,7 +421,7 @@ fn test_upload_to_different_directory() {
 
     // Note: This test verifies that the upload directory configuration works
     // The actual upload still goes to the configured upload directory
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
     let files = vec![(
         "file",
         "subdir_test.txt",
@@ -441,7 +440,7 @@ fn test_upload_to_different_directory() {
 #[test]
 fn test_file_extension_validation() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Test allowed extension
     let files = vec![("file", "allowed.txt", b"Allowed file".to_vec())];
@@ -457,7 +456,7 @@ fn test_file_extension_validation() {
 #[test]
 fn test_filename_sanitization_path_traversal() {
     let server = UploadTestServer::new(true, 10, "*.*", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Test path traversal attempts
     let malicious_files = vec![
@@ -483,7 +482,7 @@ fn test_filename_sanitization_path_traversal() {
 #[test]
 fn test_dangerous_filename_characters() {
     let server = UploadTestServer::new(true, 10, "*.*", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Test files with dangerous characters
     let dangerous_files = vec![
@@ -521,7 +520,7 @@ fn test_dangerous_filename_characters() {
 #[test]
 fn test_file_size_limit_enforcement() {
     let server = UploadTestServer::new(true, 1, "*.txt", None, None); // 1MB limit
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Test file within limit
     let small_file = vec![("file", "small.txt", vec![b'A'; 1024])]; // 1KB
@@ -537,7 +536,7 @@ fn test_file_size_limit_enforcement() {
 #[test]
 fn test_upload_disabled_scenarios() {
     let server = UploadTestServer::new(false, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     let files = vec![("file", "test.txt", b"Should not upload".to_vec())];
     let response = UploadHttpClient::upload_multipart(&url, files, vec![], None);
@@ -554,7 +553,7 @@ fn test_authentication_required_for_uploads() {
         Some("user".to_string()),
         Some("pass".to_string()),
     );
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Test without authentication
     let files = vec![("file", "test.txt", b"Test content".to_vec())];
@@ -580,7 +579,7 @@ fn test_authentication_required_for_uploads() {
 #[test]
 fn test_invalid_multipart_boundaries() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Send malformed multipart data
     let malformed_body = "------InvalidBoundary\r\nContent-Disposition: form-data; name=\"file\"\r\n\r\ntest\r\n------InvalidBoundary--";
@@ -596,7 +595,7 @@ fn test_invalid_multipart_boundaries() {
 #[test]
 fn test_malformed_multipart_data() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Test various malformed scenarios
     let malformed_scenarios = vec![
@@ -618,7 +617,7 @@ fn test_malformed_multipart_data() {
 #[test]
 fn test_missing_content_type() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     let response = UploadHttpClient::request("POST", &url, None, None, Some("test data"));
     assert_eq!(response.status_code, 400);
@@ -627,10 +626,10 @@ fn test_missing_content_type() {
 #[test]
 fn test_wrong_http_method() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     let response = UploadHttpClient::get(&url);
-    // GET /upload now serves the upload form, so it should return 200
+    // GET /_irondrop/upload now serves the upload form, so it should return 200
     assert_eq!(response.status_code, 200);
     assert!(response.body.contains("upload") || response.body.contains("form"));
 }
@@ -638,7 +637,7 @@ fn test_wrong_http_method() {
 #[test]
 fn test_oversized_file_attempts() {
     let server = UploadTestServer::new(true, 1, "*.txt", None, None); // 1MB limit
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Create a file that's exactly at the limit plus one byte
     let oversized_data = vec![b'X'; (1024 * 1024) + 1];
@@ -655,7 +654,7 @@ fn test_oversized_file_attempts() {
 #[test]
 fn test_upload_with_existing_rate_limiting() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Make multiple upload requests quickly to test server stability
     let handles: Vec<_> = (0..5)
@@ -697,7 +696,7 @@ fn test_upload_with_authentication_integration() {
     assert_eq!(response.status_code, 401);
 
     // Test upload with correct authentication
-    let upload_url = format!("http://{}/upload", server.addr);
+    let upload_url = format!("http://{}/_irondrop/upload", server.addr);
     let files = vec![("file", "auth_test.txt", b"Authenticated upload".to_vec())];
     let response = UploadHttpClient::upload_multipart(
         &upload_url,
@@ -711,7 +710,7 @@ fn test_upload_with_authentication_integration() {
 #[test]
 fn test_upload_statistics_tracking() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     let files = vec![(
         "file",
@@ -732,7 +731,7 @@ fn test_upload_ui_template_serving() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
 
     // Test that upload form is accessible
-    let form_url = format!("http://{}/upload", server.addr);
+    let form_url = format!("http://{}/_irondrop/upload", server.addr);
     let response = UploadHttpClient::get(&form_url);
 
     // Should serve upload form HTML or redirect to it
@@ -748,7 +747,7 @@ fn test_upload_ui_template_serving() {
 #[test]
 fn test_upload_api_endpoints_json_response() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Create a request that should trigger JSON response
     // This would require modifying the multipart upload to include proper Accept header
@@ -767,7 +766,7 @@ fn test_upload_api_endpoints_json_response() {
 #[test]
 fn test_multiple_clients_uploading_simultaneously() {
     let server = UploadTestServer::new(true, 50, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Spawn multiple upload threads
     let handles: Vec<_> = (0..10)
@@ -823,7 +822,7 @@ fn test_multiple_clients_uploading_simultaneously() {
 #[test]
 fn test_resource_exhaustion_protection() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Attempt many large uploads simultaneously
     let handles: Vec<_> = (0..20)
@@ -872,14 +871,14 @@ fn test_resource_exhaustion_protection() {
 fn test_upload_enable_disable_functionality() {
     // Test with upload enabled
     let enabled_server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", enabled_server.addr);
+    let url = format!("http://{}/_irondrop/upload", enabled_server.addr);
     let files = vec![("file", "enabled_test.txt", b"Upload enabled".to_vec())];
     let response = UploadHttpClient::upload_multipart(&url, files, vec![], None);
     assert_eq!(response.status_code, 200);
 
     // Test with upload disabled
     let disabled_server = UploadTestServer::new(false, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", disabled_server.addr);
+    let url = format!("http://{}/_irondrop/upload", disabled_server.addr);
     let files = vec![("file", "disabled_test.txt", b"Upload disabled".to_vec())];
     let response = UploadHttpClient::upload_multipart(&url, files, vec![], None);
     assert_ne!(response.status_code, 200);
@@ -895,13 +894,13 @@ fn test_custom_upload_directories() {
     let server2 = UploadTestServer::new(true, 10, "*.txt", None, None);
 
     // Upload to first server
-    let url1 = format!("http://{}/upload", server1.addr);
+    let url1 = format!("http://{}/_irondrop/upload", server1.addr);
     let files = vec![("file", "server1.txt", b"Server 1 content".to_vec())];
     let response = UploadHttpClient::upload_multipart(&url1, files, vec![], None);
     assert_eq!(response.status_code, 200);
 
     // Upload to second server
-    let url2 = format!("http://{}/upload", server2.addr);
+    let url2 = format!("http://{}/_irondrop/upload", server2.addr);
     let files = vec![("file", "server2.txt", b"Server 2 content".to_vec())];
     let response = UploadHttpClient::upload_multipart(&url2, files, vec![], None);
     assert_eq!(response.status_code, 200);
@@ -917,7 +916,7 @@ fn test_custom_upload_directories() {
 fn test_size_limit_configurations() {
     // Test with small size limit
     let small_server = UploadTestServer::new(true, 1, "*.txt", None, None); // 1MB
-    let url = format!("http://{}/upload", small_server.addr);
+    let url = format!("http://{}/_irondrop/upload", small_server.addr);
 
     // Upload within limit
     let small_file = vec![("file", "small.txt", vec![b'S'; 512 * 1024])]; // 512KB
@@ -931,7 +930,7 @@ fn test_size_limit_configurations() {
 
     // Test with larger size limit
     let large_server = UploadTestServer::new(true, 10, "*.txt", None, None); // 10MB
-    let url = format!("http://{}/upload", large_server.addr);
+    let url = format!("http://{}/_irondrop/upload", large_server.addr);
 
     // Upload that was too large for small server should work on large server
     let medium_file = vec![("file", "medium.txt", vec![b'M'; 2 * 1024 * 1024])]; // 2MB
@@ -946,7 +945,7 @@ fn test_invalid_configuration_handling() {
     // For now, we test that the server handles various extension configurations
 
     let server_all = UploadTestServer::new(true, 10, "*", None, None);
-    let url = format!("http://{}/upload", server_all.addr);
+    let url = format!("http://{}/_irondrop/upload", server_all.addr);
 
     // Should accept any file with wildcard pattern
     let files = vec![("file", "any.extension", b"Any extension".to_vec())];
@@ -954,7 +953,7 @@ fn test_invalid_configuration_handling() {
     assert_eq!(response.status_code, 200);
 
     let server_none = UploadTestServer::new(true, 10, "", None, None);
-    let url = format!("http://{}/upload", server_none.addr);
+    let url = format!("http://{}/_irondrop/upload", server_none.addr);
 
     // Should accept files when no extensions specified (depending on implementation)
     let files = vec![("file", "noext", b"No extension".to_vec())];
@@ -1017,7 +1016,7 @@ fn test_upload_server_setup_helper() {
 #[test]
 fn test_filename_conflict_resolution() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Upload first file
     let files = vec![("file", "conflict.txt", b"First upload".to_vec())];
@@ -1056,7 +1055,7 @@ fn test_filename_conflict_resolution() {
 #[test]
 fn test_empty_filename_handling() {
     let server = UploadTestServer::new(true, 10, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Try uploading with empty filename
     let boundary = "----IronDropTestBoundary12345";
@@ -1077,7 +1076,7 @@ fn test_empty_filename_handling() {
 #[test]
 fn test_large_number_of_small_files() {
     let server = UploadTestServer::new(true, 50, "*.txt", None, None);
-    let url = format!("http://{}/upload", server.addr);
+    let url = format!("http://{}/_irondrop/upload", server.addr);
 
     // Upload many small files in a single request
     let mut file_data = Vec::new();

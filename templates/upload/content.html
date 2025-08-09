@@ -1,0 +1,91 @@
+<!-- Upload Header -->
+<div class="page-header">
+    <h1 class="page-title">Upload Files</h1>
+    <p class="page-subtitle">Upload to: {{PATH}}</p>
+</div>
+
+<!-- Main Upload Area -->
+<div class="card">
+    <!-- Drop Zone -->
+    <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-content">
+            <div class="upload-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17,8 12,3 7,8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+            </div>
+            <h3 class="drop-zone-title">Drop files here to upload</h3>
+            <p class="drop-zone-subtitle">or</p>
+            <button class="browse-button" id="browseButton">Browse Files</button>
+            <input type="file" id="fileInput" multiple hidden>
+            <div class="upload-info">
+                <p class="upload-limit">Maximum file size: 10GB per file</p>
+                <p class="upload-types">Supports all file types</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Queue -->
+    <div class="upload-queue" id="uploadQueue" style="display: none;">
+        <div class="queue-header">
+            <h3>Upload Queue</h3>
+            <div class="queue-actions">
+                <button class="queue-action" id="clearCompleted">Clear Completed</button>
+                <button class="queue-action danger" id="cancelAll">Cancel All</button>
+            </div>
+        </div>
+        <div class="queue-list" id="queueList">
+            <!-- Queue items will be inserted here -->
+        </div>
+    </div>
+
+    <!-- Upload Summary -->
+    <div class="upload-summary" id="uploadSummary" style="display: none;">
+        <div class="summary-content">
+            <div class="summary-stat">
+                <span class="stat-value" id="totalFiles">0</span>
+                <span class="stat-label">files selected</span>
+            </div>
+            <div class="summary-stat">
+                <span class="stat-value" id="totalSize">0 B</span>
+                <span class="stat-label">total size</span>
+            </div>
+            <div class="summary-stat">
+                <span class="stat-value" id="completedFiles">0</span>
+                <span class="stat-label">uploaded</span>
+            </div>
+        </div>
+        <div class="summary-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="totalProgress"></div>
+            </div>
+            <span class="progress-text" id="progressText">0% complete</span>
+        </div>
+    </div>
+</div>
+
+<!-- Success/Error Messages -->
+<div class="upload-messages" id="uploadMessages">
+    <!-- Messages will be inserted here -->
+</div>
+
+<script>
+    // Normalize the back link to avoid '//' when PATH is root
+    (function () {
+        try {
+            var a = document.getElementById('backToDir');
+            if (!a) return;
+            var p = '{{PATH}}' || '/';
+            if (!p || p === '') p = '/';
+            // Ensure leading slash
+            if (p[0] !== '/') p = '/' + p;
+            // Ensure trailing slash for directories
+            if (!p.endsWith('/') && p !== '/') p = p + '/';
+            // Collapse multiple slashes
+            p = p.replace(/\/+/, '/');
+            a.setAttribute('href', p);
+        } catch (e) { }
+    })();
+</script>

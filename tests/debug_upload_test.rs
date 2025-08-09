@@ -78,18 +78,17 @@ fn test_upload_handler_creation() {
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "*.txt".to_string(),
-        threads: 4,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(8080),
+        allowed_extensions: Some("*.txt".to_string()),
+        threads: Some(4),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
         username: None,
         password: None,
-        enable_upload: true,
-        max_upload_size: 10,
-        upload_dir: Some(temp_dir.path().to_path_buf()),
+        enable_upload: Some(true),
+        max_upload_size: Some(10),
         config_file: None,
     };
 
@@ -115,18 +114,17 @@ fn test_upload_handler_direct() {
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "*.txt".to_string(),
-        threads: 4,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(8080),
+        allowed_extensions: Some("*.txt".to_string()),
+        threads: Some(4),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
         username: None,
         password: None,
-        enable_upload: true,
-        max_upload_size: 10,
-        upload_dir: Some(temp_dir.path().to_path_buf()),
+        enable_upload: Some(true),
+        max_upload_size: Some(10),
         config_file: None,
     };
 
@@ -183,18 +181,17 @@ fn test_upload_handler_no_extension_restrictions() {
 
     let cli = Cli {
         directory: temp_dir.path().to_path_buf(),
-        listen: "127.0.0.1".to_string(),
-        port: 8080,
-        allowed_extensions: "".to_string(), // Test with no extension restrictions
-        threads: 4,
-        chunk_size: 1024,
-        verbose: false,
-        detailed_logging: false,
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(8080),
+        allowed_extensions: Some("".to_string()), // Test with no extension restrictions
+        threads: Some(4),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
         username: None,
         password: None,
-        enable_upload: true,
-        max_upload_size: 10,
-        upload_dir: Some(temp_dir.path().to_path_buf()),
+        enable_upload: Some(true),
+        max_upload_size: Some(10),
         config_file: None,
     };
 

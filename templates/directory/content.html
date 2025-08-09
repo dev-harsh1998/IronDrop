@@ -1,0 +1,23 @@
+<!-- Directory Header -->
+<div class="directory-header">
+    <div class="directory-breadcrumb">
+        <h1 class="directory-title">{{PATH}}</h1>
+        <p class="directory-subtitle">{{ENTRY_COUNT}} items</p>
+    </div>
+</div>
+
+<!-- File Listing -->
+<div class="table-container">
+    <table class="table" role="table" aria-label="File and directory listing">
+        <thead>
+            <tr>
+                <th scope="col" aria-sort="none">Name</th>
+                <th scope="col" aria-sort="none">Size</th>
+                <th scope="col" aria-sort="none">Modified</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ENTRIES}}
+        </tbody>
+    </table>
+</div>

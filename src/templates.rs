@@ -4,13 +4,19 @@ use crate::error::AppError;
 use std::collections::HashMap;
 
 // Embed templates at compile time
-const DIRECTORY_INDEX_HTML: &str = include_str!("../templates/directory/index.html");
+// Base template
+const BASE_HTML: &str = include_str!("../templates/common/base.html");
+
+// Content templates
+const DIRECTORY_CONTENT_HTML: &str = include_str!("../templates/directory/content.html");
+const ERROR_CONTENT_HTML: &str = include_str!("../templates/error/content.html");
+const UPLOAD_CONTENT_HTML: &str = include_str!("../templates/upload/content.html");
+
+// CSS and JS assets
 const DIRECTORY_STYLES_CSS: &str = include_str!("../templates/directory/styles.css");
 const DIRECTORY_SCRIPT_JS: &str = include_str!("../templates/directory/script.js");
-const ERROR_PAGE_HTML: &str = include_str!("../templates/error/page.html");
 const ERROR_STYLES_CSS: &str = include_str!("../templates/error/styles.css");
 const ERROR_SCRIPT_JS: &str = include_str!("../templates/error/script.js");
-const UPLOAD_PAGE_HTML: &str = include_str!("../templates/upload/page.html");
 const UPLOAD_STYLES_CSS: &str = include_str!("../templates/upload/styles.css");
 const UPLOAD_SCRIPT_JS: &str = include_str!("../templates/upload/script.js");
 const UPLOAD_FORM_HTML: &str = include_str!("../templates/upload/form.html");
@@ -49,13 +55,13 @@ impl TemplateEngine {
     pub fn new() -> Self {
         let mut templates = HashMap::new();
 
-        // Load embedded templates
-        templates.insert(
-            "directory_index".to_string(),
-            DIRECTORY_INDEX_HTML.to_string(),
-        );
-        templates.insert("error_page".to_string(), ERROR_PAGE_HTML.to_string());
-        templates.insert("upload_page".to_string(), UPLOAD_PAGE_HTML.to_string());
+        // Load base template
+        templates.insert("base".to_string(), BASE_HTML.to_string());
+
+        // Load content templates
+        templates.insert("directory_content".to_string(), DIRECTORY_CONTENT_HTML.to_string());
+        templates.insert("error_content".to_string(), ERROR_CONTENT_HTML.to_string());
+        templates.insert("upload_content".to_string(), UPLOAD_CONTENT_HTML.to_string());
         templates.insert("upload_form".to_string(), UPLOAD_FORM_HTML.to_string());
 
         Self { templates }
@@ -109,6 +115,108 @@ impl TemplateEngine {
             "irondrop-logo.png" => Some((IRONDROP_LOGO_PNG, "image/png")),
             _ => None,
         }
+    }
+
+    /// Render a page using the base template system
+    pub fn render_page(
+        &self,
+        content_template: &str,
+        page_title: &str,
+        page_styles: &str,
+        page_scripts: &str,
+        header_actions: &str,
+        variables: &HashMap<String, String>,
+    ) -> Result<String, AppError> {
+        // First render the content template
+        let content = self.render(content_template, variables)?;
+
+        // Create variables for the base template
+        let mut base_variables = variables.clone();
+        base_variables.insert("PAGE_TITLE".to_string(), page_title.to_string());
+        base_variables.insert("PAGE_STYLES".to_string(), page_styles.to_string());
+        base_variables.insert("PAGE_SCRIPTS".to_string(), page_scripts.to_string());
+        base_variables.insert("HEADER_ACTIONS".to_string(), header_actions.to_string());
+        base_variables.insert("PAGE_CONTENT".to_string(), content);
+
+        // Render the base template
+        self.render("base", &base_variables)
+    }
+
+    /// Helper method to render directory page
+    pub fn render_directory_page(
+        &self,
+        variables: &HashMap<String, String>,
+    ) -> Result<String, AppError> {
+        let page_title = variables.get("PATH").unwrap_or(&"/".to_string()).clone();
+        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/directory/styles.css">"#;
+        let page_scripts = r#"<script src="/_irondrop/static/directory/script.js"></script>"#;
+        
+        // Build header actions based on upload status
+        let header_actions = if variables.get("UPLOAD_ENABLED").map(|v| v == "true").unwrap_or(false) {
+            let suffix = variables.get("QUERY_UPLOAD_SUFFIX").unwrap_or(&String::new()).clone();
+            format!(r#"<a href="/_irondrop/upload{}" class="btn btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17,8 12,3 7,8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    Upload Files
+                </a>"#, suffix)
+        } else {
+            String::new()
+        };
+
+        self.render_page("directory_content", &page_title, page_styles, page_scripts, &header_actions, variables)
+    }
+
+    /// Helper method to render error page
+    pub fn render_error_page_new(
+        &self,
+        error_code: u16,
+        error_message: &str,
+        error_description: &str,
+    ) -> Result<String, AppError> {
+        let mut variables = HashMap::new();
+        variables.insert("ERROR_CODE".to_string(), error_code.to_string());
+        variables.insert("ERROR_MESSAGE".to_string(), error_message.to_string());
+        variables.insert("ERROR_DESCRIPTION".to_string(), error_description.to_string());
+        
+        // Generate request ID and timestamp
+        let request_id = format!("req_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+        let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+        variables.insert("REQUEST_ID".to_string(), request_id);
+        variables.insert("TIMESTAMP".to_string(), timestamp);
+
+        let page_title = format!("{} {}", error_code, error_message);
+        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/error/styles.css">"#;
+        let page_scripts = r#"<script src="/_irondrop/static/error/script.js"></script>"#;
+        let header_actions = ""; // No actions on error page
+
+        self.render_page("error_content", &page_title, page_styles, page_scripts, header_actions, &variables)
+    }
+
+    /// Helper method to render upload page
+    pub fn render_upload_page_new(
+        &self,
+        path: &str,
+    ) -> Result<String, AppError> {
+        let mut variables = HashMap::new();
+        variables.insert("PATH".to_string(), path.to_string());
+
+        let page_title = format!("Upload to {}", path);
+        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/upload/styles.css">"#;
+        let page_scripts = r#"<script src="/_irondrop/static/upload/script.js"></script>"#;
+        
+        // Header action is back to directory
+        let header_actions = format!(r#"<a href="{}" class="btn btn-secondary" id="backToDir">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="m12 19-7-7 7-7" />
+                        <path d="m19 12H5" />
+                    </svg>
+                    Back to Directory
+                </a>"#, path);
+
+        self.render_page("upload_content", &page_title, page_styles, page_scripts, &header_actions, &variables)
     }
 
     /// Render a template with variables, supporting conditionals
@@ -175,7 +283,7 @@ impl TemplateEngine {
         result
     }
 
-    /// Generate directory listing HTML using template
+    /// Generate directory listing HTML using base template system
     pub fn render_directory_listing(
         &self,
         path: &str,
@@ -191,7 +299,7 @@ impl TemplateEngine {
         variables.insert("CURRENT_PATH".to_string(), current_path.to_string());
 
         // Build a clean query suffix for the upload link (omit for root)
-    let clean = current_path.trim_start_matches('/').trim_end_matches('/');
+        let clean = current_path.trim_start_matches('/').trim_end_matches('/');
         let query_suffix = if clean.is_empty() {
             String::new()
         } else {
@@ -201,42 +309,7 @@ impl TemplateEngine {
         };
         variables.insert("QUERY_UPLOAD_SUFFIX".to_string(), query_suffix);
 
-        // Add template variables for icons
-        variables.insert("FOLDER_ICON".to_string(), FOLDER_ICON_SVG.to_string());
-        variables.insert("FILE_ICON".to_string(), FILE_ICON_SVG.to_string());
-        variables.insert("BACK_ICON".to_string(), BACK_ICON_SVG.to_string());
-
-        // Generate entries data as JSON-like structure for template
-        let mut entries_data = Vec::new();
-        
-        // Add parent directory link if not at root
-        if path != "/" && !path.is_empty() {
-            entries_data.push(format!(
-                r#"{{"href": "../", "type": "back", "name": "Back", "size": "", "date": ""}}"#
-            ));
-        }
-
-        // Add file/directory entries
-        for (name, size, date) in entries {
-            let is_directory = name.ends_with('/');
-            let entry_type = if is_directory { "directory" } else { "file" };
-            let display_name = if is_directory {
-                name.trim_end_matches('/')
-            } else {
-                name
-            };
-
-            entries_data.push(format!(
-                r#"{{"href": "{}", "type": "{}", "name": "{}", "size": "{}", "date": "{}"}}"#,
-                percent_encode(name),
-                entry_type,
-                html_escape(display_name),
-                size,
-                date
-            ));
-        }
-
-        // For now, still generate HTML but use template variables for icons
+        // Generate entries HTML
         let mut entries_html = String::new();
         
         // Add parent directory link if not at root (as table row)
@@ -293,43 +366,24 @@ impl TemplateEngine {
 
         variables.insert("ENTRIES".to_string(), entries_html);
 
-        self.render("directory_index", &variables)
+        // Use the new base template system
+        self.render_directory_page(&variables)
     }
-
-    /// Generate error page HTML using template
+    /// Generate error page HTML using base template system
     pub fn render_error_page(
         &self,
         status_code: u16,
         status_text: &str,
         description: &str,
     ) -> Result<String, AppError> {
-        let mut variables = HashMap::new();
-        variables.insert("ERROR_CODE".to_string(), status_code.to_string());
-        variables.insert("ERROR_MESSAGE".to_string(), status_text.to_string());
-        variables.insert("ERROR_DESCRIPTION".to_string(), description.to_string());
-
-        // Add additional variables for new template
-        variables.insert(
-            "REQUEST_ID".to_string(),
-            format!(
-                "REQ-{:08X}",
-                std::ptr::addr_of!(variables) as usize & 0xFFFFFFFF
-            ),
-        );
-        variables.insert(
-            "TIMESTAMP".to_string(),
-            format!("{:?}", std::time::SystemTime::now()),
-        );
-
-        self.render("error_page", &variables)
+        // Use the new base template system
+        self.render_error_page_new(status_code, status_text, description)
     }
 
-    /// Generate upload page HTML using template
+    /// Generate upload page HTML using base template system
     pub fn render_upload_page(&self, path: &str) -> Result<String, AppError> {
-        let mut variables = HashMap::new();
-        variables.insert("PATH".to_string(), path.to_string());
-
-        self.render("upload_page", &variables)
+        // Use the new base template system
+        self.render_upload_page_new(path)
     }
 
     /// Get upload form component HTML

@@ -14,8 +14,10 @@ fn test_embedded_templates_functionality() {
         "ENTRIES".to_string(),
         "<tr><td>test file</td></tr>".to_string(),
     );
+    variables.insert("UPLOAD_ENABLED".to_string(), "false".to_string());
+    variables.insert("CURRENT_PATH".to_string(), "/test/path".to_string());
 
-    let result = engine.render("directory_index", &variables);
+    let result = engine.render_directory_page(&variables);
     assert!(
         result.is_ok(),
         "Directory template should render successfully"
@@ -28,24 +30,20 @@ fn test_embedded_templates_functionality() {
     );
     assert!(html.contains("test file"), "Should contain the entries");
     assert!(
-        html.contains("/_static/directory/styles.css"),
+        html.contains("/_irondrop/static/directory/styles.css"),
         "Should reference embedded CSS"
     );
     assert!(
-        html.contains("/_static/directory/script.js"),
+        html.contains("/_irondrop/static/directory/script.js"),
         "Should reference embedded JS"
     );
 
     // Test error page template rendering
-    let mut error_vars = HashMap::new();
-    error_vars.insert("ERROR_CODE".to_string(), "404".to_string());
-    error_vars.insert("ERROR_MESSAGE".to_string(), "Not Found".to_string());
-    error_vars.insert(
-        "ERROR_DESCRIPTION".to_string(),
-        "The requested resource was not found.".to_string(),
+    let error_result = engine.render_error_page_new(
+        404,
+        "Not Found", 
+        "The requested resource was not found."
     );
-
-    let error_result = engine.render("error_page", &error_vars);
     assert!(
         error_result.is_ok(),
         "Error template should render successfully"
@@ -58,11 +56,11 @@ fn test_embedded_templates_functionality() {
         "Should contain the status text"
     );
     assert!(
-        error_html.contains("/_static/error/styles.css"),
+        error_html.contains("/_irondrop/static/error/styles.css"),
         "Should reference embedded error CSS"
     );
     assert!(
-        error_html.contains("/_static/error/script.js"),
+        error_html.contains("/_irondrop/static/error/script.js"),
         "Should reference embedded error JS"
     );
 }
@@ -139,7 +137,7 @@ fn test_directory_listing_rendering() {
         ),
     ];
 
-    let result = engine.render_directory_listing("/downloads", &test_entries, 3);
+    let result = engine.render_directory_listing("/downloads", &test_entries, 3, false, "/downloads");
     assert!(
         result.is_ok(),
         "Directory listing should render successfully"
@@ -165,11 +163,11 @@ fn test_directory_listing_rendering() {
 
     // Should reference embedded assets
     assert!(
-        html.contains("/_static/directory/styles.css"),
+        html.contains("/_irondrop/static/directory/styles.css"),
         "Should reference CSS"
     );
     assert!(
-        html.contains("/_static/directory/script.js"),
+        html.contains("/_irondrop/static/directory/script.js"),
         "Should reference JS"
     );
 }
@@ -205,11 +203,11 @@ fn test_error_page_rendering() {
 
     // Should reference embedded assets
     assert!(
-        html.contains("/_static/error/styles.css"),
+        html.contains("/_irondrop/static/error/styles.css"),
         "Should reference error CSS"
     );
     assert!(
-        html.contains("/_static/error/script.js"),
+        html.contains("/_irondrop/static/error/script.js"),
         "Should reference error JS"
     );
 }

@@ -46,18 +46,17 @@ impl TestServer {
 
         let cli = Cli {
             directory: dir.path().to_path_buf(),
-            listen: "127.0.0.1".to_string(),
-            port: 0,
-            allowed_extensions: "*.txt,*.pdf".to_string(),
-            threads: 4,
-            chunk_size: 1024,
-            verbose: false,
-            detailed_logging: false,
+            listen: Some("127.0.0.1".to_string()),
+            port: Some(0),
+            allowed_extensions: Some("*.txt,*.pdf".to_string()),
+            threads: Some(4),
+            chunk_size: Some(1024),
+            verbose: Some(false),
+            detailed_logging: Some(false),
             username,
             password,
-            enable_upload: false,
-            max_upload_size: 10240,
-            upload_dir: None,
+            enable_upload: Some(false),
+            max_upload_size: Some(10240),
             config_file: None,
         };
 
@@ -224,11 +223,11 @@ fn test_enhanced_directory_listing() {
 
     // Check for modular template structure
     assert!(
-        response.body.contains("/_static/directory/styles.css"),
+        response.body.contains("/_irondrop/static/directory/styles.css"),
         "Should link to external CSS"
     );
     assert!(
-        response.body.contains("/_static/directory/script.js"),
+        response.body.contains("/_irondrop/static/directory/script.js"),
         "Should link to external JS"
     );
     assert!(
@@ -259,11 +258,11 @@ fn test_beautiful_error_pages() {
 
     // Check for modular error page template structure
     assert!(
-        response.body.contains("/_static/error/styles.css"),
+        response.body.contains("/_irondrop/static/error/styles.css"),
         "Should link to external error CSS"
     );
     assert!(
-        response.body.contains("/_static/error/script.js"),
+        response.body.contains("/_irondrop/static/error/script.js"),
         "Should link to external error JS"
     );
     assert!(
@@ -281,7 +280,7 @@ fn test_static_asset_serving() {
     let server = TestServer::new(None, None);
 
     // Test CSS file serving
-    let css_url = format!("http://{}/_static/directory/styles.css", server.addr);
+    let css_url = format!("http://{}/_irondrop/static/directory/styles.css", server.addr);
     let css_response = HttpClient::get(&css_url);
 
     assert_eq!(css_response.status_code, 200);
@@ -302,7 +301,7 @@ fn test_static_asset_serving() {
     );
 
     // Test JS file serving
-    let js_url = format!("http://{}/_static/directory/script.js", server.addr);
+    let js_url = format!("http://{}/_irondrop/static/directory/script.js", server.addr);
     let js_response = HttpClient::get(&js_url);
 
     assert_eq!(js_response.status_code, 200);
@@ -317,7 +316,7 @@ fn test_static_asset_serving() {
     );
 
     // Test error CSS serving
-    let error_css_url = format!("http://{}/_static/error/styles.css", server.addr);
+    let error_css_url = format!("http://{}/_irondrop/static/error/styles.css", server.addr);
     let error_css_response = HttpClient::get(&error_css_url);
 
     assert_eq!(error_css_response.status_code, 200);
@@ -332,7 +331,7 @@ fn test_static_asset_serving() {
     );
 
     // Test 404 for non-existent static asset
-    let missing_url = format!("http://{}/_static/nonexistent.css", server.addr);
+    let missing_url = format!("http://{}/_irondrop/static/nonexistent.css", server.addr);
     let missing_response = HttpClient::get(&missing_url);
 
     assert_eq!(missing_response.status_code, 404);
@@ -341,7 +340,7 @@ fn test_static_asset_serving() {
 #[test]
 fn test_health_check_endpoint() {
     let server = TestServer::new(None, None);
-    let url = format!("http://{}/_health", server.addr);
+    let url = format!("http://{}/_irondrop/health", server.addr);
     let response = HttpClient::get(&url);
 
     assert_eq!(response.status_code, 200);
