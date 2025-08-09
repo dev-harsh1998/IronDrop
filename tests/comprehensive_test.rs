@@ -454,7 +454,7 @@ fn test_nested_directory_access() {
     let response = HttpClient::get(&url);
     assert_eq!(response.status_code, 200);
     assert!(response.body.contains("nested.txt"));
-    assert!(response.body.contains("/subdir/"));
+    assert!(response.body.contains("/subdir"));
 
     // Test nested file access
     let url = format!("http://{}/subdir/nested.txt", server.addr);

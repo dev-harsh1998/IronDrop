@@ -25,8 +25,8 @@ fn test_embedded_templates_functionality() {
 
     let html = result.unwrap();
     assert!(
-        html.contains("/test/path"),
-        "Should contain the path variable"
+        html.contains("test/path"),
+        "Should contain the cleaned path variable (without leading slash)"
     );
     assert!(html.contains("test file"), "Should contain the entries");
     assert!(

@@ -147,7 +147,14 @@ impl TemplateEngine {
         &self,
         variables: &HashMap<String, String>,
     ) -> Result<String, AppError> {
-        let page_title = variables.get("PATH").unwrap_or(&"/".to_string()).clone();
+        let default_path = "/".to_string();
+        let raw_path = variables.get("PATH").unwrap_or(&default_path);
+        // Clean up path for display: remove leading/trailing slashes, show "Root" for empty
+        let page_title = if raw_path == "/" || raw_path.is_empty() {
+            "Root".to_string()
+        } else {
+            raw_path.trim_start_matches('/').trim_end_matches('/').to_string()
+        };
         let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/directory/styles.css">"#;
         let page_scripts = r#"<script src="/_irondrop/static/directory/script.js"></script>"#;
         
@@ -166,7 +173,18 @@ impl TemplateEngine {
             String::new()
         };
 
-        self.render_page("directory_content", &page_title, page_styles, page_scripts, &header_actions, variables)
+        // Add cleaned path for display in the directory header
+        let display_title = if raw_path == "/" || raw_path.is_empty() {
+            "Root".to_string()
+        } else {
+            raw_path.trim_end_matches('/').to_string()
+        };
+        
+        // Create a mutable copy of variables and add the display title
+        let mut enhanced_variables = variables.clone();
+        enhanced_variables.insert("DISPLAY_TITLE".to_string(), display_title);
+
+        self.render_page("directory_content", &page_title, page_styles, page_scripts, &header_actions, &enhanced_variables)
     }
 
     /// Helper method to render error page
