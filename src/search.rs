@@ -254,7 +254,8 @@ impl DirectoryIndex {
                     .strip_prefix(&self.base_dir)
                     .unwrap_or(&entry.path)
                     .to_string_lossy()
-                    .to_string();
+                    .to_string()
+                    .replace('\\', "/"); // Normalize path separators for web URLs
 
                 results.push(SearchResult {
                     name: entry.name.clone(),
@@ -484,7 +485,8 @@ fn search_directory_recursive(
                         .strip_prefix(base_dir)
                         .unwrap_or(&entry.path())
                         .to_string_lossy()
-                        .to_string();
+                        .to_string()
+                        .replace('\\', "/"); // Normalize path separators for web URLs
 
                     let result = SearchResult {
                         name: file_name.clone(),
