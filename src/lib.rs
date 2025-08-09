@@ -17,6 +17,9 @@ pub mod router;
 pub mod search;
 pub mod server;
 pub mod templates;
+pub mod ultra_compact_search;
+#[cfg(test)]
+pub mod ultra_memory_test;
 pub mod upload;
 pub mod utils;
 

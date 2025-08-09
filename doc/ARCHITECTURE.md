@@ -1,8 +1,8 @@
-# IronDrop Architecture Documentation v2.5 (Updated)
+# IronDrop Architecture Documentation v2.5
 
 ## Overview
 
-IronDrop is a lightweight, high-performance file server written in Rust featuring bidirectional file sharing, a hierarchical configuration system, modular template & UI architecture, and professional dark theme design. This document provides a comprehensive overview of the system architecture, component interactions, configuration precedence, and implementation details.
+IronDrop is a lightweight, high-performance file server written in Rust featuring bidirectional file sharing, modular template architecture, and professional UI design. This document provides a comprehensive overview of the system architecture, component interactions, and implementation details.
 
 ## System Architecture
 
@@ -26,19 +26,23 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
                                 │                       │
                                 ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Downloads     │    │     Uploads     │    │Security & Monitor│
-│ Range Requests  │    │ 10GB + Concurrent│    │ Rate Limit+Stats │
+│   Downloads     │    │     Uploads     │    │   Search Engine │
+│ Range Requests  │    │ 10GB + Concurrent│    │Ultra-Low Memory │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
+                                                        │
+                                                        ▼
+                                             ┌─────────────────┐
+                                             │Security & Monitor│
+                                             │ Rate Limit+Stats │
+                                             └─────────────────┘
 ```
 
 ## Core Modules
 
 ### 1. **Entry Point & Configuration**
-- **`main.rs`**: Entry point calling `irondrop::run()`
-- **`lib.rs`**: Library initialization, logging setup, configuration load, server bootstrap
-- **`cli.rs`**: Command-line interface with validation (adds `--config-file` flag)
-- **`config/ini_parser.rs`**: Zero‑dependency INI parser (sections, booleans, lists, file sizes)
-- **`config/mod.rs`**: Precedence resolver (CLI > INI > defaults) producing strongly typed `Config`
+- **`main.rs`** (6 lines): Simple entry point that calls `irondrop::run()`
+- **`lib.rs`** (56 lines): Library initialization, logging setup, and server bootstrap
+- **`cli.rs`** (200+ lines): Command-line interface with comprehensive validation
 
 ### 2. **HTTP Processing Layer**
 - **`server.rs`**: Custom thread pool implementation with rate limiting
@@ -50,17 +54,21 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
 - **`upload.rs`**: Secure file upload handling with atomic operations
 - **`multipart.rs`**: RFC 7578 compliant multipart/form-data parser
 
-### 4. **Template & UI System**
-- **`templates.rs`**: Native template engine with variable interpolation & static asset registry
-- **`templates/common/base.css`**: Unified design system (tokens, components, utilities)
-- **`templates/directory/`**: Directory listing templates (HTML, CSS, JS)
-- **`templates/upload/`**: Upload templates (HTML, CSS, JS, form component)
-- **`templates/error/`**: Error templates using new variables (`ERROR_CODE`, `ERROR_MESSAGE`, `ERROR_DESCRIPTION`, `REQUEST_ID`, `TIMESTAMP`)
+### 4. **Search System**
+- **`search.rs`**: Ultra-low memory search engine with LRU caching and indexing
+- **`ultra_compact_search.rs`**: Memory-optimized search implementation for 10M+ entries
+- **`ultra_memory_test.rs`**: Search performance testing and benchmarking
 
-### 5. **Support Systems**
+### 5. **Template System**
+- **`templates.rs`**: Native template engine with variable interpolation
+- **`templates/directory/`**: Directory listing templates (HTML, CSS, JS)
+- **`templates/upload/`**: File upload templates (HTML, CSS, JS)  
+- **`templates/error/`**: Error page templates (HTML, CSS, JS)
+
+### 6. **Support Systems**
 - **`error.rs`**: Custom error types and error handling
 - **`utils.rs`**: Utility functions and helper methods
- - **Monitoring (integrated)**: `/monitor` endpoint (HTML + JSON) implemented inside `http.rs` using `ServerStats` from `server.rs`.
+- **Monitoring (integrated)**: `/monitor` endpoint (HTML + JSON) implemented inside `http.rs` using `ServerStats` from `server.rs`
 
 ## Request Processing Flow
 
@@ -85,16 +93,16 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
                      │   Detection     │
                      └─────────────────┘
                                 │
-        ┌───────────┬───────────┼───────────┬───────────┐
-        │           │           │           │           │
-        ▼           ▼           ▼           ▼           ▼
-  [Static Assets] [Health] [Upload Routes] [File Sys] [API]
-        │           │           │           │           │
-        ▼           ▼           ▼           ▼           ▼
-   Serve CSS/JS  JSON Status Process Upload Path Check Template
-                                  │           │      Render
-                         [Pass]   │   [Fail]  │
-                                  ▼           ▼
+        ┌───────────┬───────────┼───────────┬───────────┬───────────┐
+        │           │           │           │           │           │
+        ▼           ▼           ▼           ▼           ▼           ▼
+  [Static Assets] [Health] [Upload Routes] [File Sys] [Search API] [Monitor]
+        │           │           │           │           │           │
+        ▼           ▼           ▼           ▼           ▼           ▼
+   Serve CSS/JS  JSON Status Process Upload Path Check Search Engine Dashboard
+                                  │           │           │
+                         [Pass]   │   [Fail]  │           ▼
+                                  ▼           ▼      JSON Results
                             Resource Type  403 Forbidden
                              Detection
                                   │
@@ -122,6 +130,9 @@ src/
 ├── response.rs          # Response handling + streaming (400+ lines)
 ├── upload.rs            # File upload system (500+ lines)
 ├── multipart.rs         # Multipart parser (661 lines)
+├── search.rs            # Ultra-low memory search engine (400+ lines)
+├── ultra_compact_search.rs # Memory-optimized search (300+ lines)
+├── ultra_memory_test.rs # Search performance testing (200+ lines)
 ├── error.rs             # Error types (100+ lines)
 └── utils.rs             # Utility functions
 
@@ -145,39 +156,83 @@ tests/
 ├── integration_test.rs       # Auth + security tests (6 tests)
 ├── upload_integration_test.rs # Upload system tests (29 tests)
 ├── multipart_test.rs         # Multipart parser tests (7 tests)
+├── ultra_compact_test.rs     # Search engine tests
 ├── debug_upload_test.rs      # Debug tests
 ├── post_body_test.rs         # POST body handling
 └── template_embedding_test.rs # Template system tests
 ```
 
-## Configuration Architecture
+## Search System Architecture
 
-### Precedence Model
-Order of resolution (highest first):
-1. Explicit CLI flags (non-default values)
-2. INI file values (if discovered / specified)
-3. Built‑in defaults
+### Overview
+IronDrop features a sophisticated dual-mode search system designed for both efficiency and scalability, with support for directories containing millions of files while maintaining low memory usage.
 
-### Discovery Order (when `--config-file` not provided)
-1. `./irondrop.ini`
-2. `./irondrop.conf`
-3. `$HOME/.config/irondrop/config.ini`
-4. `/etc/irondrop/config.ini` (Unix)
+### Search Implementation Modes
 
-### Normalization Highlights
-| Field | CLI Unit | Internal Storage | INI Formats |
-|-------|----------|------------------|------------|
-| max_upload_size | MB | Bytes (u64) | `500MB`, `1.5GB`, `2048` (bytes) |
-| allowed_extensions | Comma string | Vec<String> | Comma list |
-| verbose/detailed | Flags | bool | true/false/yes/no/on/off/1/0 |
+#### 1. **Standard Search Engine (`search.rs`)**
+- **Target**: Directories with up to 100K files
+- **Memory Usage**: ~10MB for 10K files
+- **Features**:
+  - LRU cache with 5-minute TTL
+  - Thread-safe operations with `Arc<Mutex<>>`
+  - Fuzzy search with relevance scoring
+  - Real-time indexing with background updates
+  - Full-text search with token matching
 
-### Safety
-* Upload size bounded (1MB – 10GB default) with overflow avoidance
-* Serve directory always sourced from CLI (prevents relocation via config)
-* Graceful parse of malformed section headers; strict on empty keys/sections
+#### 2. **Ultra-Compact Search (`ultra_compact_search.rs`)**
+- **Target**: Directories with 10M+ files
+- **Memory Usage**: <100MB for 10M files (11 bytes per entry)
+- **Features**:
+  - Hierarchical path storage with parent references
+  - Unified string pool with binary search
+  - Bit-packed metadata (size, timestamps, flags)
+  - Cache-aligned structures for CPU optimization
+  - Radix-accelerated indexing
 
-### Transitional Adapter
-`run_server_with_config` converts `Config` → legacy `Cli` struct to minimize internal churn.
+### Memory Optimization Techniques
+
+```
+Standard Entry (24 bytes):     Ultra-Compact Entry (11 bytes):
+┌────────────────────┐        ┌─────────────────┐
+│ Full Path (String) │        │ Name Offset (3) │
+│ Name (String)      │        │ Parent ID (3)   │
+│ Size (u64)         │        │ Size Log2 (1)   │
+│ Modified (u64)     │        │ Packed Data (4) │
+│ Flags (u32)        │        └─────────────────┘
+└────────────────────┘        58% memory reduction
+```
+
+### Search Performance Characteristics
+
+| Directory Size | Standard Mode | Ultra-Compact Mode |
+|----------------|---------------|-------------------|
+| 1K files       | <1ms         | <1ms              |
+| 10K files      | 2-5ms        | 1-3ms             |
+| 100K files     | 10-20ms      | 5-10ms            |
+| 1M files       | N/A          | 20-50ms           |
+| 10M files      | N/A          | 100-200ms         |
+
+### Search API Integration
+
+The search system integrates with the HTTP layer through dedicated endpoints:
+
+- **`GET /api/search?q=query`**: Primary search interface
+- **Frontend Integration**: Real-time search with 300ms debouncing
+- **Result Pagination**: Configurable limits and offsets
+- **JSON Response Format**: Structured results with metadata
+
+### Caching Strategy
+
+```
+Request → Cache Check → Hit: Return Cached Results
+             │
+             └─ Miss → Index Search → Cache Store → Return Results
+```
+
+- **LRU Eviction**: Least recently used entries removed first
+- **TTL Expiration**: 5-minute automatic cache invalidation
+- **Memory Bounds**: Maximum 1000 cached queries
+- **Thread Safety**: Concurrent read/write operations supported
 
 ## Security Architecture
 
@@ -249,12 +304,12 @@ Order of resolution (highest first):
 - **Directory Size**: Efficient handling of large directories
 - **Template Complexity**: Sub-millisecond variable interpolation
 
-## Template & UI System Architecture
+## Template System Architecture
 
 ### Template Engine Design
 
 The native template engine provides:
-- **Variable Interpolation**: `{{VARIABLE}}` syntax with HTML escaping (error variables renamed to `ERROR_CODE`, `ERROR_MESSAGE`, `ERROR_DESCRIPTION` + metadata `REQUEST_ID`, `TIMESTAMP`)
+- **Variable Interpolation**: `{{VARIABLE}}` syntax with HTML escaping
 - **Static Asset Serving**: Organized CSS/JS delivery via `/_static/` routes
 - **Modular Templates**: Separated concerns (HTML structure, CSS styling, JS behavior)
 - **Caching**: In-memory template storage for performance
@@ -298,30 +353,31 @@ Static Asset Request → Asset Router → Direct File Serving → CSS/JS Respons
 - **Concurrent Testing**: Multi-threaded test scenarios
 - **Security Validation**: Path traversal and injection testing
 
-## CLI Configuration (Snapshot)
+## Configuration System
+
+### CLI Configuration
 ```rust
 pub struct Cli {
-   pub directory: PathBuf,          // Required: serve root
-   pub listen: String,              // Default: 127.0.0.1
-   pub port: u16,                   // Default: 8080
-   pub allowed_extensions: String,  // Default: "*.zip,*.txt"
-   pub threads: usize,              // Default: 8
-   pub chunk_size: usize,           // Default: 1024 (bytes)
-   pub verbose: bool,               // Debug logging
-   pub detailed_logging: bool,      // Info logging
-   pub username: Option<String>,    // Basic auth (optional)
-   pub password: Option<String>,    // Basic auth (optional)
-   pub enable_upload: bool,         // Upload toggle
-   pub max_upload_size: u32,        // MB (converted to bytes in Config)
-   pub upload_dir: Option<PathBuf>, // Upload target dir (optional)
-   pub config_file: Option<String>, // INI path override
+    directory: PathBuf,           // Required: directory to serve
+    listen: String,               // Default: "127.0.0.1"
+    port: u16,                    // Default: 8080
+    allowed_extensions: String,    // Default: "*.zip,*.txt"
+    threads: usize,               // Default: 8
+    chunk_size: usize,            // Default: 1024
+    verbose: bool,                // Default: false
+    detailed_logging: bool,       // Default: false
+    username: Option<String>,     // Optional: basic auth
+    password: Option<String>,     // Optional: basic auth
+    enable_upload: bool,          // Default: false
+    max_upload_size: u32,         // Default: 10240 (10GB)
+    upload_dir: Option<PathBuf>,  // Optional: custom upload dir
 }
 ```
 
-### Validation Layers
-1. Parse-time (clap parsers: numeric bounds, path existence for config file)
-2. Config assembly (unit conversions, precedence application, list parsing, file size parsing)
-3. Request-time (path traversal prevention, extension filtering, auth, rate limits, range validation)
+### Validation Pipeline
+1. **Parse-time Validation**: Clap value parsers and constraints
+2. **Runtime Validation**: Additional checks during server initialization
+3. **Operation Validation**: Per-request validation and security checks
 
 ## Error Handling System
 

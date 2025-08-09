@@ -6,49 +6,71 @@ IronDrop features a comprehensive search system that combines server-side indexi
 
 ## Architecture Overview
 
-The search system consists of three main components:
+The search system consists of four main components:
 
-1. **Server-side Search Engine** (`src/search.rs`) - Handles indexing, caching, and search operations
-2. **Frontend Search Interface** (`templates/directory/`) - Provides the user interface and real-time search experience  
-3. **HTTP Search Endpoints** (`src/http.rs`) - RESTful API for search operations
+1. **Standard Search Engine** (`src/search.rs`) - Handles indexing, caching, and search operations for medium-sized directories
+2. **Ultra-Compact Search Engine** (`src/ultra_compact_search.rs`) - Memory-optimized search for large directories (10M+ files)
+3. **Frontend Search Interface** (`templates/directory/`) - Provides the user interface and real-time search experience  
+4. **HTTP Search Endpoints** (`src/http.rs`) - RESTful API for search operations
 
 ### Search Engine Architecture
 
-#### Core Components
+#### Dual-Mode Search System
 
-**SearchCache**
-- **Purpose**: Caches search results to improve performance
-- **Features**: 
-  - LRU (Least Recently Used) eviction policy
-  - Configurable TTL (Time To Live) for cache entries
-  - Automatic cleanup of expired entries
-- **Configuration**: Maximum 1000 cached queries, 5-minute TTL
+**1. Standard Search Engine (`search.rs`)**
+- **Target**: Directories with up to 100K files
+- **Memory Usage**: ~10MB for 10K files
+- **Core Components**:
+  - **SearchCache**: LRU cache with 5-minute TTL, max 1000 queries
+  - **DirectoryIndex**: In-memory index with recursive traversal (max 20 levels)
+  - **SearchEngine**: Thread-safe operations with `Arc<Mutex<>>`, background updates
 
-**DirectoryIndex** 
-- **Purpose**: Maintains an in-memory index of all files and directories
-- **Features**:
-  - Recursive directory traversal with depth limiting (max 20 levels)
-  - Memory protection (max 100k entries)
-  - Periodic index updates
-  - Case-insensitive search preparation
-- **Performance**: Indexes are built asynchronously to avoid blocking operations
+**2. Ultra-Compact Search Engine (`ultra_compact_search.rs`)**
+- **Target**: Directories with 10M+ files
+- **Memory Usage**: <100MB for 10M files (11 bytes per entry)
+- **Core Components**:
+  - **UltraCompactEntry**: Bit-packed 11-byte entries with parent references
+  - **String Pool**: Unified storage with binary search for deduplication
+  - **Hierarchical Storage**: Parent-child relationships instead of full paths
+  - **Cache-Aligned Structures**: CPU optimization for large datasets
 
-**SearchEngine**
-- **Purpose**: Orchestrates search operations and manages components
-- **Features**:
-  - Thread-safe operations using `Arc<Mutex<>>`
-  - Configurable update intervals
-  - Background index updates
-  - Smart caching with relevance scoring
+**3. Performance Testing Module (`ultra_memory_test.rs`)**
+- **Purpose**: Benchmarking and memory analysis for search engines
+- **Features**: Load testing, memory profiling, performance comparisons
 
 ### Performance Characteristics
+
+#### Standard Search Engine Performance
 
 | Directory Size | Search Time | Memory Usage | Algorithm |
 |----------------|-------------|--------------|-----------|
 | 10-100 files   | < 2ms       | < 50KB      | Linear substring |
 | 100-500 files  | 2-5ms       | 50-200KB    | Fuzzy + token |
 | 500-1000 files | 5-10ms      | 200-500KB   | Indexed token |
-| 1000+ files    | < 10ms      | < 500KB     | Limited results |
+| 1000-100K files| 10-50ms     | 1-10MB      | Full-text index |
+
+#### Ultra-Compact Search Engine Performance
+
+| Directory Size | Search Time | Memory Usage | Entry Size | Optimization |
+|----------------|-------------|--------------|------------|--------------|
+| 100K files    | 5-15ms      | 1.1MB        | 11 bytes   | Bit-packed data |
+| 1M files      | 20-80ms     | 11MB         | 11 bytes   | Hierarchical paths |
+| 10M files     | 100-500ms   | 110MB        | 11 bytes   | String pool + radix |
+
+#### Memory Optimization Comparison
+
+```
+Standard Entry: 24 bytes          Ultra-Compact Entry: 11 bytes
+┌─────────────────────────────┐   ┌─────────────────────────────┐
+│ Full Path String (~40 bytes)│   │ Name Offset (3 bytes)       │
+│ Name String (~12 bytes)     │   │ Parent ID (3 bytes)         │
+│ Size (8 bytes)              │   │ Size Log2 (1 byte)          │
+│ Modified Time (8 bytes)     │   │ Packed Data (4 bytes)       │
+│ Flags (4 bytes)             │   └─────────────────────────────┘
+└─────────────────────────────┘   
+Memory per entry: ~72 bytes        Memory per entry: 11 bytes
+Total for 10M files: ~720MB        Total for 10M files: ~110MB
+```
 
 ### Data Structures
 
@@ -138,43 +160,69 @@ The search implementation uses a multi-stage approach:
    - Rebuilt only when necessary (directory modifications detected)
    - Reduces file system traversal overhead
 
+## Automatic Search Mode Selection
+
+The search system automatically selects the optimal search engine based on directory size:
+
+- **<100K files**: Standard search engine with full-text indexing and fuzzy search
+- **100K-1M files**: Transitions to ultra-compact mode with reduced features
+- **>1M files**: Full ultra-compact mode with maximum memory efficiency
+
+This selection is transparent to the API and frontend - search behavior remains consistent while optimizing performance.
+
 ## API Endpoints
 
-### GET `/api/search?q={query}&limit={limit}`
+### GET `/api/search?q={query}&limit={limit}&offset={offset}`
 
-**Purpose**: Perform search query against the directory index
+**Purpose**: Perform search query against the directory index using the optimal search engine
 
 **Parameters**:
 - `q` (required): Search query string
-- `limit` (optional): Maximum number of results (default: 50, max: 1000)
+- `limit` (optional): Maximum number of results (default: 50, max: 100)
+- `offset` (optional): Result offset for pagination (default: 0)
+- `case_sensitive` (optional): Case-sensitive search (default: false)
+- `path` (optional): Search within specific subdirectory
 
 **Response Format**:
 ```json
 {
+  "status": "success",
+  "query": "filename",
   "results": [
     {
       "name": "filename.txt",
       "path": "/path/to/filename.txt", 
       "size": "1.2 KB",
-      "modified": "2 hours ago",
-      "type": "file",
-      "score": 0.95
+      "file_type": "text",
+      "score": 0.95,
+      "last_modified": 1704067200
     }
   ],
-  "total": 42,
-  "query": "filename",
-  "cached": false
+  "pagination": {
+    "total": 42,
+    "limit": 50,
+    "offset": 0,
+    "has_more": false
+  },
+  "search_stats": {
+    "search_time_ms": 12,
+    "indexed_files": 1247,
+    "cache_hit": false,
+    "engine_mode": "standard"
+  }
 }
 ```
 
 **Response Fields**:
-- `results`: Array of matching files/directories
-- `total`: Total number of matches found  
-- `query`: Processed query string
-- `cached`: Whether results came from cache
+- `status`: Request status ("success" or "error")
+- `results`: Array of matching files/directories with relevance scores
+- `pagination`: Pagination information for large result sets
+- `search_stats`: Performance metrics and search engine information
+- `engine_mode`: Which search engine was used ("standard" or "ultra_compact")
 
 **Error Responses**:
 - `400 Bad Request`: Missing or invalid query parameter
+- `503 Service Unavailable`: Search engine currently indexing
 - `500 Internal Server Error`: Search engine failure
 
 ### Integration

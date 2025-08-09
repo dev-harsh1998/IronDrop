@@ -285,13 +285,103 @@ Content-Type: text/html
 }
 ```
 
-### 4. Static Assets
+### 4. Search API
+
+#### `GET /api/search`
+Searches for files and directories within the served directory tree.
+
+**Query Parameters:**
+- `q` (required): Search query string
+- `limit` (optional): Maximum number of results (default: 50, max: 100)
+- `offset` (optional): Result offset for pagination (default: 0)
+- `case_sensitive` (optional): Case-sensitive search (`true`/`false`, default: `false`)
+- `path` (optional): Search within specific subdirectory (default: root)
+
+**Examples:**
+```http
+GET /api/search?q=document
+GET /api/search?q=report&limit=20&offset=10
+GET /api/search?q=Config&case_sensitive=true
+GET /api/search?q=readme&path=/docs
+```
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "query": "document",
+  "results": [
+    {
+      "name": "document.pdf",
+      "path": "/files/document.pdf",
+      "size": "1.0 MB",
+      "file_type": "document",
+      "score": 1.0,
+      "last_modified": 1704067200
+    },
+    {
+      "name": "my-document.txt",
+      "path": "/files/subfolder/my-document.txt", 
+      "size": "4.2 KB",
+      "file_type": "text",
+      "score": 0.8,
+      "last_modified": 1704063600
+    }
+  ],
+  "pagination": {
+    "total": 15,
+    "limit": 50,
+    "offset": 0,
+    "has_more": false
+  },
+  "search_stats": {
+    "search_time_ms": 12,
+    "indexed_files": 1247,
+    "cache_hit": false
+  }
+}
+```
+
+**Error Responses:**
+```json
+# Missing query parameter
+{
+  "status": "error",
+  "error": "BadRequest",
+  "message": "Missing required parameter: q"
+}
+
+# Search engine not available
+{
+  "status": "error", 
+  "error": "ServiceUnavailable",
+  "message": "Search engine is currently indexing, please try again"
+}
+
+# Invalid parameters
+{
+  "status": "error",
+  "error": "BadRequest",
+  "message": "Invalid limit parameter: maximum 100 allowed",
+  "details": {
+    "limit": 500,
+    "max_limit": 100
+  }
+}
+```
+
+**Performance Notes:**
+- First search may be slower due to indexing
+- Results are cached for 5 minutes
+- Large directories (>100K files) use memory-optimized search
+- Search supports fuzzy matching and token-based search
+
+### 5. Static Assets
 
 #### `GET /_static/<asset-path>`
 Serves template assets (CSS, JavaScript, images).
 
 **Examples:**
-- `GET /_static/common/base.css` (shared design system)
 - `GET /_static/directory/styles.css`
 - `GET /_static/upload/script.js`
 - `GET /_static/error/styles.css`
@@ -313,31 +403,6 @@ Content-Type: text/plain
 
 Static asset not found
 ```
-
-### 5. Server Monitoring
-
-#### `GET /_irondrop/monitor`
-Displays the comprehensive server monitoring dashboard with real-time metrics.
-
-**Response:**
-```html
-HTTP/1.1 200 OK
-Content-Type: text/html
-
-<!DOCTYPE html>
-<html>
-<!-- Interactive monitoring dashboard -->
-<!-- Includes server status, request statistics, upload metrics -->
-<!-- Auto-refreshes every 5 seconds -->
-</html>
-```
-
-**Features:**
-- Real-time server metrics
-- Request statistics (total, success, errors)
-- Upload statistics (files, sizes, success rates)
-- Performance metrics
-- Live status indicators
 
 ### 6. Health and Monitoring
 
@@ -385,8 +450,6 @@ Detailed server status and statistics.
   }
 }
 ```
-
-Note: Configuration values reflect effective merged settings after precedence resolution (CLI > INI > defaults). The raw source (e.g., whether a value came from INI or CLI) is not currently exposed.
 
 #### `GET /monitor`
 HTML monitoring dashboard (human-friendly) that auto-refreshes via JavaScript to show live server statistics. Provides request counts, bytes served (downloads), and upload metrics (counts, bytes, success rate, concurrency, average processing time).
@@ -581,23 +644,20 @@ X-RateLimit-Reset: 1704110400
 }
 ```
 
-**HTML Error Response (Variables Updated in v2.5):**
+**HTML Error Response:**
 ```html
 <!DOCTYPE html>
 <html>
 <head>
-  <title>{{ERROR_CODE}} - {{ERROR_MESSAGE}}</title>
-  <link rel="stylesheet" href="/_static/common/base.css">
-  <link rel="stylesheet" href="/_static/error/styles.css">
+    <title>Error 404 - Not Found</title>
+    <link rel="stylesheet" href="/_static/error/styles.css">
 </head>
 <body>
-  <div class="error-container">
-    <div class="error-code">{{ERROR_CODE}}</div>
-    <div class="error-message">{{ERROR_MESSAGE}}</div>
-    <div class="error-description">{{ERROR_DESCRIPTION}}</div>
-    <div class="error-meta">Request: {{REQUEST_ID}} • {{TIMESTAMP}}</div>
-    <a href="/" class="back-link">Back to Files</a>
-  </div>
+    <div class="error-container">
+        <h1>404 - Not Found</h1>
+        <p>The requested resource could not be found.</p>
+        <a href="/">← Back to Home</a>
+    </div>
 </body>
 </html>
 ```
@@ -639,6 +699,20 @@ if (result.status === 'success') {
 }
 ```
 
+**Search Files:**
+```javascript
+// Search for files
+const searchResponse = await fetch('/api/search?q=document&limit=10');
+const searchData = await searchResponse.json();
+
+if (searchData.status === 'success') {
+    console.log(`Found ${searchData.results.length} results`);
+    searchData.results.forEach(result => {
+        console.log(`${result.name} - Score: ${result.score}`);
+    });
+}
+```
+
 **Health Check:**
 ```javascript
 // Monitor server health
@@ -661,6 +735,11 @@ curl -X POST -F "file=@document.pdf" http://localhost:8080/upload
 **Get directory listing as JSON:**
 ```bash
 curl "http://localhost:8080/directory?format=json" | jq .
+```
+
+**Search files:**
+```bash
+curl "http://localhost:8080/api/search?q=document&limit=5" | jq .
 ```
 
 **Health check:**
@@ -696,6 +775,19 @@ response = requests.post('http://localhost:8080/upload', files=files)
 if response.status_code == 200:
     result = response.json()
     print(f"Upload successful: {result['message']}")
+```
+
+**Search files:**
+```python
+import requests
+
+response = requests.get('http://localhost:8080/api/search', 
+                       params={'q': 'document', 'limit': 10})
+data = response.json()
+
+if data['status'] == 'success':
+    for result in data['results']:
+        print(f"{result['name']} - Score: {result['score']}")
 ```
 
 ## Security Considerations
