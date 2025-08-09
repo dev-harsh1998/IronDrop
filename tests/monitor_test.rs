@@ -126,7 +126,6 @@ fn test_monitor_json_and_bytes_served_accounting() {
     assert_eq!(res2.status(), StatusCode::OK);
     let body2 = res2.text().unwrap();
     let bytes2 = extract_bytes_served(&body2);
-    let _monitor2_len = body2.as_bytes().len() as u64;
 
     // File bytes should appear in delta between monitor fetches minus monitor response body itself.
     let delta = bytes2.saturating_sub(bytes1);

@@ -1,4 +1,3 @@
-/* Directory Listing Specific Styles - Extends Base */
 /* Professional Blackish Grey Design */
 
 /* Directory Header */
@@ -6,7 +5,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    margin-bottom: var(--space-xl);
+    margin-bottom: var(--spacing-xl);
 }
 
 .directory-breadcrumb {
@@ -31,22 +30,578 @@
     margin: 0;
 }
 
-/* File List Enhancements */
+/* Screen reader only class for accessibility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+:root {
+    --bg-primary: #0a0a0a;           /* Deep black */
+    --bg-secondary: #1a1a1a;         /* Dark grey */
+    --bg-tertiary: #2a2a2a;          /* Medium grey */
+    --bg-glass: rgba(26, 26, 26, 0.4);
+    --text-primary: #e5e5e5;         /* Light grey */
+    --text-secondary: #b0b0b0;       /* Medium grey text */
+    --text-accent: #ffffff;          /* Pure white accent */
+    --text-muted: #666666;           /* Muted grey */
+    --border: rgba(64, 64, 64, 0.4);
+    --shadow: var(--shadow-xl);
+    --gradient: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+    --hover-bg: rgba(255, 255, 255, 0.08);
+    --table-header: #333333;         /* Dark header grey */
+    --table-stripe: rgba(255, 255, 255, 0.03);
+    --table-border: rgba(64, 64, 64, 0.5);
+    --link-hover: #ffffff;           /* Pure white on hover */
+    /* Standardized border radius values */
+    --radius-small: 4px;             /* Small elements (marks, badges) */
+    --radius-medium: 8px;            /* Medium elements (buttons, inputs) */
+    --radius-large: 12px;            /* Large elements (cards, dropdowns) */
+    --radius-xlarge: 16px;           /* Extra large elements (main containers) */
+    --radius-round: 50%;             /* Circular elements */
+    /* Standardized spacing values */
+    --spacing-xs: 0.25rem;           /* 4px - Very small gaps */
+    --spacing-sm: 0.5rem;            /* 8px - Small gaps */
+    --spacing-md: 0.75rem;           /* 12px - Medium gaps */
+    --spacing-lg: 1rem;              /* 16px - Large gaps */
+    --spacing-xl: 1.5rem;            /* 24px - Extra large gaps */
+    --spacing-2xl: 2rem;             /* 32px - Double extra large gaps */
+    --spacing-3xl: 2.5rem;           /* 40px - Triple extra large gaps */
+    /* Standardized shadow styles */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.2);                    /* Small subtle shadow */
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);                   /* Medium shadow for inputs */
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3);                   /* Large shadow for hover states */
+    --shadow-xl: 0 25px 35px -5px rgba(0, 0, 0, 0.8), 0 15px 15px -5px rgba(0, 0, 0, 0.5); /* Extra large dramatic shadow */
+    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.2);           /* Inset shadow for depth */
+    --shadow-focus: 0 0 0 3px rgba(96, 165, 250, 0.3);            /* Focus ring shadow */
+    /* Standardized typography */
+    --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-family-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Consolas', monospace;
+    --font-size-xs: 0.65rem;         /* 10px - Very small text */
+    --font-size-sm: 0.7rem;          /* 11px - Small text */
+    --font-size-base: 0.8rem;        /* 13px - Base small text */
+    --font-size-md: 0.875rem;        /* 14px - Medium text */
+    --font-size-lg: 0.95rem;         /* 15px - Large text */
+    --font-size-xl: 1rem;            /* 16px - Extra large text */
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --line-height-tight: 1.2;
+    --line-height-normal: 1.6;
+    --letter-spacing-tight: -0.025em;
+    --letter-spacing-normal: 0;
+    --letter-spacing-wide: 0.05em;
+    --letter-spacing-wider: 0.1em;
+    /* Standardized z-index values */
+    --z-background: -1;               /* Background elements */
+    --z-base: 1;                      /* Base level elements */
+    --z-elevated: 10;                 /* Elevated elements like sticky headers */
+    --z-modal: 100;                   /* Modal overlays */
+    --z-dropdown: 1000;               /* Dropdowns and tooltips */
+    --z-top: 9999;                    /* Always on top elements */
+    /* Standardized transitions */
+    --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);      /* Fast interactions */
+    --transition-normal: 0.3s cubic-bezier(0.4, 0, 0.2, 1);     /* Normal interactions */
+    --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);       /* Slow animations */
+    --transition-bounce: 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Bouncy effect */
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family-primary);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: var(--line-height-normal);
+    transition: all var(--transition-normal);
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--gradient);
+    opacity: 0.03;
+    z-index: var(--z-background);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--spacing-2xl);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    z-index: var(--z-base);
+}
+
+.search-container {
+    margin-bottom: var(--spacing-2xl);
+    position: relative;
+    animation: fadeIn 0.5s ease forwards;
+    /* Prevent layout shifts from status text changes */
+    min-height: 4rem;
+    display: flex;
+    align-items: center;
+    /* Ensure search container is always on top */
+    z-index: var(--z-elevated);
+    order: -1; /* Ensure it always appears first in flexbox */
+}
+
+.search-input {
+    width: 100%;
+    padding: var(--spacing-lg) 9rem var(--spacing-lg) var(--spacing-xl); /* Reserve space for status text */
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-large);
+    color: var(--text-primary);
+    font-size: var(--font-size-xl);
+    font-family: var(--font-family-primary);
+    transition: all var(--transition-normal);
+    box-shadow: var(--shadow-md);
+    /* Prevent input width changes */
+    box-sizing: border-box;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--text-accent);
+    box-shadow: var(--shadow-focus), var(--shadow-lg);
+    transform: translateY(-2px) scale(1.01);
+    transition: all var(--transition-normal);
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+    transition: color var(--transition-fast);
+}
+
+.search-input:focus::placeholder {
+    color: var(--text-secondary);
+}
+
+.search-status {
+    position: absolute;
+    right: var(--spacing-xl);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: var(--letter-spacing-wide);
+    pointer-events: none;
+    transition: all var(--transition-fast);
+    /* Fixed width to prevent layout shifts */
+    width: 7rem;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Stable baseline positioning */
+    line-height: var(--line-height-tight);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    height: 1.2rem;
+}
+
+.search-status.has-results {
+    color: var(--text-secondary);
+}
+
+.search-status.loading {
+    color: var(--text-accent);
+    opacity: 0.8;
+}
+
+.search-status.loading::after {
+    content: '';
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    margin-left: var(--spacing-sm);
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: var(--radius-round);
+    animation: searchSpinner 0.8s linear infinite;
+    vertical-align: middle;
+}
+
+@keyframes searchSpinner {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+mark {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-accent);
+    padding: 0.1em 0.2em;
+    border-radius: var(--radius-small);
+    font-weight: var(--font-weight-semibold);
+}
+
+.file-link .name mark {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: var(--shadow-sm);
+}
+
+tr.hidden {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.98);
+    pointer-events: none;
+    /* Use visibility instead of display for smoother transitions */
+    visibility: hidden;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Prevent layout shift by collapsing smoothly */
+    max-height: 0;
+    overflow: hidden;
+}
+
+tr.hidden td {
+    padding-top: 0;
+    padding-bottom: 0;
+    border: none;
+    height: 0;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Visible state for smooth transitions */
+tr.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    visibility: visible;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 5rem;
+}
+
+tr.visible td {
+    padding: var(--spacing-xl) var(--spacing-3xl);
+    height: 3.5rem;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--table-border);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+tr.visible td:last-child {
+    border-right: none;
+}
+
+tr.search-match {
+    animation: searchHighlight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes searchHighlight {
+    0% { 
+        background: rgba(255, 255, 255, 0.08);
+        transform: translateX(3px) scale(1.01);
+        box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+    }
+    50% {
+        background: rgba(255, 255, 255, 0.04);
+        transform: translateX(1px) scale(1.005);
+    }
+    100% { 
+        background: transparent;
+        transform: translateX(0) scale(1);
+        box-shadow: none;
+    }
+}
+
+/* Search dropdown styles */
+.search-dropdown {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-large);
+    box-shadow: var(--shadow-xl), var(--shadow-inset);
+    z-index: var(--z-dropdown);
+    max-height: 300px;
+    overflow: hidden;
+    animation: dropdownSlide var(--transition-fast) ease-out;
+    /* Prevent layout shifts */
+    will-change: transform, opacity;
+    /* Ensure dropdown is always clickable */
+    pointer-events: auto;
+    /* Force GPU acceleration for better positioning */
+    transform: translateZ(0);
+    /* Ensure solid background */
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+@keyframes dropdownSlide {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-header {
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wide);
+    /* Ensure solid background */
+    opacity: 1;
+}
+
+.dropdown-results {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-md) var(--spacing-lg);
+    cursor: pointer;
+    border-bottom: 1px solid rgba(64, 64, 64, 0.3);
+    transition: all var(--transition-normal);
+    gap: var(--spacing-md);
+    position: relative;
+    /* Ensure proper clickability */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    /* Better touch targets */
+    min-height: 3rem;
+    /* Ensure background is solid */
+    background-color: transparent;
+    /* Force clickability */
+    pointer-events: auto;
+    /* Ensure proper stacking */
+    z-index: var(--z-base);
+    /* Prevent any overlay issues */
+    isolation: isolate;
+}
+
+.dropdown-item:hover,
+.dropdown-item.selected {
+    background: var(--hover-bg);
+    transform: translateX(6px) scale(1.01);
+    /* Enhanced visual feedback */
+    box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.3);
+    color: var(--text-accent);
+    transition: all var(--transition-bounce);
+}
+
+.dropdown-item.selected {
+    background: rgba(96, 165, 250, 0.2);
+    border-left: 3px solid rgba(96, 165, 250, 1);
+    color: var(--text-accent);
+    transform: translateX(6px);
+    /* Enhanced selected state */
+    box-shadow: inset 3px 0 0 rgba(96, 165, 250, 0.8), var(--shadow-sm);
+}
+
+/* Focus states for keyboard navigation */
+.dropdown-item:focus {
+    outline: 2px solid rgba(96, 165, 250, 0.8);
+    outline-offset: -2px;
+    background: var(--hover-bg);
+    transform: translateX(4px);
+    transition: all var(--transition-fast);
+}
+
+/* Active state for better click feedback */
+.dropdown-item:active {
+    background: rgba(96, 165, 250, 0.3);
+    transform: translateX(2px) scale(0.98);
+    transition: all var(--transition-fast);
+}
+
+.dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.dropdown-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.dropdown-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.dropdown-name {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-xs);
+    word-break: break-all;
+}
+
+.dropdown-name mark {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--text-accent);
+    padding: 0.1em 0.2em;
+    border-radius: var(--radius-small);
+    font-weight: var(--font-weight-semibold);
+}
+
+.dropdown-path {
+    font-size: var(--font-size-base);
+    color: var(--text-muted);
+    font-family: var(--font-family-mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dropdown-size {
+    font-size: var(--font-size-base);
+    color: var(--text-secondary);
+    font-family: var(--font-family-mono);
+    flex-shrink: 0;
+    text-align: right;
+    min-width: 4rem;
+}
+
+
+
+.listing {
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xlarge);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    position: relative;
+    /* Prevent layout shifts during search operations */
+    min-height: 200px;
+    /* Ensure listing appears after search container */
+    z-index: var(--z-base);
+    order: 1;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    /* Ensure stable header positioning */
+    position: relative;
+}
+
+th {
+    background: var(--table-header);
+    color: var(--text-primary);
+    padding: 1.8rem var(--spacing-3xl);
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-base);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-wider);
+    position: sticky;
+    top: 0;
+    z-index: var(--z-elevated);
+    border-right: 2px solid var(--table-border);
+    box-shadow: inset 0 -1px 0 var(--border);
+    /* Prevent header movement during search operations */
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    /* Force GPU acceleration for stable positioning */
+    transform: translateZ(0);
+    will-change: auto;
+    /* Fixed heights to prevent jumping */
+    height: 4.4rem;
+    box-sizing: border-box;
+}
+
+th:last-child {
+    border-right: none;
+}
+
+th::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--text-accent), transparent);
+}
+
+td {
+    padding: var(--spacing-xl) var(--spacing-3xl);
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--table-border);
+    transition: all var(--transition-normal);
+    vertical-align: middle;
+    /* Prevent content jumping */
+    height: 3.5rem;
+    box-sizing: border-box;
+}
+
+td:last-child {
+    border-right: none;
+}
+
+tbody tr:nth-child(even) {
+    background: var(--table-stripe);
+}
+
+/* Ensure consistent row heights */
+tbody tr {
+    min-height: 3.5rem;
+    transition: all var(--transition-fast);
+}
+
+tr:hover td {
+    background: var(--hover-bg);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    transition: all var(--transition-normal);
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
 .file-link {
     color: var(--text-primary);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    transition: var(--transition-fast);
+    gap: var(--spacing-md);
+    transition: all var(--transition-fast);
     position: relative;
 }
 
 .file-link:hover {
     color: var(--link-hover);
-    transform: translateX(4px);
-    text-shadow: 0 2px 4px rgba(255, 255, 255, 0.2);
+    transform: translateX(6px) scale(1.02);
+    text-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+    transition: all var(--transition-bounce);
 }
 
 /* Icon wrapper replacing colored bullet */
@@ -83,31 +638,224 @@
 .file-size {
     text-align: right;
     color: var(--text-secondary);
-    font-family: var(--font-family);
-    font-size: 0.875rem;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-md);
 }
 
 .file-date {
     color: var(--text-secondary);
-    font-size: 0.875rem;
+    font-size: var(--font-size-md);
     white-space: nowrap;
 }
 
-/* Mobile Responsiveness */
 @media (max-width: 768px) {
     .directory-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: var(--space-md);
-        margin-bottom: var(--space-lg);
+        gap: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
     }
 
     .directory-title {
         font-size: 1.4rem;
     }
-
+    
+    .container {
+        padding: var(--spacing-lg);
+    }
+    
+    .search-container {
+        margin-bottom: var(--spacing-xl);
+        min-height: 3.5rem; /* Adjust for mobile */
+    }
+    
+    .search-input {
+        padding: 0.875rem 6rem 0.875rem var(--spacing-lg); /* Adjusted padding for mobile status */
+        font-size: var(--font-size-lg);
+    }
+    
+    .search-status {
+        right: var(--spacing-lg);
+        font-size: var(--font-size-sm);
+        width: 4.5rem; /* Smaller width for mobile */
+        height: 1rem;
+    }
+    
+    .search-status.loading::after {
+        width: 0.5rem;
+        height: 0.5rem;
+        margin-left: 0.3rem;
+    }
+    
+    th, td {
+        padding: var(--spacing-lg) var(--spacing-xl);
+    }
+    
+    th {
+        height: 3.5rem; /* Smaller header height on mobile */
+        font-size: var(--font-size-sm);
+        padding: 1.2rem var(--spacing-xl);
+    }
+    
     .file-size,
     .file-date {
         display: none;
     }
+    
+    /* Dropdown adjustments for mobile */
+    .search-dropdown {
+        max-height: 250px;
+        margin-top: 0.25rem;
+    }
+    
+    .dropdown-item {
+        padding: var(--spacing-sm) var(--spacing-md);
+        gap: var(--spacing-sm);
+    }
+    
+    .dropdown-name {
+        font-size: var(--font-size-lg);
+    }
+    
+    .dropdown-path {
+        font-size: var(--font-size-sm);
+    }
+    
+    .dropdown-size {
+        font-size: var(--font-size-sm);
+        min-width: 3rem;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .container {
+        padding: var(--spacing-md);
+    }
+    
+    .search-input {
+        padding: var(--spacing-md) 5rem var(--spacing-md) 0.875rem;
+        font-size: var(--font-size-lg);
+    }
+    
+    .search-status {
+        right: var(--spacing-md);
+        font-size: var(--font-size-sm);
+        width: 4rem;
+    }
+    
+    th, td {
+        padding: var(--spacing-md) var(--spacing-lg);
+    }
+    
+    th {
+        height: 3rem;
+        font-size: var(--font-size-xs);
+        padding: var(--spacing-lg);
+    }
+    
+    .file-link {
+        font-size: var(--font-size-lg);
+        gap: var(--spacing-sm);
+    }
+    
+    .listing {
+        border-radius: var(--radius-xlarge);
+    }
+    
+    /* Optimize animations for smaller screens */
+    tr.search-match {
+        animation-duration: 0.2s;
+    }
+    
+    .search-dropdown {
+        max-height: 200px;
+        border-radius: var(--radius-medium);
+    }
+    
+    tbody tr {
+        min-height: 2.5rem;
+    }
+    
+    td {
+        height: 2.5rem;
+    }
+    
+    tr.visible td {
+        height: 2.5rem;
+        padding: var(--spacing-md) var(--spacing-lg);
+    }
+}
+
+.loading {
+    opacity: 0;
+    animation: fadeIn 0.5s ease forwards;
+}
+
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    
+    .search-status.loading::after {
+        animation: none;
+        opacity: 0.5;
+    }
+    
+    tr.hidden,
+    tr.visible {
+        transition: none;
+        transform: none;
+    }
+}
+
+/* Focus trap styles */
+.focus-trap {
+    position: fixed;
+    top: -1px;
+    left: -1px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Additional fixes for layout and clickability issues */
+.search-container * {
+    /* Ensure all search elements are properly stacked */
+    z-index: inherit;
+}
+
+.search-dropdown .dropdown-results {
+    /* Ensure dropdown results container is clickable */
+    pointer-events: auto;
+    position: relative;
+    z-index: var(--z-base);
+}
+
+/* Prevent any table elements from overlaying search */
+table {
+    position: relative;
+    z-index: var(--z-base);
+}
+
+
+/* Force proper stacking context */
+body {
+    position: relative;
+    z-index: var(--z-base);
+}
+
+/* Ensure search dropdown is above all table content */
+.search-container {
+    /* Create proper stacking context */
+    isolation: isolate;
 }

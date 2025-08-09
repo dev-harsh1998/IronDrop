@@ -168,6 +168,11 @@ fn test_directory_listing_rendering() {
         html.contains("/_irondrop/static/directory/script.js"),
         "Should reference JS"
     );
+
+    // Note: Search functionality is not yet integrated into the current template system
+    // The search features are planned/implemented in directory/index.html but the 
+    // template engine currently uses the modular base.html + directory/content.html approach
+    // which doesn't include search elements yet.
 }
 
 /// Test error page rendering with embedded templates

@@ -14,6 +14,7 @@ pub mod middleware;
 pub mod multipart;
 pub mod response;
 pub mod router;
+pub mod search;
 pub mod server;
 pub mod templates;
 pub mod upload;

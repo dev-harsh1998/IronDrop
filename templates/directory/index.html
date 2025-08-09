@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{PATH}} - IronDrop</title>
+    <link rel="stylesheet" href="/_static/directory/styles.css">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+</head>
+<body>
+    <div class="container">
+        <div class="search-container" role="search">
+            <label for="search" class="sr-only">Search files and directories</label>
+            <input type="text" 
+                   id="search" 
+                   class="search-input" 
+                   placeholder="Search files..."
+                   autocomplete="off"
+                   spellcheck="false"
+                   aria-describedby="search-status"
+                   aria-label="Search files and directories">
+            <span class="search-status" 
+                  id="search-status" 
+                  role="status" 
+                  aria-live="polite"
+                  aria-atomic="true"></span>
+        </div>
+        <div class="listing" role="main">
+            <table role="table" aria-label="File and directory listing">
+                <thead>
+                    <tr>
+                        <th scope="col" aria-sort="none">Name</th>
+                        <th scope="col" aria-sort="none">Size</th>
+                        <th scope="col" aria-sort="none">Modified</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{ENTRIES}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script src="/_static/directory/script.js"></script>
+</body>
+</html>

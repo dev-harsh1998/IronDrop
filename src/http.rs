@@ -4,12 +4,16 @@ use crate::error::AppError;
 use crate::fs::FileDetails;
 use crate::response::create_error_response;
 use crate::router::Router;
+use crate::search::{perform_search, SearchParams, SearchResult};
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::net::TcpStream;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+use std::time::Instant;
+
+// Search result types are now imported from the search module
 
 /// Maximum size for request body (10GB) to prevent memory exhaustion attacks
 const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024 * 1024;
@@ -357,6 +361,200 @@ pub fn handle_client(
 }
 
 // Static asset, favicon, upload, and health handlers moved to handlers.rs
+// But search functionality is added here for API endpoint integration
+
+/// URL decode function for parsing query parameters
+fn url_decode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '%' {
+            let hex: String = chars.by_ref().take(2).collect();
+            if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                result.push(byte as char);
+            } else {
+                result.push(ch);
+            }
+        } else if ch == '+' {
+            result.push(' ');
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
+/// A safe, manual path normalization function.
+fn normalize_path(path: &Path) -> Result<PathBuf, AppError> {
+    let mut components = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(name) => {
+                components.push(name);
+            }
+            Component::ParentDir => {
+                if components.pop().is_none() {
+                    return Err(AppError::Forbidden);
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(components.iter().collect())
+}
+
+/// Handle search API requests with optimizations
+fn handle_search_api_request(
+    request: &Request,
+    base_dir: &Arc<PathBuf>,
+) -> Result<Response, AppError> {
+    let start_time = Instant::now();
+
+    // Parse query parameters manually
+    let query_params: HashMap<String, String> =
+        if let Some(query_string) = request.path.split('?').nth(1) {
+            query_string
+                .split('&')
+                .filter_map(|param| {
+                    let mut parts = param.splitn(2, '=');
+                    match (parts.next(), parts.next()) {
+                        (Some(key), Some(value)) => Some((url_decode(key), url_decode(value))),
+                        _ => None,
+                    }
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        };
+
+    let search_query = query_params.get("q").ok_or(AppError::BadRequest)?;
+
+    // Validate query length for performance
+    if search_query.len() < 2 {
+        return Err(AppError::BadRequest);
+    }
+    if search_query.len() > 100 {
+        return Err(AppError::BadRequest);
+    }
+
+    let search_path = query_params.get("path").map_or("/", |v| v);
+    let limit = query_params
+        .get("limit")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(50)
+        .min(200); // Cap at 200 results
+    let offset = query_params
+        .get("offset")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(0);
+
+    let params = SearchParams {
+        query: search_query.clone(),
+        path: search_path.to_string(),
+        limit,
+        offset,
+        case_sensitive: false,
+    };
+
+    // Perform optimized search with caching and indexing
+    let mut results = perform_search(base_dir, &params)?;
+
+    // Sort by relevance score
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Apply pagination
+    let _total_count = results.len();
+    let paginated_results: Vec<SearchResult> =
+        results.into_iter().skip(offset).take(limit).collect();
+
+    let _elapsed_ms = start_time.elapsed().as_millis();
+
+    // Create simple JSON manually to avoid serde dependency
+    let json_items: Vec<String> = paginated_results
+        .iter()
+        .map(|result| {
+            format!(
+                r#"{{"name":"{}","path":"{}","size":"{}","type":"{}"}}"#,
+                result.name.replace('"', r#"\""#),
+                result.path.replace('"', r#"\""#),
+                result.size,
+                result.file_type
+            )
+        })
+        .collect();
+
+    let json_response = format!("[{}]", json_items.join(","));
+
+    Ok(Response {
+        status_code: 200,
+        status_text: "OK".to_string(),
+        headers: {
+            let mut map = HashMap::new();
+            map.insert("Content-Type".to_string(), "application/json".to_string());
+            map.insert("Access-Control-Allow-Origin".to_string(), "*".to_string());
+            map
+        },
+        body: ResponseBody::Text(json_response),
+    })
+}
+
+/// Create a monitor response with server statistics as JSON
+fn create_monitor_json(stats: Option<&crate::server::ServerStats>) -> Response {
+    let json_content = if let Some(stats) = stats {
+        let (total, successful, errors, bytes, uptime) = stats.get_stats();
+        let error_rate = if total > 0 {
+            (errors as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        };
+        let request_rate = if uptime.as_secs() > 0 {
+            (total as f64 / uptime.as_secs() as f64) * 60.0
+        } else {
+            0.0
+        };
+        
+        format!(
+            r#"{{
+    "status": "healthy",
+    "uptime_seconds": {},
+    "total_requests": {},
+    "successful_requests": {},
+    "failed_requests": {},
+    "total_bytes_sent": {},
+    "request_rate_per_minute": {:.2},
+    "error_rate_percent": {:.2}
+}}"#,
+            uptime.as_secs(),
+            total,
+            successful,
+            errors,
+            bytes,
+            request_rate,
+            error_rate
+        )
+    } else {
+        r#"{"status": "healthy", "message": "Statistics not available"}"#.to_string()
+    };
+
+    Response {
+        status_code: 200,
+        status_text: "OK".to_string(),
+        headers: {
+            let mut map = HashMap::new();
+            map.insert(
+                "Content-Type".to_string(),
+                "application/json; charset=utf-8".to_string(),
+            );
+            map.insert("Cache-Control".to_string(), "no-cache".to_string());
+            map
+        },
+        body: ResponseBody::Text(json_content),
+    }
+}
 
 /// Determines the correct response based on the request.
 #[allow(clippy::too_many_arguments)]
@@ -368,13 +566,42 @@ fn route_request(
     _password: &Arc<Option<String>>,
     chunk_size: usize,
     cli_config: Option<&crate::cli::Cli>,
-    _stats: Option<&crate::server::ServerStats>,
+    stats: Option<&crate::server::ServerStats>,
     router: &Arc<Router>,
 ) -> Result<Response, AppError> {
     // Authentication is now handled by middleware in the router
     // First check if router handles the request (internal routes)
     if let Some(router_response) = router.route(request) {
         return router_response;
+    }
+
+    // Handle search API requests before other routing
+    if request.path.starts_with("/_api/search") {
+        return handle_search_api_request(request, base_dir);
+    }
+
+    // /monitor endpoint (HTML or JSON if ?json=1)
+    if request.path.starts_with("/monitor") {
+        if request.path.contains("json=1") {
+            return Ok(create_monitor_json(stats));
+        } else {
+            use crate::templates::TemplateEngine;
+            let engine = TemplateEngine::new();
+            if let Ok(html) = engine.render_monitor_page() {
+                return Ok(Response {
+                    status_code: 200,
+                    status_text: "OK".into(),
+                    headers: {
+                        let mut h = HashMap::new();
+                        h.insert("Content-Type".into(), "text/html; charset=utf-8".into());
+                        h
+                    },
+                    body: ResponseBody::Text(html),
+                });
+            } else {
+                return Ok(create_monitor_json(stats));
+            }
+        }
     }
 
     // All non-internal paths (not starting with /_irondrop/) are treated as file / directory lookup

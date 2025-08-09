@@ -507,6 +507,9 @@ pub fn run_server(
         ));
     }
 
+    // Initialize the search subsystem with caching and indexing
+    crate::search::initialize_search(base_dir.as_ref().clone());
+
     let allowed_extensions = Arc::new(
         cli.allowed_extensions
             .as_ref()
