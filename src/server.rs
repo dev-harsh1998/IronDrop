@@ -482,9 +482,7 @@ fn get_process_memory_bytes() -> Option<u64> {
                         debug!("Memory tracking unavailable: /proc/self/status access denied");
                     }
                     _ => {
-                        warn!(
-                            "Memory tracking unavailable: failed to read /proc/self/status: {e}"
-                        );
+                        warn!("Memory tracking unavailable: failed to read /proc/self/status: {e}");
                     }
                 }
                 None
@@ -544,6 +542,7 @@ fn get_process_memory_bytes() -> Option<u64> {
         use std::ffi::c_void;
 
         #[repr(C)]
+        #[allow(non_snake_case)]
         struct PROCESS_MEMORY_COUNTERS {
             cb: u32,
             PageFaultCount: u32,
@@ -973,9 +972,7 @@ pub fn run_server(
             if memory_available {
                 let current_mb = current_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
                 let peak_mb = peak_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
-                info!(
-                    "🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak"
-                );
+                info!("🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak");
             } else {
                 debug!("🧠 Memory Stats: unavailable");
             }
@@ -1093,9 +1090,7 @@ pub fn run_server(
     if memory_available {
         let current_mb = current_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
         let peak_mb = peak_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
-        info!(
-            "🧠 Final Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak"
-        );
+        info!("🧠 Final Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak");
     } else {
         info!("🧠 Final Memory Stats: unavailable");
     }
