@@ -480,7 +480,7 @@ impl<R: Read> Read for MultipartPartReader<R> {
 }
 
 impl<R: Read> MultipartPartReader<R> {
-    /// Find boundary in internal buffer using binary search (no UTF-8 assumptions)
+    /// Find boundary in internal buffer using `memchr` (no UTF-8 assumptions)
     fn find_boundary_in_buffer(&self) -> Option<usize> {
         if self.buffer.is_empty() || self.boundary.is_empty() {
             return None;

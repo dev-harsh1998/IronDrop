@@ -133,6 +133,26 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 - Integrated with upload handler and HTTP processing
 - Zero external dependencies with pure Rust implementation
 
+### 🔍 [Search Feature Documentation](./SEARCH_FEATURE.md)
+**Audience**: Frontend Developers, Backend Engineers, System Architects  
+**Purpose**: Comprehensive search functionality implementation details
+
+**Contents:**
+- Server-side search engine with indexing and caching
+- Real-time frontend search interface with debounced input
+- RESTful search API with JSON responses
+- Performance optimization and scalability considerations
+- Security implementation and access control
+- Configuration options and troubleshooting guide
+
+**Implementation Status**: ✅ **Production Ready** (v2.5)
+- Thread-safe search engine with LRU caching (5-minute TTL)
+- Real-time client-side search with 300ms debouncing
+- Comprehensive test coverage including template integration
+- Support for up to 100k indexed files with 20-level directory depth
+- Accessibility-compliant UI with keyboard navigation support
+- Memory-efficient implementation with automatic cleanup
+
 ## 📊 Documentation Statistics
 
 | Document | Pages | Focus Area | Last Updated |
@@ -143,14 +163,16 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 | **Upload Integration** | ~8 | UI System & Templates | v2.5 |
 | **Security Fixes** | ~6 | Security Implementation | v2.5 |
 | **Multipart Parser** | ~5 | Protocol Implementation | v2.5 |
+| **Search Feature** | ~12 | Search Engine & Frontend | v2.5 |
 
 ## 🎯 Documentation by Audience
 
 ### For **Developers**
 1. Start with [Architecture Documentation](./ARCHITECTURE.md) for system overview
 2. Review [API Reference](./API_REFERENCE.md) for integration details
-3. Check [Upload Integration](./UPLOAD_INTEGRATION.md) for UI implementation
-4. Examine [Multipart Parser](./MULTIPART_README.md) for protocol details
+3. Check [Search Feature](./SEARCH_FEATURE.md) for search functionality implementation
+4. Review [Upload Integration](./UPLOAD_INTEGRATION.md) for UI implementation
+5. Examine [Multipart Parser](./MULTIPART_README.md) for protocol details
 
 ### For **DevOps/SysAdmins**
 1. Begin with [Deployment Guide](./DEPLOYMENT.md) for production setup
@@ -166,9 +188,10 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 
 ### For **Integration Teams**
 1. Begin with [API Reference](./API_REFERENCE.md) for endpoint specifications
-2. Review [Upload Integration](./UPLOAD_INTEGRATION.md) for UI components
-3. Check [Architecture Documentation](./ARCHITECTURE.md) for system boundaries
-4. Reference [Deployment Guide](./DEPLOYMENT.md) for environment setup
+2. Review [Search Feature](./SEARCH_FEATURE.md) for search API and frontend integration
+3. Check [Upload Integration](./UPLOAD_INTEGRATION.md) for UI components
+4. Review [Architecture Documentation](./ARCHITECTURE.md) for system boundaries
+5. Reference [Deployment Guide](./DEPLOYMENT.md) for environment setup
 
 ## 🔍 Quick Reference
 
@@ -189,6 +212,7 @@ curl -X POST -F "file=@document.pdf" http://localhost:8080/upload
 
 ### Key Endpoints
 - **Directory Listing**: `GET /` or `GET /path/`
+- **File Search**: `GET /api/search?q=query&limit=50`
 - **File Upload**: `POST /upload`
 - **Health Check**: `GET /_health`
 - **Server Status**: `GET /_status`

@@ -148,8 +148,8 @@ fn test_directory_listing_rendering() {
     assert!(html.contains("1.2 KB"), "Should contain file sizes");
     assert!(html.contains("45.8 MB"), "Should contain large file size");
 
-    // Should contain proper HTML structure
-    assert!(html.contains("<table>"), "Should contain table structure");
+    // Should contain proper HTML structure (updated for search functionality)
+    assert!(html.contains("<table"), "Should contain table structure");
     assert!(html.contains("file-link"), "Should contain styled links");
     assert!(
         html.contains("file-type directory"),
@@ -165,6 +165,17 @@ fn test_directory_listing_rendering() {
     assert!(
         html.contains("/_static/directory/script.js"),
         "Should reference JS"
+    );
+
+    // Should contain search functionality elements
+    assert!(
+        html.contains("search-container"),
+        "Should contain search container"
+    );
+    assert!(html.contains("search-input"), "Should contain search input");
+    assert!(
+        html.contains("Search files..."),
+        "Should contain search placeholder"
     );
 }
 

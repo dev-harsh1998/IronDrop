@@ -3,6 +3,7 @@
 use crate::error::AppError;
 use crate::fs::{generate_directory_listing, FileDetails};
 use crate::response::{create_error_response, get_mime_type};
+use crate::search::{perform_search, SearchParams, SearchResult};
 use crate::upload::UploadHandler;
 use base64::Engine;
 use log::{debug, error, info, warn};
@@ -11,6 +12,9 @@ use std::io::prelude::*;
 use std::net::TcpStream;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+use std::time::Instant;
+
+// Search result types are now imported from the search module
 
 /// Maximum size for request body (10GB) to prevent memory exhaustion attacks
 const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024 * 1024;
@@ -355,6 +359,27 @@ pub fn handle_client(
     }
 }
 
+/// URL decode function for parsing query parameters
+fn url_decode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '%' {
+            let hex: String = chars.by_ref().take(2).collect();
+            if let Ok(byte) = u8::from_str_radix(&hex, 16) {
+                result.push(byte as char);
+            } else {
+                result.push(ch);
+            }
+        } else if ch == '+' {
+            result.push(' ');
+        } else {
+            result.push(ch);
+        }
+    }
+    result
+}
+
 /// A safe, manual path normalization function.
 fn normalize_path(path: &Path) -> Result<PathBuf, AppError> {
     let mut components = Vec::new();
@@ -428,6 +453,107 @@ fn handle_favicon_request(path: &str) -> Result<Response, AppError> {
         body: ResponseBody::Binary(content.to_vec()),
     })
 }
+
+/// Handle search API requests with optimizations
+fn handle_search_api_request(
+    request: &Request,
+    base_dir: &Arc<PathBuf>,
+) -> Result<Response, AppError> {
+    let start_time = Instant::now();
+
+    // Parse query parameters manually
+    let query_params: HashMap<String, String> =
+        if let Some(query_string) = request.path.split('?').nth(1) {
+            query_string
+                .split('&')
+                .filter_map(|param| {
+                    let mut parts = param.splitn(2, '=');
+                    match (parts.next(), parts.next()) {
+                        (Some(key), Some(value)) => Some((url_decode(key), url_decode(value))),
+                        _ => None,
+                    }
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        };
+
+    let search_query = query_params.get("q").ok_or(AppError::BadRequest)?;
+
+    // Validate query length for performance
+    if search_query.len() < 2 {
+        return Err(AppError::BadRequest);
+    }
+    if search_query.len() > 100 {
+        return Err(AppError::BadRequest);
+    }
+
+    let search_path = query_params.get("path").map_or("/", |v| v);
+    let limit = query_params
+        .get("limit")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(50)
+        .min(200); // Cap at 200 results
+    let offset = query_params
+        .get("offset")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(0);
+
+    let params = SearchParams {
+        query: search_query.clone(),
+        path: search_path.to_string(),
+        limit,
+        offset,
+        case_sensitive: false,
+    };
+
+    // Perform optimized search with caching and indexing
+    let mut results = perform_search(base_dir, &params)?;
+
+    // Sort by relevance score
+    results.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Apply pagination
+    let _total_count = results.len();
+    let paginated_results: Vec<SearchResult> =
+        results.into_iter().skip(offset).take(limit).collect();
+
+    let _elapsed_ms = start_time.elapsed().as_millis();
+
+    // Create simple JSON manually to avoid serde dependency
+    let json_items: Vec<String> = paginated_results
+        .iter()
+        .map(|result| {
+            format!(
+                r#"{{"name":"{}","path":"{}","size":"{}","type":"{}"}}"#,
+                result.name.replace('"', r#"\""#),
+                result.path.replace('"', r#"\""#),
+                result.size,
+                result.file_type
+            )
+        })
+        .collect();
+
+    let json_response = format!("[{}]", json_items.join(","));
+
+    Ok(Response {
+        status_code: 200,
+        status_text: "OK".to_string(),
+        headers: {
+            let mut map = HashMap::new();
+            map.insert("Content-Type".to_string(), "application/json".to_string());
+            map.insert("Access-Control-Allow-Origin".to_string(), "*".to_string());
+            map
+        },
+        body: ResponseBody::Text(json_response),
+    })
+}
+
+// Search implementation moved to search.rs module
 
 /// Handle GET requests for upload form
 fn handle_upload_form_request(
@@ -609,6 +735,11 @@ fn route_request(
         || request.path == "/favicon-32x32.png"
     {
         return handle_favicon_request(&request.path);
+    }
+
+    // Handle search API requests
+    if request.path.starts_with("/_api/search") {
+        return handle_search_api_request(request, base_dir);
     }
 
     // Handle upload requests (strip query parameters for matching)

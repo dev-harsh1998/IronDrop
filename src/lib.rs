@@ -10,6 +10,7 @@ pub mod fs;
 pub mod http;
 pub mod multipart;
 pub mod response;
+pub mod search;
 pub mod server;
 pub mod templates;
 pub mod upload;
