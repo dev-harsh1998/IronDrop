@@ -666,6 +666,8 @@ The modular template system allows easy customization:
 If you're looking to understand the codebase, integrate IronDrop, or contribute to development:
 
 - **📖 [Complete Documentation Suite](./doc/)** - Comprehensive technical documentation
+- **🧩 [Configuration System](./doc/CONFIGURATION_SYSTEM.md)** - INI file support & precedence model (v2.5)
+- **🎨 [Template & UI System](./doc/TEMPLATE_SYSTEM.md)** - Native engine, variables, conditionals, theming (v2.5)
 - **🏗️ [Architecture Guide](./doc/ARCHITECTURE.md)** - System design, component breakdown, and code organization
 - **🔌 [API Reference](./doc/API_REFERENCE.md)** - Complete REST API specification with examples
 - **🚀 [Deployment Guide](./doc/DEPLOYMENT.md)** - Production deployment with Docker, systemd, and reverse proxy

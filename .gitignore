@@ -4,3 +4,4 @@ Cargo.lock
 # Ignore LLM context files
 .copilot/
 .copilot
+*.DS_Store
