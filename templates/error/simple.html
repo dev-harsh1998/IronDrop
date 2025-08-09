@@ -1,0 +1,113 @@
+<!-- Simple Error Page -->
+<div class="page-content">
+    <div class="card error-container">
+        <div class="error-code">{{ERROR_CODE}}</div>
+        <div class="error-message">{{ERROR_MESSAGE}}</div>
+        <div class="error-description">{{ERROR_DESCRIPTION}}</div>
+
+        <div class="error-actions">
+            <a href="/" class="btn btn-light">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9,22 9,12 15,12 15,22" />
+                </svg>
+                Go Home
+            </a>
+            <a href="javascript:history.back()" class="btn btn-light">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m12 19-7-7 7-7" />
+                    <path d="m19 12H5" />
+                </svg>
+                Go Back
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Page content centering */
+    .page-content {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: 60vh;
+        padding-top: var(--space-2xl);
+    }
+
+    /* Error container - Uses base card class + error-specific styling */
+    .error-container {
+        text-align: center;
+        max-width: 600px;
+        width: 90%;
+        padding: var(--space-2xl);
+        opacity: 0;
+        animation: fadeIn 0.5s ease forwards;
+    }
+
+    .error-code {
+        font-size: 5rem;
+        font-weight: 800;
+        background: var(--gradient-accent);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: var(--space-md);
+        line-height: 1;
+        font-family: var(--font-family);
+    }
+
+    .error-message {
+        font-size: 1.5rem;
+        color: var(--text-primary);
+        margin-bottom: var(--space-xl);
+        font-weight: 600;
+    }
+
+    .error-description {
+        color: var(--text-secondary);
+        font-size: 1rem;
+        margin-bottom: var(--space-xl);
+        line-height: 1.6;
+    }
+
+    .error-actions {
+        display: flex;
+        gap: var(--space-md);
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    /* Animation */
+    @keyframes fadeIn {
+        to {
+            opacity: 1;
+        }
+    }
+
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+        .page-content {
+            min-height: 50vh;
+            padding-top: var(--space-xl);
+        }
+
+        .error-container {
+            padding: var(--space-xl);
+            margin: var(--space-sm);
+            width: 95%;
+        }
+
+        .error-code {
+            font-size: 4rem;
+        }
+
+        .error-message {
+            font-size: 1.25rem;
+        }
+
+        .error-actions {
+            flex-direction: column;
+            align-items: center;
+        }
+    }
+</style>

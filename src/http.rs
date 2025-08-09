@@ -1,14 +1,14 @@
 //! Handles HTTP request parsing, routing, and response generation.
 
 use crate::error::AppError;
-use crate::fs::{generate_directory_listing, FileDetails};
-use crate::response::{create_error_response, get_mime_type};
+use crate::fs::FileDetails;
+use crate::response::create_error_response;
 use crate::router::Router;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::net::TcpStream;
-use std::path::{Component, Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Maximum size for request body (10GB) to prevent memory exhaustion attacks
@@ -333,38 +333,28 @@ pub fn handle_client(
     );
 
     match response_result {
-        Ok(response) => {
-            if let Err(e) = send_response(&mut stream, response, &log_prefix) {
-                error!("{log_prefix} Failed to send response: {e}");
+        Ok(response) => match send_response(&mut stream, response, &log_prefix) {
+            Ok(body_bytes) => {
+                if let Some(stats) = stats {
+                    stats.record_request(true, body_bytes);
+                }
             }
-        }
+            Err(e) => {
+                error!("{log_prefix} Failed to send response: {e}");
+                if let Some(stats) = stats {
+                    stats.record_request(false, 0);
+                }
+            }
+        },
         Err(e) => {
             warn!("{log_prefix} Error processing request: {e}");
             send_error_response(&mut stream, e, &log_prefix);
+            if let Some(stats) = stats {
+                stats.record_request(false, 0);
+            }
         }
     }
 }
-
-/// A safe, manual path normalization function.
-fn normalize_path(path: &Path) -> Result<PathBuf, AppError> {
-    let mut components = Vec::new();
-    for component in path.components() {
-        match component {
-            Component::Normal(name) => {
-                components.push(name);
-            }
-            Component::ParentDir => {
-                if components.pop().is_none() {
-                    return Err(AppError::Forbidden);
-                }
-            }
-            _ => {}
-        }
-    }
-    Ok(components.iter().collect())
-}
-
-// Static asset, favicon, upload, and health handlers moved to handlers.rs
 
 // Static asset, favicon, upload, and health handlers moved to handlers.rs
 
@@ -377,12 +367,12 @@ fn route_request(
     _username: &Arc<Option<String>>,
     _password: &Arc<Option<String>>,
     chunk_size: usize,
-    _cli_config: Option<&crate::cli::Cli>,
+    cli_config: Option<&crate::cli::Cli>,
     _stats: Option<&crate::server::ServerStats>,
     router: &Arc<Router>,
 ) -> Result<Response, AppError> {
     // Authentication is now handled by middleware in the router
-    // Consult shared router (runs middleware internally including auth)
+    // First check if router handles the request (internal routes)
     if let Some(router_response) = router.route(request) {
         return router_response;
     }
@@ -392,117 +382,22 @@ fn route_request(
         return Err(AppError::NotFound);
     }
 
-    // Handle different methods appropriately
-    match request.method.as_str() {
-        "GET" => {
-            // GET requests are handled normally
-        }
-        "POST" => {
-            // For now, POST requests are only accepted but not fully implemented
-            // In a real implementation, this would handle file uploads
-            // For the current implementation, we'll allow POST but treat it like GET for basic functionality
-            debug!("POST request received, treating as GET for basic functionality");
-        }
-        _ => {
-            return Err(AppError::MethodNotAllowed);
-        }
-    }
-
-    let requested_path = PathBuf::from(request.path.strip_prefix('/').unwrap_or(&request.path));
-    let safe_path = normalize_path(&requested_path)?;
-    let full_path = base_dir.join(safe_path);
-
-    if !full_path.starts_with(base_dir.as_ref()) {
-        return Err(AppError::Forbidden);
-    }
-
-    if !full_path.exists() {
-        return Err(AppError::NotFound);
-    }
-
-    if full_path.is_dir() {
-        // Only serve directory listings for GET requests
-        if request.method == "POST" {
-            return Err(AppError::MethodNotAllowed);
-        }
-
-        // Create a config from CLI if available
-        let config = _cli_config.map(|cli| crate::config::Config {
-            listen: "127.0.0.1".to_string(),
-            port: 8080,
-            threads: 8,
-            chunk_size: 1024,
-            directory: cli.directory.clone(),
-            enable_upload: cli.enable_upload.unwrap_or(false),
-            max_upload_size: cli.max_upload_size_bytes(),
-            username: cli.username.clone(),
-            password: cli.password.clone(),
-            allowed_extensions: cli
-                .allowed_extensions
-                .as_ref()
-                .unwrap_or(&"*".to_string())
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect(),
-            verbose: cli.verbose.unwrap_or(false),
-            detailed_logging: cli.detailed_logging.unwrap_or(false),
-        });
-
-        let html_content = generate_directory_listing(&full_path, &request.path, config.as_ref())?;
-        Ok(Response {
-            status_code: 200,
-            status_text: "OK".to_string(),
-            headers: {
-                let mut map = HashMap::new();
-                map.insert(
-                    "Content-Type".to_string(),
-                    "text/html; charset=utf-8".to_string(),
-                );
-                map
-            },
-            body: ResponseBody::Text(html_content),
-        })
-    } else if full_path.is_file() {
-        if !allowed_extensions
-            .iter()
-            .any(|p| p.matches_path(&full_path))
-        {
-            return Err(AppError::Forbidden);
-        }
-
-        let file_details = FileDetails::new(full_path.clone(), chunk_size)?;
-        let mime_type = get_mime_type(&full_path);
-        Ok(Response {
-            status_code: 200,
-            status_text: "OK".to_string(),
-            headers: {
-                let mut map = HashMap::new();
-                map.insert("Content-Type".to_string(), mime_type.to_string());
-                map.insert("Content-Length".to_string(), file_details.size.to_string());
-                map.insert("Accept-Ranges".to_string(), "bytes".to_string());
-                map.insert(
-                    "Cache-Control".to_string(),
-                    "public, max-age=3600".to_string(),
-                );
-                map
-            },
-            body: ResponseBody::Stream(file_details),
-        })
-    } else {
-        Err(AppError::NotFound)
-    }
+    // Handle file and directory serving via dedicated handler
+    crate::handlers::handle_file_request(
+        request,
+        base_dir,
+        allowed_extensions,
+        chunk_size,
+        cli_config,
+    )
 }
-
-// Router building moved to handlers.rs
-
-// Authentication moved to middleware
 
 /// Sends a fully formed `Response` to the client with enhanced headers.
 fn send_response(
     stream: &mut TcpStream,
     response: Response,
     log_prefix: &str,
-) -> Result<(), std::io::Error> {
+) -> Result<u64, std::io::Error> {
     info!(
         "{} {} {}",
         log_prefix, response.status_code, response.status_text
@@ -543,23 +438,28 @@ fn send_response(
 
     stream.write_all(response_str.as_bytes())?;
 
-    // Send body
+    // Send body and count only body bytes (exclude headers for stats)
+    let mut body_sent: u64 = 0;
     match response.body {
         ResponseBody::Text(_) | ResponseBody::Binary(_) => {
             stream.write_all(&body_bytes)?;
+            body_sent += body_bytes.len() as u64;
         }
         ResponseBody::Stream(mut file_details) => {
             let mut buffer = vec![0; file_details.chunk_size];
-            while let Ok(bytes_read) = file_details.file.read(&mut buffer) {
+            loop {
+                let bytes_read = file_details.file.read(&mut buffer)?;
                 if bytes_read == 0 {
                     break;
                 }
                 stream.write_all(&buffer[..bytes_read])?;
+                body_sent += bytes_read as u64;
             }
         }
     }
 
-    stream.flush()
+    stream.flush()?;
+    Ok(body_sent)
 }
 
 /// Sends a pre-canned error response using the new response system.

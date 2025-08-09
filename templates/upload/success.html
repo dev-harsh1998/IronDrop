@@ -1,0 +1,104 @@
+<!-- Upload Success Page -->
+<div class="page-header">
+    <h1 class="page-title">✅ Upload Successful!</h1>
+    <p class="page-subtitle">Successfully uploaded {{FILE_COUNT}} file(s)</p>
+</div>
+
+<!-- Success Stats Card -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">📊 Upload Statistics</h2>
+    </div>
+    <div class="card-content">
+        <div class="upload-stats">
+            <div class="stat-item">
+                <span class="stat-label">Files:</span>
+                <span class="stat-value">{{FILE_COUNT}}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Total Size:</span>
+                <span class="stat-value">{{TOTAL_SIZE}}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Processing Time:</span>
+                <span class="stat-value">{{PROCESSING_TIME}} ms</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Uploaded Files Card -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">📁 Uploaded Files</h2>
+    </div>
+    <div class="card-content">
+        <div class="uploaded-files-list">
+            {{FILES_LIST}}
+        </div>
+    </div>
+</div>
+
+<!-- Warnings (if any) -->
+{{WARNINGS}}
+
+<style>
+    .upload-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--space-lg);
+    }
+
+    .stat-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--space-md);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+    }
+
+    .stat-label {
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .stat-value {
+        color: var(--text-accent);
+        font-weight: 600;
+        font-family: var(--font-family);
+    }
+
+    .uploaded-files-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+
+    .uploaded-file-item {
+        padding: var(--space-sm) var(--space-md);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+    }
+
+    .warnings-card {
+        background: rgba(245, 158, 11, 0.1);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: 20px;
+        padding: var(--space-lg);
+        margin-top: var(--space-lg);
+    }
+
+    .warnings-title {
+        color: #f59e0b;
+        font-weight: 600;
+        margin-bottom: var(--space-md);
+    }
+
+    .warnings-list {
+        color: #f59e0b;
+    }
+</style>

@@ -314,7 +314,32 @@ Content-Type: text/plain
 Static asset not found
 ```
 
-### 5. Health and Monitoring
+### 5. Server Monitoring
+
+#### `GET /_irondrop/monitor`
+Displays the comprehensive server monitoring dashboard with real-time metrics.
+
+**Response:**
+```html
+HTTP/1.1 200 OK
+Content-Type: text/html
+
+<!DOCTYPE html>
+<html>
+<!-- Interactive monitoring dashboard -->
+<!-- Includes server status, request statistics, upload metrics -->
+<!-- Auto-refreshes every 5 seconds -->
+</html>
+```
+
+**Features:**
+- Real-time server metrics
+- Request statistics (total, success, errors)
+- Upload statistics (files, sizes, success rates)
+- Performance metrics
+- Live status indicators
+
+### 6. Health and Monitoring
 
 #### `GET /_health`
 Basic health check endpoint.
@@ -362,6 +387,58 @@ Detailed server status and statistics.
 ```
 
 Note: Configuration values reflect effective merged settings after precedence resolution (CLI > INI > defaults). The raw source (e.g., whether a value came from INI or CLI) is not currently exposed.
+
+#### `GET /monitor`
+HTML monitoring dashboard (human-friendly) that auto-refreshes via JavaScript to show live server statistics. Provides request counts, bytes served (downloads), and upload metrics (counts, bytes, success rate, concurrency, average processing time).
+
+**Response (HTML):**
+```http
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html>
+<html>
+  <!-- Embedded dashboard template -->
+</html>
+```
+
+#### `GET /monitor?json=1`
+Machine-readable JSON stats for integration with external monitoring / scripting.
+
+**Response (JSON):**
+```json
+{
+  "requests": {
+    "total": 42,
+    "successful": 40,
+    "errors": 2,
+    "bytes_served": 1048576,
+    "uptime_secs": 360
+  },
+  "downloads": {
+    "bytes_served": 1048576
+  },
+  "uploads": {
+    "total_uploads": 5,
+    "successful_uploads": 5,
+    "failed_uploads": 0,
+    "files_uploaded": 7,
+    "upload_bytes": 5242880,
+    "average_upload_size": 748982,
+    "largest_upload": 2097152,
+    "concurrent_uploads": 0,
+    "average_processing_time": 152.4,
+    "success_rate": 100.0
+  }
+}
+```
+
+**Notes:**
+- `bytes_served` counts only response body bytes (excludes headers).
+- `average_processing_time` is the rolling average (last 100 uploads).
+- All counters are cumulative since server start.
+
+**Planned Extensions (future versions):** active connections, per-endpoint metrics, Prometheus format.
 
 ### 6. API Information
 

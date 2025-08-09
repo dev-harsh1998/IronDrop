@@ -79,9 +79,18 @@ pub fn register_internal_routes(
             }),
         );
     }
+
+    // Monitor endpoint (server metrics)
+    if let Some(stats_arc) = stats {
+        router.register_exact(
+            "GET",
+            "/_irondrop/monitor",
+            Box::new(move |req: &Request| handle_monitor_request(req, Some(stats_arc.as_ref()))),
+        );
+    }
 }
 
-fn create_health_check_response() -> Response {
+pub fn create_health_check_response() -> Response {
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -120,7 +129,7 @@ fn create_health_check_response() -> Response {
     }
 }
 
-fn handle_static_asset(path: &str) -> Result<Response, AppError> {
+pub fn handle_static_asset(path: &str) -> Result<Response, AppError> {
     use crate::templates::TemplateEngine;
     let asset_path = path.strip_prefix("/_irondrop/static/").unwrap_or("");
     let engine = TemplateEngine::new();
@@ -143,7 +152,7 @@ fn handle_static_asset(path: &str) -> Result<Response, AppError> {
     })
 }
 
-fn handle_favicon_request(path: &str) -> Result<Response, AppError> {
+pub fn handle_favicon_request(path: &str) -> Result<Response, AppError> {
     use crate::templates::TemplateEngine;
     let favicon_path = path.strip_prefix('/').unwrap_or(path);
     let engine = TemplateEngine::new();
@@ -188,7 +197,7 @@ fn handle_logo_request() -> Result<Response, AppError> {
     })
 }
 
-fn handle_upload_form_request(
+pub fn handle_upload_form_request(
     request: &Request,
     cli_config: Option<&crate::cli::Cli>,
     _base_dir: Option<&std::path::PathBuf>,
@@ -223,7 +232,7 @@ fn handle_upload_form_request(
     })
 }
 
-fn handle_upload_request(
+pub fn handle_upload_request(
     request: &Request,
     cli_config: Option<&crate::cli::Cli>,
     stats: Option<&crate::server::ServerStats>,
@@ -263,4 +272,212 @@ fn handle_upload_request(
         headers,
         body,
     })
+}
+
+pub fn handle_monitor_request(
+    request: &Request,
+    stats: Option<&crate::server::ServerStats>,
+) -> Result<Response, AppError> {
+    // Check if JSON response is requested
+    if request.path.contains("json=1") {
+        return Ok(create_monitor_json(stats));
+    }
+
+    // Return HTML response
+    let engine = crate::templates::TemplateEngine::new();
+    match engine.render_monitor_page() {
+        Ok(html) => Ok(Response {
+            status_code: 200,
+            status_text: "OK".into(),
+            headers: {
+                let mut h = HashMap::new();
+                h.insert("Content-Type".into(), "text/html; charset=utf-8".into());
+                h.insert("Cache-Control".into(), "no-cache".into());
+                h
+            },
+            body: ResponseBody::Text(html),
+        }),
+        Err(_) => {
+            // Fallback to JSON if HTML rendering fails
+            Ok(create_monitor_json(stats))
+        }
+    }
+}
+
+fn create_monitor_json(stats: Option<&crate::server::ServerStats>) -> Response {
+    if let Some(s) = stats {
+        let (total, successful, errors, bytes, uptime) = s.get_stats();
+        let up = s.get_upload_stats();
+        let json = format!(
+            r#"{{"requests":{{"total":{total},"successful":{successful},"errors":{errors}}},"downloads":{{"bytes_served":{bytes}}},"uptime_secs":{},"uploads":{{"total_uploads":{},"successful_uploads":{},"failed_uploads":{},"files_uploaded":{},"upload_bytes":{},"average_upload_size":{},"largest_upload":{},"concurrent_uploads":{},"average_processing_ms":{:.2},"success_rate":{:.2}}}}}"#,
+            uptime.as_secs(),
+            up.total_uploads,
+            up.successful_uploads,
+            up.failed_uploads,
+            up.files_uploaded,
+            up.upload_bytes,
+            up.average_upload_size,
+            up.largest_upload,
+            up.concurrent_uploads,
+            up.average_processing_time,
+            up.success_rate
+        );
+        return Response {
+            status_code: 200,
+            status_text: "OK".into(),
+            headers: {
+                let mut h = HashMap::new();
+                h.insert("Content-Type".into(), "application/json".into());
+                h.insert("Cache-Control".into(), "no-cache".into());
+                h
+            },
+            body: ResponseBody::Text(json),
+        };
+    }
+    Response {
+        status_code: 503,
+        status_text: "Service Unavailable".into(),
+        headers: {
+            let mut h = HashMap::new();
+            h.insert("Content-Type".into(), "application/json".into());
+            h
+        },
+        body: ResponseBody::Text("{\"error\":\"stats unavailable\"}".into()),
+    }
+}
+
+/// Handle file and directory serving requests
+/// This moves the file serving logic from http.rs to handlers.rs for better separation of concerns
+pub fn handle_file_request(
+    request: &Request,
+    base_dir: &std::path::PathBuf,
+    allowed_extensions: &[glob::Pattern],
+    chunk_size: usize,
+    cli_config: Option<&crate::cli::Cli>,
+) -> Result<Response, AppError> {
+    use crate::fs::{generate_directory_listing, FileDetails};
+    use crate::response::get_mime_type;
+    use log::debug;
+    use std::path::PathBuf;
+
+    // Handle different methods appropriately
+    match request.method.as_str() {
+        "GET" => {
+            // GET requests are handled normally
+        }
+        "POST" => {
+            // For now, POST requests are only accepted but not fully implemented
+            // In a real implementation, this would handle file uploads
+            // For the current implementation, we'll allow POST but treat it like GET for basic functionality
+            debug!("POST request received, treating as GET for basic functionality");
+        }
+        _ => {
+            return Err(AppError::MethodNotAllowed);
+        }
+    }
+
+    let requested_path = PathBuf::from(request.path.strip_prefix('/').unwrap_or(&request.path));
+    let safe_path = normalize_path(&requested_path)?;
+    let full_path = base_dir.join(safe_path);
+
+    if !full_path.starts_with(base_dir) {
+        return Err(AppError::Forbidden);
+    }
+
+    if !full_path.exists() {
+        return Err(AppError::NotFound);
+    }
+
+    if full_path.is_dir() {
+        // Only serve directory listings for GET requests
+        if request.method == "POST" {
+            return Err(AppError::MethodNotAllowed);
+        }
+
+        // Create a config from CLI if available
+        let config = cli_config.map(|cli| crate::config::Config {
+            listen: "127.0.0.1".to_string(),
+            port: 8080,
+            threads: 8,
+            chunk_size: 1024,
+            directory: cli.directory.clone(),
+            enable_upload: cli.enable_upload.unwrap_or(false),
+            max_upload_size: cli.max_upload_size_bytes(),
+            username: cli.username.clone(),
+            password: cli.password.clone(),
+            allowed_extensions: cli
+                .allowed_extensions
+                .as_ref()
+                .unwrap_or(&"*".to_string())
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect(),
+            verbose: cli.verbose.unwrap_or(false),
+            detailed_logging: cli.detailed_logging.unwrap_or(false),
+        });
+
+        let html_content = generate_directory_listing(&full_path, &request.path, config.as_ref())?;
+        Ok(Response {
+            status_code: 200,
+            status_text: "OK".to_string(),
+            headers: {
+                let mut map = HashMap::new();
+                map.insert(
+                    "Content-Type".to_string(),
+                    "text/html; charset=utf-8".to_string(),
+                );
+                map
+            },
+            body: ResponseBody::Text(html_content),
+        })
+    } else if full_path.is_file() {
+        if !allowed_extensions
+            .iter()
+            .any(|p| p.matches_path(&full_path))
+        {
+            return Err(AppError::Forbidden);
+        }
+
+        let file_details = FileDetails::new(full_path.clone(), chunk_size)?;
+        let mime_type = get_mime_type(&full_path);
+        Ok(Response {
+            status_code: 200,
+            status_text: "OK".to_string(),
+            headers: {
+                let mut map = HashMap::new();
+                map.insert("Content-Type".to_string(), mime_type.to_string());
+                map.insert("Content-Length".to_string(), file_details.size.to_string());
+                map.insert("Accept-Ranges".to_string(), "bytes".to_string());
+                map.insert(
+                    "Cache-Control".to_string(),
+                    "public, max-age=3600".to_string(),
+                );
+                map
+            },
+            body: ResponseBody::Stream(file_details),
+        })
+    } else {
+        Err(AppError::NotFound)
+    }
+}
+
+/// A safe, manual path normalization function.
+fn normalize_path(path: &std::path::Path) -> Result<std::path::PathBuf, AppError> {
+    use std::path::Component;
+
+    let mut components = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(name) => {
+                components.push(name);
+            }
+            Component::ParentDir => {
+                if components.pop().is_none() {
+                    return Err(AppError::Forbidden);
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(components.iter().collect())
 }

@@ -223,11 +223,15 @@ fn test_enhanced_directory_listing() {
 
     // Check for modular template structure
     assert!(
-        response.body.contains("/_irondrop/static/directory/styles.css"),
+        response
+            .body
+            .contains("/_irondrop/static/directory/styles.css"),
         "Should link to external CSS"
     );
     assert!(
-        response.body.contains("/_irondrop/static/directory/script.js"),
+        response
+            .body
+            .contains("/_irondrop/static/directory/script.js"),
         "Should link to external JS"
     );
     assert!(
@@ -266,7 +270,7 @@ fn test_beautiful_error_pages() {
         "Should link to external error JS"
     );
     assert!(
-        response.body.contains("class=\"error-container\""),
+        response.body.contains("error-container"),
         "Should use proper error CSS classes"
     );
 
@@ -280,7 +284,10 @@ fn test_static_asset_serving() {
     let server = TestServer::new(None, None);
 
     // Test CSS file serving
-    let css_url = format!("http://{}/_irondrop/static/directory/styles.css", server.addr);
+    let css_url = format!(
+        "http://{}/_irondrop/static/directory/styles.css",
+        server.addr
+    );
     let css_response = HttpClient::get(&css_url);
 
     assert_eq!(css_response.status_code, 200);
@@ -301,7 +308,10 @@ fn test_static_asset_serving() {
     );
 
     // Test JS file serving
-    let js_url = format!("http://{}/_irondrop/static/directory/script.js", server.addr);
+    let js_url = format!(
+        "http://{}/_irondrop/static/directory/script.js",
+        server.addr
+    );
     let js_response = HttpClient::get(&js_url);
 
     assert_eq!(js_response.status_code, 200);

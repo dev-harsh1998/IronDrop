@@ -732,9 +732,6 @@ fn handle_client_with_stats(
     router: &Arc<crate::router::Router>,
 ) -> Result<(), AppError> {
     let start = Instant::now();
-    let bytes_sent = 0u64;
-
-    // Use existing handle_client but with error tracking
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         handle_client(
             stream,
@@ -752,8 +749,10 @@ fn handle_client_with_stats(
     let success = result.is_ok();
     let processing_time = start.elapsed();
 
-    // Record statistics
-    stats.record_request(success, bytes_sent);
+    // On panic, record failure (normal success/failure & bytes recorded in handle_client)
+    if !success {
+        stats.record_request(false, 0);
+    }
 
     if processing_time > Duration::from_millis(1000) {
         warn!(

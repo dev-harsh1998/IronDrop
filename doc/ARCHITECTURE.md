@@ -60,6 +60,7 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
 ### 5. **Support Systems**
 - **`error.rs`**: Custom error types and error handling
 - **`utils.rs`**: Utility functions and helper methods
+ - **Monitoring (integrated)**: `/monitor` endpoint (HTML + JSON) implemented inside `http.rs` using `ServerStats` from `server.rs`.
 
 ## Request Processing Flow
 
@@ -204,6 +205,7 @@ Order of resolution (highest first):
    - Comprehensive request logging with unique IDs
    - Performance metrics collection and statistics
    - Health check endpoints (`/_health`, `/_status`)
+   - Unified monitoring dashboard (`/monitor`, `/monitor?json=1`)
    - Error tracking and security event logging
 
 ### Security Features by Component

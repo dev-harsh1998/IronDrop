@@ -49,6 +49,7 @@ use crate::error::AppError;
 use crate::http::Request;
 use crate::multipart::{MultipartConfig, MultipartParser};
 use crate::response::{get_mime_type, HttpResponse};
+use crate::templates::TemplateEngine;
 use glob::Pattern;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
@@ -749,64 +750,22 @@ impl UploadHandler {
                 .join("\n");
 
             format!(
-                r#"
-                <div class="warnings">
+                r#"<div class="warnings">
                     <h3>⚠️ Warnings</h3>
                     <ul>{warnings_list}</ul>
-                </div>
-            "#
+                </div>"#
             )
         };
 
-        let response_body = format!(
-            r#"<!DOCTYPE html>
-<html>
-<head>
-    <title>Upload Complete - IronDrop</title>
-    <meta charset="utf-8">
-    <style>
-        body {{ background: #1e293b; color: #f1f5f9; font-family: sans-serif; padding: 2rem; }}
-        .container {{ max-width: 800px; margin: 0 auto; }}
-        .success {{ background: #10b981; color: white; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }}
-        .stats {{ background: #374151; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; }}
-        .warnings {{ background: #f59e0b; color: #1f2937; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; }}
-        ul {{ list-style-type: none; padding-left: 0; }}
-        li {{ padding: 0.25rem 0; }}
-        a {{ color: #60a5fa; text-decoration: none; }}
-        a:hover {{ text-decoration: underline; }}
-        .back-link {{ display: inline-block; margin-top: 1rem; background: #3b82f6; color: white; padding: 0.5rem 1rem; border-radius: 0.25rem; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="success">
-            <h1>✅ Upload Successful!</h1>
-            <p>Successfully uploaded {} file(s)</p>
-        </div>
-        
-        <h2>📁 Uploaded Files</h2>
-        <ul>{}</ul>
-        
-        <div class="stats">
-            <h3>📊 Upload Statistics</h3>
-            <p><strong>Files:</strong> {}</p>
-            <p><strong>Total Size:</strong> {}</p>
-            <p><strong>Processing Time:</strong> {} ms</p>
-        </div>
-        
-        {}
-        
-        <a href="/" class="back-link">← Back to Files</a>
-    </div>
-</body>
-</html>"#,
+        // Use the template engine instead of inline HTML
+        let template_engine = TemplateEngine::new();
+        let response_body = template_engine.render_upload_success(
             result.uploaded_files.len(),
-            files_list,
-            result.uploaded_files.len(),
-            format_bytes(result.total_bytes),
+            &format_bytes(result.total_bytes),
             result.processing_time_ms,
-            warnings_html
-        );
+            &files_list,
+            &warnings_html,
+        )?;
 
         Ok(HttpResponse::new(200, "OK").with_html_body(response_body))
     }

@@ -2,11 +2,12 @@
 <div class="inline-upload collapsed">
     <div class="upload-toggle">
         <h3>Upload Files</h3>
-        <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6,9 12,15 18,9"/>
+        <svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <polyline points="6,9 12,15 18,9" />
         </svg>
     </div>
-    
+
     <div class="upload-form">
         <form method="post" enctype="multipart/form-data">
             <div class="form-row">
@@ -14,17 +15,18 @@
                     <label class="form-label" for="upload-files">Select Files</label>
                     <input type="file" id="upload-files" name="file" multiple class="form-input" accept="*/*">
                 </div>
-                <button type="submit" class="upload-button" disabled>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem;">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="17,8 12,3 7,8"/>
-                        <line x1="12" y1="3" x2="12" y2="15"/>
+                <button type="submit" class="btn btn-light" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        style="margin-right: 0.5rem;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17,8 12,3 7,8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
                     Upload Files
                 </button>
             </div>
         </form>
-        
+
         <div class="upload-info">
             <p class="upload-limit">Drag and drop files or use the file selector above</p>
             <p class="upload-types">Maximum 10GB per file • All file types supported</p>

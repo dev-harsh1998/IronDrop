@@ -11,6 +11,7 @@ const BASE_HTML: &str = include_str!("../templates/common/base.html");
 const DIRECTORY_CONTENT_HTML: &str = include_str!("../templates/directory/content.html");
 const ERROR_CONTENT_HTML: &str = include_str!("../templates/error/content.html");
 const UPLOAD_CONTENT_HTML: &str = include_str!("../templates/upload/content.html");
+const UPLOAD_SUCCESS_HTML: &str = include_str!("../templates/upload/success.html");
 
 // CSS and JS assets
 const DIRECTORY_STYLES_CSS: &str = include_str!("../templates/directory/styles.css");
@@ -20,6 +21,11 @@ const ERROR_SCRIPT_JS: &str = include_str!("../templates/error/script.js");
 const UPLOAD_STYLES_CSS: &str = include_str!("../templates/upload/styles.css");
 const UPLOAD_SCRIPT_JS: &str = include_str!("../templates/upload/script.js");
 const UPLOAD_FORM_HTML: &str = include_str!("../templates/upload/form.html");
+
+// Monitor templates
+const MONITOR_CONTENT_HTML: &str = include_str!("../templates/monitor/content.html");
+const MONITOR_STYLES_CSS: &str = include_str!("../templates/monitor/styles.css");
+const MONITOR_SCRIPT_JS: &str = include_str!("../templates/monitor/script.js");
 
 // Common base styles
 const BASE_CSS: &str = include_str!("../templates/common/base.css");
@@ -59,22 +65,38 @@ impl TemplateEngine {
         templates.insert("base".to_string(), BASE_HTML.to_string());
 
         // Load content templates
-        templates.insert("directory_content".to_string(), DIRECTORY_CONTENT_HTML.to_string());
+        templates.insert(
+            "directory_content".to_string(),
+            DIRECTORY_CONTENT_HTML.to_string(),
+        );
         templates.insert("error_content".to_string(), ERROR_CONTENT_HTML.to_string());
-        templates.insert("upload_content".to_string(), UPLOAD_CONTENT_HTML.to_string());
+        templates.insert(
+            "upload_content".to_string(),
+            UPLOAD_CONTENT_HTML.to_string(),
+        );
+        templates.insert(
+            "upload_success".to_string(),
+            UPLOAD_SUCCESS_HTML.to_string(),
+        );
         templates.insert("upload_form".to_string(), UPLOAD_FORM_HTML.to_string());
+        templates.insert(
+            "monitor_content".to_string(),
+            MONITOR_CONTENT_HTML.to_string(),
+        );
 
         Self { templates }
     }
 
     /// Get appropriate icon SVG based on file extension
     fn get_file_icon(filename: &str) -> &'static str {
-        let extension = filename.split('.').last().unwrap_or("").to_lowercase();
+        let extension = filename.split('.').next_back().unwrap_or("").to_lowercase();
         match extension.as_str() {
             // Archive formats
             "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" | "xz" => ZIP_ICON_SVG,
             // Image formats
-            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "svg" | "ico" | "tiff" => IMAGE_ICON_SVG,
+            "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "svg" | "ico" | "tiff" => {
+                IMAGE_ICON_SVG
+            }
             // Video formats
             "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" | "webm" | "m4v" => VIDEO_ICON_SVG,
             // Default file icon
@@ -102,6 +124,9 @@ impl TemplateEngine {
             // Upload assets
             "upload/styles.css" => Some((UPLOAD_STYLES_CSS, "text/css")),
             "upload/script.js" => Some((UPLOAD_SCRIPT_JS, "application/javascript")),
+            // Monitor assets
+            "monitor/styles.css" => Some((MONITOR_STYLES_CSS, "text/css")),
+            "monitor/script.js" => Some((MONITOR_SCRIPT_JS, "application/javascript")),
             _ => None,
         }
     }
@@ -153,22 +178,35 @@ impl TemplateEngine {
         let page_title = if raw_path == "/" || raw_path.is_empty() {
             "Root".to_string()
         } else {
-            raw_path.trim_start_matches('/').trim_end_matches('/').to_string()
+            raw_path
+                .trim_start_matches('/')
+                .trim_end_matches('/')
+                .to_string()
         };
-        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/directory/styles.css">"#;
+        let page_styles =
+            r#"<link rel="stylesheet" href="/_irondrop/static/directory/styles.css">"#;
         let page_scripts = r#"<script src="/_irondrop/static/directory/script.js"></script>"#;
-        
+
         // Build header actions based on upload status
-        let header_actions = if variables.get("UPLOAD_ENABLED").map(|v| v == "true").unwrap_or(false) {
-            let suffix = variables.get("QUERY_UPLOAD_SUFFIX").unwrap_or(&String::new()).clone();
-            format!(r#"<a href="/_irondrop/upload{}" class="btn btn-primary">
+        let header_actions = if variables
+            .get("UPLOAD_ENABLED")
+            .map(|v| v == "true")
+            .unwrap_or(false)
+        {
+            let suffix = variables
+                .get("QUERY_UPLOAD_SUFFIX")
+                .unwrap_or(&String::new())
+                .clone();
+            format!(
+                r#"<a href="/_irondrop/upload{suffix}" class="btn btn-light">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="17,8 12,3 7,8" />
                         <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
                     Upload Files
-                </a>"#, suffix)
+                </a>"#
+            )
         } else {
             String::new()
         };
@@ -179,12 +217,19 @@ impl TemplateEngine {
         } else {
             raw_path.trim_end_matches('/').to_string()
         };
-        
+
         // Create a mutable copy of variables and add the display title
         let mut enhanced_variables = variables.clone();
         enhanced_variables.insert("DISPLAY_TITLE".to_string(), display_title);
 
-        self.render_page("directory_content", &page_title, page_styles, page_scripts, &header_actions, &enhanced_variables)
+        self.render_page(
+            "directory_content",
+            &page_title,
+            page_styles,
+            page_scripts,
+            &header_actions,
+            &enhanced_variables,
+        )
     }
 
     /// Helper method to render error page
@@ -197,44 +242,68 @@ impl TemplateEngine {
         let mut variables = HashMap::new();
         variables.insert("ERROR_CODE".to_string(), error_code.to_string());
         variables.insert("ERROR_MESSAGE".to_string(), error_message.to_string());
-        variables.insert("ERROR_DESCRIPTION".to_string(), error_description.to_string());
-        
+        variables.insert(
+            "ERROR_DESCRIPTION".to_string(),
+            error_description.to_string(),
+        );
+
         // Generate request ID and timestamp
-        let request_id = format!("req_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
-        let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
+        let request_id = format!(
+            "req_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+        );
+        let timestamp = chrono::Utc::now()
+            .format("%Y-%m-%d %H:%M:%S UTC")
+            .to_string();
         variables.insert("REQUEST_ID".to_string(), request_id);
         variables.insert("TIMESTAMP".to_string(), timestamp);
 
-        let page_title = format!("{} {}", error_code, error_message);
+        let page_title = format!("{error_code} {error_message}");
         let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/error/styles.css">"#;
         let page_scripts = r#"<script src="/_irondrop/static/error/script.js"></script>"#;
         let header_actions = ""; // No actions on error page
 
-        self.render_page("error_content", &page_title, page_styles, page_scripts, header_actions, &variables)
+        self.render_page(
+            "error_content",
+            &page_title,
+            page_styles,
+            page_scripts,
+            header_actions,
+            &variables,
+        )
     }
 
     /// Helper method to render upload page
-    pub fn render_upload_page_new(
-        &self,
-        path: &str,
-    ) -> Result<String, AppError> {
+    pub fn render_upload_page_new(&self, path: &str) -> Result<String, AppError> {
         let mut variables = HashMap::new();
         variables.insert("PATH".to_string(), path.to_string());
 
-        let page_title = format!("Upload to {}", path);
+        let page_title = format!("Upload to {path}");
         let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/upload/styles.css">"#;
         let page_scripts = r#"<script src="/_irondrop/static/upload/script.js"></script>"#;
-        
+
         // Header action is back to directory
-        let header_actions = format!(r#"<a href="{}" class="btn btn-secondary" id="backToDir">
+        let header_actions = format!(
+            r#"<a href="{path}" class="btn btn-light" id="backToDir">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="m12 19-7-7 7-7" />
                         <path d="m19 12H5" />
                     </svg>
                     Back to Directory
-                </a>"#, path);
+                </a>"#
+        );
 
-        self.render_page("upload_content", &page_title, page_styles, page_scripts, &header_actions, &variables)
+        self.render_page(
+            "upload_content",
+            &page_title,
+            page_styles,
+            page_scripts,
+            &header_actions,
+            &variables,
+        )
     }
 
     /// Render a template with variables, supporting conditionals
@@ -329,20 +398,19 @@ impl TemplateEngine {
 
         // Generate entries HTML
         let mut entries_html = String::new();
-        
+
         // Add parent directory link if not at root (as table row)
         if path != "/" && !path.is_empty() {
             entries_html.push_str(&format!(
                 r#"<tr>
                     <td>
                         <a href="../" class="file-link">
-                            <span class="file-type directory">{}</span>
+                            <span class="file-type directory">{BACK_ICON_SVG}</span>
                             <span class="name">Back</span>
                         </a>
                     </td>
                     <td class="size" colspan="2"></td>
-                </tr>"#,
-                BACK_ICON_SVG
+                </tr>"#
             ));
         }
 
@@ -404,9 +472,59 @@ impl TemplateEngine {
         self.render_upload_page_new(path)
     }
 
+    /// Render monitor page using the base template system
+    pub fn render_monitor_page(&self) -> Result<String, AppError> {
+        let page_title = "Monitor";
+        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/monitor/styles.css">"#;
+        let page_scripts = r#"<script src="/_irondrop/static/monitor/script.js"></script>"#;
+        let header_actions = r#"<a href="/" class="btn btn-light">← Back to Files</a>"#;
+
+        let variables = HashMap::new();
+
+        self.render_page(
+            "monitor_content",
+            page_title,
+            page_styles,
+            page_scripts,
+            header_actions,
+            &variables,
+        )
+    }
+
     /// Get upload form component HTML
     pub fn get_upload_form(&self) -> Result<String, AppError> {
         self.render("upload_form", &HashMap::new())
+    }
+
+    /// Render upload success page
+    pub fn render_upload_success(
+        &self,
+        file_count: usize,
+        total_size: &str,
+        processing_time: u64,
+        files_list: &str,
+        warnings: &str,
+    ) -> Result<String, AppError> {
+        let page_title = "Upload Successful";
+        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/upload/styles.css">"#;
+        let page_scripts = "";
+        let header_actions = r#"<a href="/" class="btn btn-light">← Back to Files</a>"#;
+
+        let mut variables = HashMap::new();
+        variables.insert("FILE_COUNT".to_string(), file_count.to_string());
+        variables.insert("TOTAL_SIZE".to_string(), total_size.to_string());
+        variables.insert("PROCESSING_TIME".to_string(), processing_time.to_string());
+        variables.insert("FILES_LIST".to_string(), files_list.to_string());
+        variables.insert("WARNINGS".to_string(), warnings.to_string());
+
+        self.render_page(
+            "upload_success",
+            page_title,
+            page_styles,
+            page_scripts,
+            header_actions,
+            &variables,
+        )
     }
 }
 

@@ -32,10 +32,15 @@
     --gradient-primary: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
     --gradient-accent: linear-gradient(135deg, var(--text-accent), #cccccc);
 
-    /* Shadows */
-    --shadow: 0 25px 35px -5px rgba(0, 0, 0, 0.8), 0 15px 15px -5px rgba(0, 0, 0, 0.5);
-    --shadow-hover: 0 8px 20px -5px rgba(255, 255, 255, 0.15);
-    --shadow-button: 0 4px 12px rgba(255, 255, 255, 0.2);
+    /* Shadows - Even More Minimal */
+    --shadow-minimal: 0 1px 2px rgba(0, 0, 0, 0.02);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-hover: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow-button: 0 1px 2px rgba(0, 0, 0, 0.03);
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.03);
+
+    /* Additional solid color variables */
+    --border-hover: #555555;
 
     /* Typography */
     --font-family: 'Fira Code', 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
@@ -55,9 +60,10 @@
     --radius-lg: 16px;
     --radius-xl: 24px;
 
-    /* Transitions */
-    --transition-fast: 0.2s ease;
-    --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Transitions - Very Subtle */
+    --transition-fast: 0.15s ease;
+    --transition-smooth: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-subtle: 0.1s ease;
 }
 
 /* Reset */
@@ -199,6 +205,21 @@ body::before {
     backdrop-filter: blur(10px);
 }
 
+/* Light Button (improved styling with dark shadows) */
+.btn-light {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.btn-light:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
 .btn-primary {
     background: var(--gradient-accent);
     color: var(--bg-primary);
@@ -206,8 +227,23 @@ body::before {
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+}
+
+/* Light Button (improved styling with dark shadows) */
+.btn-light {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.btn-light:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .btn-secondary {
@@ -217,11 +253,8 @@ body::before {
 }
 
 .btn-secondary:hover {
-    background: var(--hover-bg);
-    color: var(--text-accent);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     box-shadow: var(--shadow-hover);
-    text-shadow: 0 2px 4px rgba(255, 255, 255, 0.2);
 }
 
 .btn-ghost {
@@ -231,8 +264,8 @@ body::before {
 }
 
 .btn-ghost:hover {
-    background: var(--hover-bg);
-    color: var(--text-primary);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-card);
 }
 
 /* Icon Buttons */
@@ -243,41 +276,76 @@ body::before {
     justify-content: center;
 }
 
-/* Card Components */
+/* Card Components - Updated to maintain upload card aesthetic */
 .card {
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px);
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-    box-shadow: var(--shadow);
+    border-radius: 20px;
+    /* Keep the nice rounded corners like upload */
+    padding: var(--space-lg);
+    box-shadow: var(--shadow-minimal);
+    transition: var(--transition-smooth);
     position: relative;
+    overflow: hidden;
 }
 
-.card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+.card:hover {
+    box-shadow: var(--shadow);
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+    /* Subtle lift */
 }
 
 .card-header {
-    padding: var(--space-xl);
+    padding: var(--space-lg) var(--space-lg) var(--space-md);
     border-bottom: 1px solid var(--border);
-    background: var(--bg-tertiary);
+    background: transparent;
+    /* Remove background for cleaner look */
+}
+
+.card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.card-subtitle {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin: var(--space-xs) 0 0 0;
 }
 
 .card-content {
-    padding: var(--space-xl);
+    padding: var(--space-lg);
+    color: var(--text-primary);
 }
 
 .card-footer {
-    padding: var(--space-lg) var(--space-xl);
+    padding: var(--space-md) var(--space-lg) var(--space-lg);
     border-top: 1px solid var(--border);
+    background: transparent;
+    /* Remove background for cleaner look */
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-md);
+}
+
+/* Simple card variant (no padding adjustments) */
+.card-simple {
     background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-minimal);
+    transition: var(--transition-smooth);
+    position: relative;
+    overflow: hidden;
+}
+
+.card-simple:hover {
+    box-shadow: var(--shadow);
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
 }
 
 /* Form Components */
@@ -310,14 +378,20 @@ body::before {
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
 }
 
-/* Table Styles */
+/* Table Styles - Updated with minimal shadows */
 .table-container {
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px);
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
+    border-radius: 20px;
+    /* Match card radius */
     overflow: hidden;
+    box-shadow: var(--shadow-minimal);
+    transition: var(--transition-smooth);
+}
+
+.table-container:hover {
     box-shadow: var(--shadow);
+    border-color: var(--border-hover);
 }
 
 .table {
@@ -334,7 +408,8 @@ body::before {
     text-transform: uppercase;
     letter-spacing: 0.1em;
     position: relative;
-    border-right: 2px solid var(--table-border);
+    border-right: 1px solid var(--table-border);
+    /* Thinner border */
     box-shadow: inset 0 -1px 0 var(--border);
 }
 
@@ -348,8 +423,11 @@ body::before {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 2px;
+    height: 1px;
+    /* Thinner accent line */
     background: linear-gradient(90deg, transparent, var(--text-accent), transparent);
+    opacity: 0.3;
+    /* More subtle */
 }
 
 .table td {
@@ -371,19 +449,25 @@ body::before {
 .table tbody tr:hover td {
     background: var(--hover-bg);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    /* More subtle */
+    box-shadow: var(--shadow-minimal);
+    /* Minimal shadow */
 }
 
 .table tbody tr:last-child td {
     border-bottom: none;
 }
 
-/* Footer */
+/* Footer - Consistent with design system */
 .app-footer {
     margin-top: var(--space-2xl);
-    padding-top: var(--space-xl);
+    padding: var(--space-xl) var(--space-lg);
     border-top: 1px solid var(--border);
     text-align: center;
+    background: var(--bg-secondary);
+    border-radius: 20px 20px 0 0;
+    /* Match card styling */
+    box-shadow: var(--shadow-minimal);
 }
 
 .footer-info {
@@ -396,6 +480,7 @@ body::before {
 
 .app-footer:hover .footer-info {
     opacity: 1;
+    color: var(--text-secondary);
 }
 
 /* Utility Classes */

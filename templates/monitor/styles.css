@@ -1,0 +1,132 @@
+/* Monitor Page Specific Styles - Extends Base */
+
+/* Monitor Status - Uses base card class + status-specific styling */
+.monitor-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-xl);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.status-text {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.last-updated {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* Metrics Grid Layout */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: var(--space-xl);
+    margin-bottom: var(--space-2xl);
+}
+
+/* Metric Cards - Uses base card class + metric-specific styling */
+.metric-card {
+    text-align: center;
+    padding: var(--space-2xl);
+    opacity: 0;
+    animation: fadeIn 0.5s ease forwards;
+}
+
+.metric-title {
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    margin-bottom: var(--space-xl);
+    font-weight: 600;
+}
+
+.metric-info {
+    background: var(--bg-glass);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-md) var(--space-lg);
+    font-family: var(--font-family);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    backdrop-filter: blur(10px);
+    text-align: left;
+    line-height: 1.8;
+}
+
+.metric-info div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-xs) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metric-info div:last-child {
+    border-bottom: none;
+}
+
+.metric-info span {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
+
+/* Status Animation */
+@keyframes pulse-subtle {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.status-indicator.refreshing {
+    animation: pulse-subtle 1.5s ease-in-out infinite;
+}
+
+/* Loading States */
+.loading-data .metric-card {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .metrics-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-lg);
+    }
+
+    .metric-card {
+        padding: var(--space-xl);
+        margin: var(--space-sm);
+    }
+
+    .monitor-status {
+        flex-direction: column;
+        gap: var(--space-sm);
+        text-align: center;
+        padding: var(--space-md);
+    }
+
+    .metric-title {
+        font-size: 1.25rem;
+    }
+}

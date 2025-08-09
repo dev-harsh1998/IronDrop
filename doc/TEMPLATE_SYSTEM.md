@@ -1,10 +1,10 @@
 # IronDrop Template & UI System Documentation (v2.5)
 
-**Status**: ✅ Production Ready (v2.5)
+**Status**: ✅ Production Ready (v2.5) - Updated with Light Button System & Card Unification
 
 **Audience**: Backend & Frontend Developers, UI/UX Engineers, Integrators
 
-**Purpose**: Explain the native template engine, variable & conditional system, modular asset architecture, customization points, security model, and performance characteristics.
+**Purpose**: Explain the native template engine, variable & conditional system, modular asset architecture, card-based UI components, light button system, customization points, security model, and performance characteristics.
 
 ---
 
@@ -202,12 +202,35 @@ Primary design tokens live in `templates/common/base.css` and influence all page
   --text-primary: #e5e5e5;
   --text-secondary: #b0b0b0;
   --accent: #ffffff;
-  --radius-sm: 4px;
-  --radius-md: 8px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
   --radius-lg: 16px;
+  --shadow-minimal: 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   /* ... */
 }
 ```
+
+### UI Component System
+The design system is built around reusable components:
+
+#### Button Classes
+- `.btn-light` - Primary button style with light appearance and dark shadows
+- `.btn-primary` - Accent gradient buttons for primary actions
+- `.btn-secondary` - Secondary action buttons with glass effect
+- `.btn-ghost` - Minimal transparent buttons
+
+#### Card Components
+All card-like elements use the base `.card` class for consistency:
+- Error pages: `<div class="card error-container">`
+- Monitor metrics: `<div class="card metric-card">`
+- Upload areas: `<div class="card">`
+
+This ensures uniform styling with:
+- 20px border radius
+- Consistent hover effects (`translateY(-1px)`)
+- Unified shadow system
+- Responsive behavior
 
 Customization Steps:
 1. Adjust global tokens in `base.css` (preferred – cascades across modules)

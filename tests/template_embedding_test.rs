@@ -39,11 +39,8 @@ fn test_embedded_templates_functionality() {
     );
 
     // Test error page template rendering
-    let error_result = engine.render_error_page_new(
-        404,
-        "Not Found", 
-        "The requested resource was not found."
-    );
+    let error_result =
+        engine.render_error_page_new(404, "Not Found", "The requested resource was not found.");
     assert!(
         error_result.is_ok(),
         "Error template should render successfully"
@@ -137,7 +134,8 @@ fn test_directory_listing_rendering() {
         ),
     ];
 
-    let result = engine.render_directory_listing("/downloads", &test_entries, 3, false, "/downloads");
+    let result =
+        engine.render_directory_listing("/downloads", &test_entries, 3, false, "/downloads");
     assert!(
         result.is_ok(),
         "Directory listing should render successfully"
