@@ -15,10 +15,8 @@ use std::time::{Duration, Instant};
 
 #[cfg(target_os = "linux")]
 use std::fs;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::mem;
-#[cfg(target_os = "windows")]
-use std::ptr;
 
 /// Rate limiter for basic DoS protection
 #[derive(Clone)]
