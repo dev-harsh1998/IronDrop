@@ -610,11 +610,11 @@ impl UltraLowMemoryIndex {
             return Ok(());
         }
 
-        // Check memory usage (strict limit for <100MB target)
+        // Check memory usage (limit for large directories)
         let memory_usage = self.get_memory_usage();
-        if memory_usage > 150_000_000 {
-            // 150MB safety margin
-            warn!("Memory usage limit reached (150MB), stopping indexing");
+        if memory_usage > 1_073_741_824 {
+            // 1GB safety margin
+            warn!("Memory usage limit reached (1GB), stopping indexing");
             return Ok(());
         }
 

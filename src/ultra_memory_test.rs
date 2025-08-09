@@ -6,7 +6,6 @@
 #[cfg(test)]
 mod tests {
     use crate::search::{get_ultra_memory_stats, initialize_search, perform_search, SearchParams};
-    use std::path::PathBuf;
 
     #[test]
     fn test_memory_efficiency_estimate() {

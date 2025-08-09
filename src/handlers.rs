@@ -308,9 +308,27 @@ fn create_monitor_json(stats: Option<&crate::server::ServerStats>) -> Response {
     if let Some(s) = stats {
         let (total, successful, errors, bytes, uptime) = s.get_stats();
         let up = s.get_upload_stats();
+        let (current_memory, peak_memory, memory_available) = s.get_memory_usage();
+
+        // Build memory section based on availability
+        let memory_section = if memory_available {
+            let current_bytes = current_memory.unwrap_or(0);
+            let peak_bytes = peak_memory.unwrap_or(0);
+            format!(
+                r#""memory":{{"available":true,"current_bytes":{},"peak_bytes":{},"current_mb":{:.2},"peak_mb":{:.2}}}"#,
+                current_bytes,
+                peak_bytes,
+                current_bytes as f64 / 1024.0 / 1024.0,
+                peak_bytes as f64 / 1024.0 / 1024.0
+            )
+        } else {
+            r#""memory":{"available":false,"current_bytes":null,"peak_bytes":null,"current_mb":null,"peak_mb":null}"#.to_string()
+        };
+
         let json = format!(
-            r#"{{"requests":{{"total":{total},"successful":{successful},"errors":{errors}}},"downloads":{{"bytes_served":{bytes}}},"uptime_secs":{},"uploads":{{"total_uploads":{},"successful_uploads":{},"failed_uploads":{},"files_uploaded":{},"upload_bytes":{},"average_upload_size":{},"largest_upload":{},"concurrent_uploads":{},"average_processing_ms":{:.2},"success_rate":{:.2}}}}}"#,
+            r#"{{"requests":{{"total":{total},"successful":{successful},"errors":{errors}}},"downloads":{{"bytes_served":{bytes}}},"uptime_secs":{},{},"uploads":{{"total_uploads":{},"successful_uploads":{},"failed_uploads":{},"files_uploaded":{},"upload_bytes":{},"average_upload_size":{},"largest_upload":{},"concurrent_uploads":{},"average_processing_ms":{:.2},"success_rate":{:.2}}}}}"#,
             uptime.as_secs(),
+            memory_section,
             up.total_uploads,
             up.successful_uploads,
             up.failed_uploads,

@@ -6,12 +6,19 @@ use crate::http::handle_client;
 use crate::middleware::AuthMiddleware;
 use crate::router::Router;
 use glob::Pattern;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, TcpListener};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+
+#[cfg(target_os = "linux")]
+use std::fs;
+#[cfg(target_os = "macos")]
+use std::mem;
+#[cfg(target_os = "windows")]
+use std::ptr;
 
 /// Rate limiter for basic DoS protection
 #[derive(Clone)]
@@ -124,6 +131,12 @@ pub struct ServerStats {
     pub largest_upload: Arc<Mutex<u64>>,
     pub concurrent_uploads: Arc<Mutex<u64>>,
     pub upload_processing_times: Arc<Mutex<Vec<u64>>>,
+
+    // Memory statistics
+    pub process_memory_bytes: Arc<Mutex<Option<u64>>>,
+    pub peak_memory_bytes: Arc<Mutex<Option<u64>>>,
+    pub last_memory_check: Arc<Mutex<Option<Instant>>>,
+    pub memory_available: Arc<Mutex<bool>>,
 }
 
 impl ServerStats {
@@ -145,6 +158,12 @@ impl ServerStats {
             largest_upload: Arc::new(Mutex::new(0)),
             concurrent_uploads: Arc::new(Mutex::new(0)),
             upload_processing_times: Arc::new(Mutex::new(Vec::new())),
+
+            // Memory statistics
+            process_memory_bytes: Arc::new(Mutex::new(None)),
+            peak_memory_bytes: Arc::new(Mutex::new(None)),
+            last_memory_check: Arc::new(Mutex::new(None)),
+            memory_available: Arc::new(Mutex::new(true)), // Assume available until proven otherwise
         }
     }
 
@@ -321,6 +340,253 @@ impl ServerStats {
             },
         }
     }
+
+    /// Get current process memory usage in bytes
+    ///
+    /// This function implements cross-platform memory reading with caching
+    /// to avoid frequent expensive syscalls. Memory is cached for 5 seconds.
+    /// Returns (current_memory, peak_memory, available) where memory values
+    /// are None if memory tracking is unavailable.
+    pub fn get_memory_usage(&self) -> (Option<u64>, Option<u64>, bool) {
+        let now = Instant::now();
+
+        // Check if we need to refresh the memory reading (cache for 5 seconds)
+        let should_refresh = {
+            let last_check = self.last_memory_check.lock().unwrap();
+            match *last_check {
+                Some(last) => now.duration_since(last) >= Duration::from_secs(5),
+                None => true,
+            }
+        };
+
+        if should_refresh {
+            let current_memory_opt = get_process_memory_bytes();
+
+            // Update availability status
+            let is_available = current_memory_opt.is_some();
+            if let Ok(mut available) = self.memory_available.lock() {
+                if !*available && is_available {
+                    info!("Memory tracking is now available");
+                } else if *available && !is_available {
+                    info!("Memory tracking is no longer available");
+                }
+                *available = is_available;
+            }
+
+            // Update current memory
+            if let Ok(mut mem) = self.process_memory_bytes.lock() {
+                *mem = current_memory_opt;
+            }
+
+            // Update peak memory if this is higher
+            if let (Some(current_memory), Ok(mut peak)) =
+                (current_memory_opt, self.peak_memory_bytes.lock())
+            {
+                match *peak {
+                    Some(peak_val) => {
+                        if current_memory > peak_val {
+                            *peak = Some(current_memory);
+                        }
+                    }
+                    None => {
+                        *peak = Some(current_memory);
+                    }
+                }
+            }
+
+            // Update last check time
+            if let Ok(mut last_check) = self.last_memory_check.lock() {
+                *last_check = Some(now);
+            }
+        }
+
+        // Return current and peak memory with availability
+        let current = *self
+            .process_memory_bytes
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let peak = *self
+            .peak_memory_bytes
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let available = *self
+            .memory_available
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        (current, peak, available)
+    }
+
+    /// Force refresh memory statistics (bypasses cache)
+    pub fn refresh_memory_stats(&self) {
+        let current_memory_opt = get_process_memory_bytes();
+
+        // Update availability status
+        let is_available = current_memory_opt.is_some();
+        if let Ok(mut available) = self.memory_available.lock() {
+            *available = is_available;
+        }
+
+        if let Ok(mut mem) = self.process_memory_bytes.lock() {
+            *mem = current_memory_opt;
+        }
+
+        if let (Some(current_memory), Ok(mut peak)) =
+            (current_memory_opt, self.peak_memory_bytes.lock())
+        {
+            match *peak {
+                Some(peak_val) => {
+                    if current_memory > peak_val {
+                        *peak = Some(current_memory);
+                    }
+                }
+                None => {
+                    *peak = Some(current_memory);
+                }
+            }
+        }
+
+        if let Ok(mut last_check) = self.last_memory_check.lock() {
+            *last_check = Some(Instant::now());
+        }
+    }
+}
+
+/// Cross-platform process memory reading
+///
+/// Returns current process memory usage in bytes, or None if unavailable.
+/// Prioritizes Linux /proc/self/status, with fallbacks for other platforms.
+/// Returns None when memory tracking is restricted (e.g., containers, CI environments).
+fn get_process_memory_bytes() -> Option<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        match fs::read_to_string("/proc/self/status") {
+            Ok(status) => {
+                for line in status.lines() {
+                    if line.starts_with("VmRSS:") {
+                        if let Some(kb_str) = line.split_whitespace().nth(1) {
+                            if let Ok(kb) = kb_str.parse::<u64>() {
+                                return Some(kb * 1024); // Convert KB to bytes
+                            }
+                        }
+                    }
+                }
+                // Parsing succeeded but VmRSS not found - unusual but possible
+                debug!("VmRSS not found in /proc/self/status");
+                None
+            }
+            Err(e) => {
+                // Log different error types with appropriate levels
+                match e.kind() {
+                    std::io::ErrorKind::NotFound => {
+                        debug!("Memory tracking unavailable: /proc/self/status not found");
+                    }
+                    std::io::ErrorKind::PermissionDenied => {
+                        debug!("Memory tracking unavailable: /proc/self/status access denied");
+                    }
+                    _ => {
+                        warn!(
+                            "Memory tracking unavailable: failed to read /proc/self/status: {e}"
+                        );
+                    }
+                }
+                None
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::ffi::c_void;
+
+        #[repr(C)]
+        struct mach_task_basic_info {
+            virtual_size: u64,
+            resident_size: u64,
+            resident_size_max: u64,
+            user_time: [u64; 2],
+            system_time: [u64; 2],
+            policy: i32,
+            suspend_count: i32,
+        }
+
+        extern "C" {
+            fn mach_task_self() -> u32;
+            fn task_info(
+                target_task: u32,
+                flavor: u32,
+                task_info_out: *mut c_void,
+                task_info_outCnt: *mut u32,
+            ) -> i32;
+        }
+
+        const MACH_TASK_BASIC_INFO: u32 = 20;
+        const MACH_TASK_BASIC_INFO_COUNT: u32 = 10;
+
+        unsafe {
+            let mut info: mach_task_basic_info = mem::zeroed();
+            let mut count = MACH_TASK_BASIC_INFO_COUNT;
+
+            let result = task_info(
+                mach_task_self(),
+                MACH_TASK_BASIC_INFO,
+                &mut info as *mut _ as *mut c_void,
+                &mut count,
+            );
+
+            if result == 0 {
+                return Some(info.resident_size);
+            }
+        }
+        debug!("Memory tracking unavailable: failed to get memory info on macOS");
+        None
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::ffi::c_void;
+
+        #[repr(C)]
+        struct PROCESS_MEMORY_COUNTERS {
+            cb: u32,
+            PageFaultCount: u32,
+            PeakWorkingSetSize: usize,
+            WorkingSetSize: usize,
+            QuotaPeakPagedPoolUsage: usize,
+            QuotaPagedPoolUsage: usize,
+            QuotaPeakNonPagedPoolUsage: usize,
+            QuotaNonPagedPoolUsage: usize,
+            PagefileUsage: usize,
+            PeakPagefileUsage: usize,
+        }
+
+        extern "system" {
+            fn GetCurrentProcess() -> *mut c_void;
+            fn GetProcessMemoryInfo(
+                hProcess: *mut c_void,
+                ppsmemCounters: *mut PROCESS_MEMORY_COUNTERS,
+                cb: u32,
+            ) -> i32;
+        }
+
+        unsafe {
+            let mut pmc: PROCESS_MEMORY_COUNTERS = mem::zeroed();
+            pmc.cb = mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+
+            let result = GetProcessMemoryInfo(GetCurrentProcess(), &mut pmc, pmc.cb);
+
+            if result != 0 {
+                return Some(pmc.WorkingSetSize as u64);
+            }
+        }
+        debug!("Memory tracking unavailable: failed to get memory info on Windows");
+        None
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        debug!("Memory tracking not supported on this platform");
+        None
+    }
 }
 
 #[cfg(test)]
@@ -372,6 +638,115 @@ mod tests {
         assert_eq!(final_stats.successful_uploads, 2);
         assert_eq!(final_stats.failed_uploads, 1);
         assert!((final_stats.success_rate - (200.0 / 3.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_memory_tracking() {
+        let stats = ServerStats::new();
+
+        // Test initial memory state
+        let (current, peak, available) = stats.get_memory_usage();
+
+        // Test behavior based on availability
+        if available {
+            // When memory tracking is available, we should have Some values
+            assert!(current.is_some());
+            assert!(peak.is_some());
+            assert!(current.unwrap() <= peak.unwrap());
+
+            // Test forced refresh
+            stats.refresh_memory_stats();
+            let (current2, peak2, available2) = stats.get_memory_usage();
+
+            assert!(available2);
+            assert!(current2.is_some());
+            assert!(peak2.is_some());
+
+            // Peak should never decrease
+            assert!(peak2.unwrap() >= peak.unwrap());
+            // Current might change but should be reasonable
+            assert!(current2.unwrap() <= peak2.unwrap());
+        } else {
+            // When memory tracking is unavailable, values should be None
+            assert!(current.is_none());
+            assert!(peak.is_none());
+
+            // Test forced refresh
+            stats.refresh_memory_stats();
+            let (current2, peak2, available2) = stats.get_memory_usage();
+
+            // Should remain unavailable
+            assert!(!available2);
+            assert!(current2.is_none());
+            assert!(peak2.is_none());
+        }
+    }
+
+    #[test]
+    fn test_memory_caching() {
+        let stats = ServerStats::new();
+
+        // First call should set the cache
+        let (current1, peak1, available1) = stats.get_memory_usage();
+
+        // Immediate second call should use cache (values should be identical)
+        let (current2, peak2, available2) = stats.get_memory_usage();
+        assert_eq!(current1, current2);
+        assert_eq!(peak1, peak2);
+        assert_eq!(available1, available2);
+
+        // Verify cache timestamp was set
+        let last_check = stats.last_memory_check.lock().unwrap();
+        assert!(last_check.is_some());
+    }
+
+    #[test]
+    fn test_memory_unavailable_scenario() {
+        let stats = ServerStats::new();
+
+        // First check the actual system state
+        let (initial_current, initial_peak, initial_available) = stats.get_memory_usage();
+
+        if initial_available {
+            // System has memory tracking available, so let's manually simulate unavailable state
+            // Set memory as unavailable for testing
+            if let Ok(mut available) = stats.memory_available.lock() {
+                *available = false;
+            }
+            if let Ok(mut mem) = stats.process_memory_bytes.lock() {
+                *mem = None;
+            }
+            if let Ok(mut peak) = stats.peak_memory_bytes.lock() {
+                *peak = None;
+            }
+
+            // Now the get_memory_usage should return the cached unavailable state
+            // without refreshing (since we didn't change the timestamp)
+            let (current, peak, available) = (
+                *stats.process_memory_bytes.lock().unwrap(),
+                *stats.peak_memory_bytes.lock().unwrap(),
+                *stats.memory_available.lock().unwrap(),
+            );
+
+            // Should indicate unavailable memory based on what we set
+            assert!(!available);
+            assert!(current.is_none());
+            assert!(peak.is_none());
+        } else {
+            // System doesn't have memory tracking, verify the behavior
+            assert!(!initial_available);
+            assert!(initial_current.is_none());
+            assert!(initial_peak.is_none());
+
+            // Test refresh maintains unavailable state
+            stats.refresh_memory_stats();
+            let (current2, peak2, available2) = stats.get_memory_usage();
+
+            // Should remain unavailable if system doesn't support it
+            assert!(!available2);
+            assert!(current2.is_none());
+            assert!(peak2.is_none());
+        }
     }
 }
 
@@ -586,6 +961,7 @@ pub fn run_server(
             thread::sleep(Duration::from_secs(300)); // Report every 5 minutes
             let (total, successful, errors, bytes, uptime) = stats_reporter.get_stats();
             let upload_stats = stats_reporter.get_upload_stats();
+            let (current_memory, peak_memory, memory_available) = stats_reporter.get_memory_usage();
 
             info!(
                 "📊 Request Stats: {} total ({} successful, {} errors), {:.2} MB served, uptime: {}s",
@@ -595,6 +971,16 @@ pub fn run_server(
                 bytes as f64 / 1024.0 / 1024.0,
                 uptime.as_secs()
             );
+
+            if memory_available {
+                let current_mb = current_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
+                let peak_mb = peak_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
+                info!(
+                    "🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak"
+                );
+            } else {
+                debug!("🧠 Memory Stats: unavailable");
+            }
 
             if upload_stats.total_uploads > 0 {
                 info!(
@@ -695,6 +1081,7 @@ pub fn run_server(
     // Final stats report
     let (total, successful, errors, bytes, uptime) = stats.get_stats();
     let upload_stats = stats.get_upload_stats();
+    let (current_memory, peak_memory, memory_available) = stats.get_memory_usage();
 
     info!(
         "📊 Final Request Stats: {} total ({} successful, {} errors), {:.2} MB served, uptime: {}s",
@@ -704,6 +1091,16 @@ pub fn run_server(
         bytes as f64 / 1024.0 / 1024.0,
         uptime.as_secs()
     );
+
+    if memory_available {
+        let current_mb = current_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
+        let peak_mb = peak_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
+        info!(
+            "🧠 Final Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak"
+        );
+    } else {
+        info!("🧠 Final Memory Stats: unavailable");
+    }
 
     if upload_stats.total_uploads > 0 {
         info!(

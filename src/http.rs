@@ -504,40 +504,43 @@ fn handle_search_api_request(
 
 /// Create a monitor response with server statistics as JSON
 fn create_monitor_json(stats: Option<&crate::server::ServerStats>) -> Response {
-    let json_content = if let Some(stats) = stats {
-        let (total, successful, errors, bytes, uptime) = stats.get_stats();
-        let error_rate = if total > 0 {
-            (errors as f64 / total as f64) * 100.0
+    let json_content = if let Some(s) = stats {
+        let (total, successful, errors, bytes, uptime) = s.get_stats();
+        let up = s.get_upload_stats();
+        let (current_memory, peak_memory, memory_available) = s.get_memory_usage();
+
+        // Build memory section based on availability
+        let memory_section = if memory_available {
+            let current_bytes = current_memory.unwrap_or(0);
+            let peak_bytes = peak_memory.unwrap_or(0);
+            format!(
+                r#""memory":{{"available":true,"current_bytes":{},"peak_bytes":{},"current_mb":{:.2},"peak_mb":{:.2}}}"#,
+                current_bytes,
+                peak_bytes,
+                current_bytes as f64 / 1024.0 / 1024.0,
+                peak_bytes as f64 / 1024.0 / 1024.0
+            )
         } else {
-            0.0
+            r#""memory":{"available":false,"current_bytes":null,"peak_bytes":null,"current_mb":null,"peak_mb":null}"#.to_string()
         };
-        let request_rate = if uptime.as_secs() > 0 {
-            (total as f64 / uptime.as_secs() as f64) * 60.0
-        } else {
-            0.0
-        };
-        
+
         format!(
-            r#"{{
-    "status": "healthy",
-    "uptime_seconds": {},
-    "total_requests": {},
-    "successful_requests": {},
-    "failed_requests": {},
-    "total_bytes_sent": {},
-    "request_rate_per_minute": {:.2},
-    "error_rate_percent": {:.2}
-}}"#,
+            r#"{{"requests":{{"total":{total},"successful":{successful},"errors":{errors}}},"downloads":{{"bytes_served":{bytes}}},"uptime_secs":{},{},"uploads":{{"total_uploads":{},"successful_uploads":{},"failed_uploads":{},"files_uploaded":{},"upload_bytes":{},"average_upload_size":{},"largest_upload":{},"concurrent_uploads":{},"average_processing_ms":{:.2},"success_rate":{:.2}}}}}"#,
             uptime.as_secs(),
-            total,
-            successful,
-            errors,
-            bytes,
-            request_rate,
-            error_rate
+            memory_section,
+            up.total_uploads,
+            up.successful_uploads,
+            up.failed_uploads,
+            up.files_uploaded,
+            up.upload_bytes,
+            up.average_upload_size,
+            up.largest_upload,
+            up.concurrent_uploads,
+            up.average_processing_time,
+            up.success_rate
         )
     } else {
-        r#"{"status": "healthy", "message": "Statistics not available"}"#.to_string()
+        r#"{"error":"stats unavailable"}"#.to_string()
     };
 
     Response {
