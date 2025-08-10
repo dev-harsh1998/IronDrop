@@ -1,119 +1,153 @@
 # IronDrop
 
 <div align="center">
-  <img src="irondrop-logo.png" alt="IronDrop Logo" width="120"/>
+  <img src="irondrop-logo.png" alt="IronDrop Logo" width="150"/>
+  
+  <h1>IronDrop: The Zero-Dependency, High-Performance File Server</h1>
+  
+  <p>
+    <strong>Drop files, not dependencies.</strong> IronDrop is a blazing-fast, secure, and feature-rich file server written in pure Rust, delivered as a single, portable binary.
+  </p>
   
   [![Rust CI](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml/badge.svg)](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml)
 </div>
 
-A lightweight, high-performance file server written in Rust with **zero external dependencies**. Production-ready with comprehensive upload functionality, dual-mode search engine, and enterprise-grade security.
+IronDrop is not just another file server. It's a production-ready toolkit designed for performance, security, and ease of use. Whether you're sharing files on your local network, setting up a lightweight digital archive, or need a robust upload endpoint, IronDrop provides a complete solution with zero external dependencies.
 
-## 🚀 Features
+## ⭐ Why Choose IronDrop?
 
-• **File Downloads** - Secure file serving with range requests and MIME detection  
-• **File Uploads** - Drag-and-drop interface supporting up to 10GB files  
-• **Advanced Search** - Dual-mode search engine optimized for directories of any size  
-• **Professional UI** - Modern blackish-grey interface with responsive design  
-• **Security Built-in** - Rate limiting, authentication, path traversal protection  
-• **Real-time Monitoring** - Live dashboard at `/monitor` with JSON API  
-• **Zero Dependencies** - Pure Rust implementation, single binary deployment  
+IronDrop was built to address the limitations of other open-source file servers. Here’s how it stands out:
+
+| Feature | IronDrop | `python -m http.server` | `npx http-server` | Other Rust Servers (`miniserve`) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Zero Dependencies** | ✅ | ❌ (Python) | ❌ (Node.js) | ✅ |
+| **File Uploads** | ✅ | ❌ | ❌ | ✅ |
+| **Advanced Search** | ✅ | ❌ | ❌ | ❌ |
+| **Real-time Monitoring** | ✅ | ❌ | ❌ | ❌ |
+| **Enterprise-Grade Security**| ✅ | ❌ | ❌ | ❌ |
+| **Low Memory Usage** | ✅ | ❌ | ❌ | ✅ |
+| **Single Binary** | ✅ | ❌ | ❌ | ✅ |
+
+## 🚀 Key Features
+
+*   **🚀 High-Performance File Serving:** Serve files with support for range requests, MIME type detection, and conditional caching headers.
+*   **⬆️ Modern File Uploads:** A beautiful drag-and-drop interface for uploading files and entire folders. Supports files up to 10GB.
+*   **🧠 Advanced Dual-Mode Search:** A powerful search engine that automatically switches between a standard, full-featured engine and an "ultra-compact" mode for directories with millions of files.
+*   **📊 Real-time Monitoring:** A built-in monitoring dashboard at `/monitor` provides live statistics on requests, uploads, and server health, with a JSON API for integration.
+*   **🔒 Enterprise-Grade Security:** IronDrop is built with a security-first mindset, featuring:
+    *   Rate limiting and connection management to prevent DoS attacks.
+    *   Optional Basic Authentication.
+    *   Path traversal protection and filename sanitization.
+    *   Comprehensive OWASP compliance.
+*   **🖥️ Professional UI:** A modern, responsive, dark-themed interface that's a pleasure to use.
+*   **📦 Zero Dependencies, Single Binary:** The entire application, including all assets, is compiled into a single, portable executable. No runtimes, no interpreters, no hassle.
+
+## ⚡ Performance
+
+IronDrop is engineered for extreme performance and memory efficiency.
+
+### Ultra-Compact Search Engine
+
+The standout feature is the **ultra-compact search engine**, which can index over **10 million files using less than 100MB of RAM**.
+
+| Directory Size | Search Time | Memory Usage | 
+| :--- | :--- | :--- |
+| 100K files | 5-15ms | ~1.1MB |
+| 1M files | 20-80ms | ~11MB |
+| **10M files** | **100-500ms** | **~110MB** |
+
+This makes IronDrop the ideal choice for serving large archives, datasets, and media collections without sacrificing performance.
+
+## 🛡️ Security
+
+Security is a core design principle of IronDrop.
+
+*   **OWASP Top 10 Compliant:** The server is designed to mitigate the most critical web application security risks.
+*   **Comprehensive Input Validation:** All inputs, from CLI arguments to HTTP headers and filenames, are rigorously validated.
+*   **Secure by Default:** Features like uploads and authentication are opt-in, ensuring a secure default configuration.
+*   **Extensive Security Documentation:** For a detailed breakdown of security features, see the [RFC & OWASP Compliance](./doc/RFC_OWASP_COMPLIANCE.md) and [Security Fixes](./doc/SECURITY_FIXES.md) documents.
 
 ## 📦 Installation
 
-### Quick Start
+Getting started with IronDrop is simple.
+
+### From Source
+
 ```bash
-# Clone and build
+# Clone the repository
 git clone https://github.com/dev-harsh1998/IronDrop.git
 cd IronDrop
+
+# Build the release binary
 cargo build --release
 
-# Run server
-./target/release/irondrop -d /path/to/files
+# The executable will be in ./target/release/irondrop
 ```
 
-### System Installation (Optional)
+### System-Wide Installation
 
-Make `irondrop` available system-wide:
-
-**Linux/macOS:**
 ```bash
-# Copy to system PATH
+# For Linux/macOS
 sudo cp ./target/release/irondrop /usr/local/bin/
 
-# Or user-local installation
-mkdir -p ~/.local/bin
-cp ./target/release/irondrop ~/.local/bin/
-# Add ~/.local/bin to PATH in ~/.bashrc or ~/.zshrc
-export PATH="$HOME/.local/bin:$PATH"
+# For Windows (in PowerShell)
+mkdir "C:\ Program Files\IronDrop"
+copy ".\target\release\irondrop.exe" "C:\ Program Files\IronDrop\"
+# Then add C:\ Program Files\IronDrop to your system's PATH
 ```
 
-**Windows:**
-```powershell
-# Copy to a directory in PATH, or create one
-mkdir "C:\Program Files\IronDrop"
-copy ".\target\release\irondrop.exe" "C:\Program Files\IronDrop\"
-# Add C:\Program Files\IronDrop to system PATH via Environment Variables
-```
+## ⚙️ Usage
 
-### Basic Usage
 ```bash
-# Serve current directory
+# Serve the current directory
 irondrop -d .
 
 # Enable uploads with authentication
-irondrop -d . --enable-upload --username admin --password secret
+irondrop -d . --enable-upload --username admin --password your-secret-password
 
-# Custom port and network interface
-irondrop -d ./files --listen 0.0.0.0 --port 3000
+# Serve on a different port and listen on all interfaces
+irondrop -d /path/to/your/files --port 3000 --listen 0.0.0.0
 ```
 
+For a full list of options, run `irondrop --help`.
+
+## 📚 Documentation
+
+IronDrop has extensive documentation covering its architecture, API, and features.
+
+*   [**Complete Documentation Index**](./doc/README.md)
+*   [**Architecture Guide**](./doc/ARCHITECTURE.md)
+*   [**API Reference**](./doc/API_REFERENCE.md)
+*   [**Deployment Guide**](./doc/DEPLOYMENT.md)
+*   [**Search Feature Deep Dive**](./doc/SEARCH_FEATURE.md)
+
 ## 🧪 Testing
+
+IronDrop is rigorously tested with over 100 tests.
 
 ```bash
 # Run all tests
 cargo test
 
-# Run with output
+# Run tests with output
 cargo test -- --nocapture
-
-# Format and lint
-cargo fmt && cargo clippy
 ```
-
-## 📋 Current Version
-
-**v2.5.0** - Latest stable release with advanced search system, comprehensive file upload functionality, and monitoring dashboard
-
-## 📖 Documentation
-
-For comprehensive documentation, deployment guides, and API reference:
-
-**[📚 Complete Documentation](./doc/README.md)**
-
-### Quick Links
-• [🏗️ Architecture Guide](./doc/ARCHITECTURE.md) - System design and components  
-• [🔌 API Reference](./doc/API_REFERENCE.md) - REST endpoints and examples  
-• [🔍 Search System](./doc/SEARCH_FEATURE.md) - Dual-mode search implementation  
-• [🚀 Deployment Guide](./doc/DEPLOYMENT.md) - Production setup and Docker  
-• [🔒 Security Guide](./doc/SECURITY_FIXES.md) - Security features and best practices  
-
-## 🌟 Why IronDrop?
-
-• **Zero Config** - Works out of the box with sensible defaults  
-• **Production Ready** - 101+ tests, comprehensive security, monitoring built-in  
-• **Memory Efficient** - <100MB for 10M+ files with ultra-compact search  
-• **Developer Friendly** - Clear architecture, extensive documentation  
 
 ## 📜 License
 
-GPL-3.0 License - see [LICENSE](LICENSE) for details.
+IronDrop is licensed under the [GPL-3.0 License](./LICENSE).
 
 ---
 
 <div align="center">
-
-*Made with 🦀 in Rust*
-
-**[⭐ Star us on GitHub](https://github.com/dev-harsh1998/IronDrop) • [📖 Documentation](./doc/) • [🐛 Issues](https://github.com/dev-harsh1998/IronDrop/issues)**
-
+  <p>
+    <strong>Made with ❤️ and 🦀 in Rust</strong>
+  </p>
+  <p>
+    <a href="https://github.com/dev-harsh1998/IronDrop">⭐ Star us on GitHub</a>
+    &nbsp;&nbsp;&bull;&nbsp;&nbsp;
+    <a href="https://github.com/dev-harsh1998/IronDrop/issues">Report an Issue</a>
+    &nbsp;&nbsp;&bull;&nbsp;&nbsp;
+    <a href="./doc/README.md">Read the Docs</a>
+  </p>
 </div>
