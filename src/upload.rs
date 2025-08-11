@@ -53,59 +53,17 @@ use crate::templates::TemplateEngine;
 use glob::Pattern;
 use log::{error, info, warn};
 // Removed rand dependency
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 
 /// Temporary file prefix for atomic operations
 const TEMP_FILE_PREFIX: &str = ".irondrop_temp_";
 
-/// Optimized buffer size for memory-efficient streaming
-const STREAM_BUFFER_SIZE: usize = 64 * 1024; // 64KB buffer for better I/O performance
-
 /// Size of temporary disk buffer for large uploads
 const DISK_BUFFER_SIZE: usize = 1024 * 1024; // 1MB disk buffer
-
-/// Simple buffer pool for memory reuse during uploads
-struct BufferPool {
-    buffers: Arc<Mutex<Vec<Vec<u8>>>>,
-}
-
-impl BufferPool {
-    fn new() -> Self {
-        Self {
-            buffers: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    fn get_buffer(&self) -> Vec<u8> {
-        if let Ok(mut buffers) = self.buffers.lock() {
-            if let Some(mut buffer) = buffers.pop() {
-                buffer.clear();
-                buffer.resize(STREAM_BUFFER_SIZE, 0);
-                return buffer;
-            }
-        }
-        vec![0u8; STREAM_BUFFER_SIZE]
-    }
-
-    fn return_buffer(&self, buffer: Vec<u8>) {
-        if let Ok(mut buffers) = self.buffers.lock() {
-            if buffers.len() < 10 {
-                // Limit pool size to prevent memory bloat
-                buffers.push(buffer);
-            }
-        }
-    }
-}
-
-thread_local! {
-    static BUFFER_POOL: RefCell<BufferPool> = RefCell::new(BufferPool::new());
-}
 
 // UploadGuard removed since concurrent limiting is handled at server level
 
@@ -564,7 +522,7 @@ impl UploadHandler {
                 total_bytes += length;
             }
 
-            // Create a temporary file for streaming the upload
+            // For file-based uploads, use stream_to method to avoid creating another temp file
             let temp_filename = format!(
                 "{}{}_{}_{:x}.tmp",
                 TEMP_FILE_PREFIX,
@@ -577,39 +535,23 @@ impl UploadHandler {
             );
             let temp_path = self.target_dir.join(&temp_filename);
 
-            // Stream the file content directly to disk instead of loading it into memory
+            // Stream the file content directly to disk using the efficient stream_to method
             let mut temp_file = File::create(&temp_path).map_err(|e| {
                 error!("Failed to create temporary file {temp_path:?}: {e}");
                 AppError::from(e)
             })?;
 
-            // Use a memory-optimized buffer from pool for streaming
-            let mut buffer = BUFFER_POOL.with(|pool| pool.borrow().get_buffer());
-            let mut file_size: u64 = 0;
+            // Use the multipart part's stream_to method for efficient streaming
+            let file_size = part.stream_to(&mut temp_file, 64 * 1024).map_err(|e| {
+                error!("Failed to stream to temporary file {temp_path:?}: {e}");
+                let _ = fs::remove_file(&temp_path); // Cleanup on error
+                e
+            })?;
 
-            // Stream data from part reader to file
-            loop {
-                match part.reader.read(&mut buffer) {
-                    Ok(0) => break, // End of file
-                    Ok(bytes_read) => {
-                        temp_file.write_all(&buffer[..bytes_read]).map_err(|e| {
-                            error!("Failed to write to temporary file {temp_path:?}: {e}");
-                            let _ = fs::remove_file(&temp_path); // Cleanup on error
-                            AppError::from(e)
-                        })?;
-                        file_size += bytes_read as u64;
-
-                        // Check size limit during streaming
-                        if file_size > self.max_file_size {
-                            let _ = fs::remove_file(&temp_path); // Cleanup
-                            return Err(AppError::payload_too_large(self.max_file_size));
-                        }
-                    }
-                    Err(e) => {
-                        let _ = fs::remove_file(&temp_path); // Cleanup on error
-                        return Err(AppError::Io(e));
-                    }
-                }
+            // Check size limit after streaming
+            if file_size > self.max_file_size {
+                let _ = fs::remove_file(&temp_path); // Cleanup
+                return Err(AppError::payload_too_large(self.max_file_size));
             }
 
             // Sync file to ensure data is written
@@ -618,9 +560,6 @@ impl UploadHandler {
                 let _ = fs::remove_file(&temp_path); // Cleanup on error
                 AppError::from(e)
             })?;
-
-            // Return buffer to pool for reuse
-            BUFFER_POOL.with(|pool| pool.borrow().return_buffer(buffer));
 
             // Update total bytes if we didn't have Content-Length
             if content_length.is_none() {
