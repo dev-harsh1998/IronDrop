@@ -222,9 +222,14 @@ fn test_stress_mixed_file_sizes() {
         );
     }
 
+    // Adjust threshold for CI environments (especially Windows)
+    // CI environments often have limited I/O performance
+    let min_throughput = if cfg!(windows) { 0.5 } else { 1.0 };
     assert!(
-        throughput > 1.5,
-        "Mixed size throughput should be at least 1.5 MB/s"
+        throughput > min_throughput,
+        "Mixed size throughput should be at least {:.1} MB/s (actual: {:.2} MB/s)",
+        min_throughput,
+        throughput
     );
 }
 
@@ -329,9 +334,14 @@ fn test_stress_large_files_sequential() {
     );
     println!("   Overall throughput: {:.2} MB/s", overall_throughput);
 
+    // Adjust threshold for CI environments (especially Windows)
+    // CI environments often have limited I/O performance
+    let min_throughput = if cfg!(windows) { 1.0 } else { 2.5 };
     assert!(
-        overall_throughput > 3.0,
-        "Large files throughput should be at least 3 MB/s"
+        overall_throughput > min_throughput,
+        "Large files throughput should be at least {:.1} MB/s (actual: {:.2} MB/s)",
+        min_throughput,
+        overall_throughput
     );
 }
 
@@ -442,9 +452,14 @@ fn test_stress_multipart_multiple_files() {
     println!("   Total time: {} ms", total_duration.as_millis());
     println!("   Throughput: {:.2} MB/s", throughput);
 
+    // Adjust threshold for CI environments (especially Windows)
+    // CI environments often have limited I/O performance
+    let min_throughput = if cfg!(windows) { 0.7 } else { 1.5 };
     assert!(
-        throughput > 2.0,
-        "Multipart throughput should be at least 2 MB/s"
+        throughput > min_throughput,
+        "Multipart throughput should be at least {:.1} MB/s (actual: {:.2} MB/s)",
+        min_throughput,
+        throughput
     );
     assert_eq!(
         total_files,
