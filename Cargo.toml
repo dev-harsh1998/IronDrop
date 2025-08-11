@@ -22,4 +22,14 @@ serde_json = "1.0"
 tempfile = "3.20.0"
 threadpool = "1.8.1"
 
+[profile.release]
+opt-level = 'z'     # Optimize for size
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Maximum size reduction, longer compile time
+panic = 'abort'     # Remove panic unwinding code
+strip = true        # Strip symbols from binary
+debug = false       # No debug symbols
+debug-assertions = false  # Disable debug assertions
+overflow-checks = false   # Disable integer overflow checks
+
 
