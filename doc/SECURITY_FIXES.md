@@ -142,7 +142,7 @@ All security features are fully implemented and active:
 - **CLI Validation Tests**: Comprehensive testing in integration test suites
 - **Security Tests**: Path traversal and boundary testing included
 - **Error Handling Tests**: Validation of proper error responses
-- **Total Tests**: 101+ tests covering all security scenarios
+- **Total Tests**: 59 tests across 13 files covering all security scenarios
 
 ### 🔒 **Production Hardening**
 - **Error Messages**: Descriptive but security-conscious error reporting

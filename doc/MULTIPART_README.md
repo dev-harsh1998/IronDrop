@@ -6,7 +6,7 @@ This document describes the comprehensive multipart/form-data parser module crea
 
 The `src/multipart.rs` module provides a memory-efficient, security-focused multipart/form-data parser that uses only the standard Rust library. It's designed to handle file uploads and form fields with comprehensive security validations.
 
-**Current Status**: Production-ready with RFC 7578 compliance and comprehensive test coverage (7+ dedicated tests).
+**Current Status**: Production-ready with RFC 7578 compliance and comprehensive test coverage (7 dedicated multipart tests as part of 59 total tests across the project).
 
 ## Key Features
 
@@ -171,7 +171,7 @@ The multipart parser is fully integrated into IronDrop's upload system:
 - **v2.5**: Production release with comprehensive security validations
 - Full RFC 7578 compliance with boundary detection
 - Memory-efficient streaming parser
-- Extensive test coverage (101+ total project tests)
+- Extensive test coverage (59 total project tests across 13 test files)
 - Integrated with upload UI system and template engine
 
 The module provides enterprise-grade multipart parsing capabilities and is battle-tested with comprehensive security validations.

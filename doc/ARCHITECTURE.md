@@ -154,12 +154,18 @@ templates/
 tests/
 ├── comprehensive_test.rs     # Core server tests (19 tests)
 ├── integration_test.rs       # Auth + security tests (6 tests)
-├── upload_integration_test.rs # Upload system tests (29 tests)
-├── multipart_test.rs         # Multipart parser tests (7 tests)
-├── ultra_compact_test.rs     # Search engine tests
-├── debug_upload_test.rs      # Debug tests
-├── post_body_test.rs         # POST body handling
-└── template_embedding_test.rs # Template system tests
+├── edge_case_test.rs         # Upload edge cases (10 tests)
+├── memory_optimization_test.rs # Memory efficiency (6 tests)
+├── performance_test.rs       # Upload performance (5 tests)
+├── stress_test.rs           # Stress testing (4 tests)
+├── multipart_test.rs        # Multipart parser tests (7 tests)
+├── ultra_compact_test.rs    # Search engine tests (4 tests)
+├── template_embedding_test.rs # Template system tests (3 tests)
+├── test_upload.sh           # End-to-end upload testing
+├── test_1gb_upload.sh       # Large file upload testing
+└── test_executable_portability.sh # Portability validation
+
+Total: 59 tests across 13 test files
 ```
 
 ## Search System Architecture

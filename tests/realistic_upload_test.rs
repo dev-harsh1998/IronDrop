@@ -115,7 +115,7 @@ fn test_realistic_large_file_upload() {
                 );
 
                 println!(
-                    "✅ Successfully uploaded and verified {} ({} bytes)",
+                    "Successfully uploaded and verified {} ({} bytes)",
                     filename, size
                 );
             }
@@ -183,7 +183,7 @@ fn test_realistic_binary_file_upload() {
             );
 
             println!(
-                "✅ Successfully uploaded and verified binary file ({} bytes)",
+                "Successfully uploaded and verified binary file ({} bytes)",
                 binary_data.len()
             );
         }
@@ -278,10 +278,10 @@ fn test_realistic_multiple_large_files() {
                     filename
                 );
 
-                println!("✅ Verified {} ({} bytes)", filename, uploaded_data.len());
+                println!("Verified {} ({} bytes)", filename, uploaded_data.len());
             }
 
-            println!("✅ All multiple files uploaded and verified successfully");
+            println!("All multiple files uploaded and verified successfully");
         }
         Err(e) => panic!("Multiple file upload failed: {:?}", e),
     }
@@ -354,7 +354,7 @@ fn test_exact_boundary_cases() {
                     size
                 );
 
-                println!("✅ Boundary case {} bytes passed", size);
+                println!("Boundary case {} bytes passed", size);
             }
             Err(e) => panic!("Boundary test {} failed: {:?}", size, e),
         }

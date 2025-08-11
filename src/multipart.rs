@@ -447,7 +447,7 @@ impl<R: Read> Read for MultipartPartReader<R> {
             }
 
             // Need more data, try to read from underlying reader
-            let mut temp_buf = [0u8; 4096]; // Read in chunks
+            let mut temp_buf = [0u8; 2048]; // Reduced chunk size for memory efficiency
             let bytes_read = self.reader.read(&mut temp_buf)?;
 
             if bytes_read == 0 {
@@ -465,8 +465,8 @@ impl<R: Read> Read for MultipartPartReader<R> {
             // Add new data to buffer
             self.buffer.extend_from_slice(&temp_buf[..bytes_read]);
 
-            // Check buffer size limit
-            if self.buffer.len() > 2 * boundary_pattern_max_len + 4096 {
+            // Check buffer size limit - more aggressive memory management
+            if self.buffer.len() > 2 * boundary_pattern_max_len + 2048 {
                 // Buffer is getting too large, something might be wrong
                 // Return some data to prevent memory exhaustion
                 let data_len = std::cmp::min(self.buffer.len() / 2, buf.len());

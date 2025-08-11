@@ -157,7 +157,7 @@ mod ultra_compact_tests {
                 let path_time = path_start.elapsed();
 
                 println!(
-                    "Entry {}: {} ({}μs)",
+                    "Entry {}: {} ({}us)",
                     id,
                     path.display(),
                     path_time.as_micros()
@@ -177,9 +177,9 @@ mod ultra_compact_tests {
             bytes_per_entry
         );
 
-        println!("\n✓ Ultra-compact implementation successful!");
-        println!("✓ Achieved {:.2} MB for {} entries", memory_mb, total_added);
-        println!("✓ That's {:.1}x better than original!", 3514.0 / memory_mb);
+        println!("\nUltra-compact implementation successful!");
+        println!("Achieved {:.2} MB for {} entries", memory_mb, total_added);
+        println!("That's {:.1}x better than original!", 3514.0 / memory_mb);
     }
 
     #[test]

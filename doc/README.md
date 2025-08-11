@@ -27,7 +27,7 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 - Security architecture and defense-in-depth implementation
 - Performance characteristics and scalability considerations
 - Template system design and asset pipeline
-- Testing architecture with 101+ comprehensive tests
+- Testing architecture with 59 comprehensive tests across 13 test files
 
 **Key Sections:**
 - Core module breakdown with line counts and responsibilities
@@ -86,6 +86,26 @@ Hierarchical configuration (CLI > INI > defaults) with zero‑dep INI parser, se
 
 ### 🎨 [Template & UI System](./TEMPLATE_SYSTEM.md)
 Native zero-dependency template engine: variables, conditionals, embedded assets, security model, theming & roadmap.
+
+### 🧪 [Testing Documentation](./TESTING_DOCUMENTATION.md) ⭐
+**Audience**: Developers, QA Engineers, DevOps Teams  
+**Purpose**: Comprehensive testing suite documentation and validation procedures
+
+**Contents:**
+- **Complete Test Coverage**: 59 tests across 13 test files covering all functionality
+- **Test Categories**: Core server, integration, edge cases, memory optimization, performance, stress testing
+- **Security Testing**: Path traversal prevention, input validation, authentication mechanisms
+- **Performance Benchmarks**: Memory efficiency targets, upload speed thresholds, stress test metrics
+- **Shell Script Tests**: End-to-end validation, large file uploads, executable portability
+- **Test Infrastructure**: Helper functions, data management, execution procedures
+
+**Implementation Status**: ✅ **Production Ready** (v2.5)
+- **English-Only Testing**: All test messages and output standardized to English
+- **Comprehensive Coverage**: Edge cases, security scenarios, and performance validation
+- **Memory Optimization Tests**: Ultra-compact search engine validation for 10M+ files
+- **Upload System Tests**: Complete file upload functionality with 29 dedicated tests
+- **Multipart Parser Tests**: RFC 7578 compliance validation with 7 test cases
+- **Performance Validation**: Stress testing with throughput and memory efficiency metrics
 
 ### 📤 [Upload Integration Guide](./UPLOAD_INTEGRATION.md)
 **Audience**: Frontend Developers, UI/UX Implementers  
@@ -295,7 +315,7 @@ IronDrop v2.5 introduces a **production-ready file upload system** with enterpri
 - **⚡ Performance**: Handles up to **10GB** files with atomic operations and concurrent processing
 - **🎨 Professional UI**: Integrated upload interface accessible at `/upload` with real-time feedback
 - **🛡️ Robust Validation**: Multi-layer security including extension filtering, size limits, and malformed data rejection
-- **🧪 Battle-Tested**: 101+ tests covering edge cases, security scenarios, and performance stress testing
+- **🧪 Battle-Tested**: 59 tests across 13 test files covering edge cases, security scenarios, and performance stress testing
 
 ### 🔍 **Advanced Search System** (New in v2.5)
 IronDrop v2.5 introduces a **dual-mode search engine** optimized for directories of any size:
@@ -581,7 +601,7 @@ Every module is documented and formatted with `cargo fmt` and `clippy -- -D warn
 
 ### Comprehensive Test Suite
 
-The project includes **101+ comprehensive tests** covering all aspects of functionality, with complete upload system validation:
+The project includes **59 comprehensive tests across 13 test files** covering all aspects of functionality, with complete upload system validation:
 
 ```bash
 # Run all tests (covers upload, download, security, concurrency)
@@ -933,7 +953,7 @@ UI system and template integration:
 
 ### 🧪 **Testing & Quality Assurance**
 
-IronDrop includes **101+ comprehensive tests** covering:
+IronDrop includes **59 comprehensive tests across 13 test files** covering:
 
 - **Core Server Tests** (19 tests): HTTP handling, directory listing, authentication
 - **Upload System Tests** (29 tests): File uploads, validation, concurrent handling
@@ -961,7 +981,7 @@ cargo test multipart_test       # Multipart parser
 | **Source Files** | 15 | Rust modules with clear separation of concerns |
 | **Lines of Code** | 3000+ | Production-ready implementation |
 | **Template Files** | 10 | Professional UI with HTML/CSS/JS separation |
-| **Test Cases** | 101+ | Comprehensive coverage including security tests |
+| **Test Cases** | 59 across 13 files | Comprehensive coverage including security tests |
 | **Documentation Pages** | 10 | Complete technical documentation suite |
 
 ---
@@ -1025,7 +1045,7 @@ We welcome contributions! Here's how to get started:
 
 ### **For Developers**
 - **Pure Rust**: No external dependencies, everything built from scratch
-- **Comprehensive Tests**: 101+ tests ensure reliability and stability
+- **Comprehensive Tests**: 59 tests across 13 files ensure reliability and stability
 - **Clean Architecture**: Well-documented, modular codebase
 - **Performance Focus**: Custom thread pool and optimized file streaming
 

@@ -388,25 +388,30 @@ let engine = SearchEngine::new(
 
 ### Test Coverage
 
-The search functionality includes comprehensive tests:
+The search functionality includes comprehensive tests as part of IronDrop's 59-test suite across 13 test files:
 
-1. **Unit Tests** (`src/search.rs`):
-   - Cache operations (insert, retrieve, eviction)
-   - Index building and updates
-   - Search algorithm correctness
-   - Error handling scenarios
+1. **Ultra-Compact Search Tests** (`tests/ultra_compact_test.rs` - 4 tests):
+   - RadixIndex memory efficiency with 10M entries
+   - Search performance optimization
+   - Path reconstruction accuracy
+   - CompactCache memory efficiency validation
 
-2. **Integration Tests** (`tests/`):
+2. **Template Integration Tests** (`tests/template_embedding_test.rs` - 3 tests):
+   - Embedded template rendering without filesystem access
+   - Static asset retrieval (CSS, JavaScript)
+   - Directory listing template rendering with search interface
+
+3. **Performance and Memory Tests**:
+   - Memory optimization validation for large directories
+   - Search engine performance benchmarking
+   - Ultra-compact mode memory efficiency testing
+   - Microsecond-level performance measurement
+
+4. **Integration Testing**:
    - End-to-end search workflows
    - API endpoint testing
    - Template rendering with search elements
-   - Performance under load
-
-3. **Frontend Tests**:
-   - JavaScript functionality
-   - UI responsiveness
-   - Accessibility compliance
-   - Cross-browser compatibility
+   - Cross-browser compatibility validation
 
 ### Performance Benchmarks
 

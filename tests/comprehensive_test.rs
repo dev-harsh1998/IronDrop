@@ -242,6 +242,7 @@ fn test_enhanced_directory_listing() {
     );
 
     // Ensure no emoji icons are present
+    // Check that response doesn't contain emoji characters (folder and file icons)
     assert!(!response.body.contains("📁"));
     assert!(!response.body.contains("📄"));
 }

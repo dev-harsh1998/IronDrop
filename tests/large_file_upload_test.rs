@@ -68,10 +68,7 @@ fn test_large_file_uploads() {
                     );
                 }
 
-                println!(
-                    "✅ Large file {}MB upload test passed",
-                    size / (1024 * 1024)
-                );
+                println!("Large file {}MB upload test passed", size / (1024 * 1024));
             }
             Err(e) => panic!(
                 "Parser creation failed for {}MB file: {:?}",
@@ -186,7 +183,7 @@ fn test_multiple_large_files() {
         );
     }
 
-    println!("✅ Multiple large files test passed");
+    println!("Multiple large files test passed");
 }
 
 #[test]
@@ -230,5 +227,5 @@ fn test_binary_data_preservation() {
     );
     assert_eq!(data, test_data, "Binary data should be exactly preserved");
 
-    println!("✅ Binary data preservation test passed");
+    println!("Binary data preservation test passed");
 }
