@@ -11,7 +11,7 @@ A lightweight, high-performance file server written in Rust featuring **bidirect
 
 This documentation suite provides complete coverage of IronDrop's architecture, API, deployment, and specialized features. Each document is designed to serve specific audiences and use cases.
 
-**🎉 NEW in v2.5**: Complete file upload functionality with **10GB support**, enhanced multipart parsing, robust security validation, and comprehensive test coverage. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
+**🎉 NEW in v2.5.1**: Complete file upload functionality with **10GB support**, advanced streaming implementation for memory-efficient large file handling, enhanced multipart parsing, robust security validation, and comprehensive test coverage. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
 
 ## 📖 Core Documentation
 
@@ -27,7 +27,7 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 - Security architecture and defense-in-depth implementation
 - Performance characteristics and scalability considerations
 - Template system design and asset pipeline
-- Testing architecture with 59 comprehensive tests across 13 test files
+- Testing architecture with 62 comprehensive tests across 15 test files
 
 **Key Sections:**
 - Core module breakdown with line counts and responsibilities
@@ -92,19 +92,21 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 **Purpose**: Comprehensive testing suite documentation and validation procedures
 
 **Contents:**
-- **Complete Test Coverage**: 59 tests across 13 test files covering all functionality
-- **Test Categories**: Core server, integration, edge cases, memory optimization, performance, stress testing
+- **Complete Test Coverage**: 62 tests across 15 test files covering all functionality
+- **Test Categories**: Core server, integration, edge cases, memory optimization, performance, stress testing, streaming
 - **Security Testing**: Path traversal prevention, input validation, authentication mechanisms
 - **Performance Benchmarks**: Memory efficiency targets, upload speed thresholds, stress test metrics
 - **Shell Script Tests**: End-to-end validation, large file uploads, executable portability
+- **Streaming Tests**: HTTP layer streaming validation and large file bash integration tests
 - **Test Infrastructure**: Helper functions, data management, execution procedures
 
-**Implementation Status**: ✅ **Production Ready** (v2.5)
+**Implementation Status**: ✅ **Production Ready** (v2.5.1)
 - **English-Only Testing**: All test messages and output standardized to English
-- **Comprehensive Coverage**: Edge cases, security scenarios, and performance validation
+- **Comprehensive Coverage**: Edge cases, security scenarios, performance validation, and streaming functionality
 - **Memory Optimization Tests**: Ultra-compact search engine validation for 10M+ files
-- **Upload System Tests**: Complete file upload functionality with 29 dedicated tests
-- **Multipart Parser Tests**: RFC 7578 compliance validation with 7 test cases
+- **Upload System Tests**: Complete file upload functionality with streaming support
+- **Multipart Parser Tests**: RFC 7578 compliance validation with streaming implementation
+- **Large File Testing**: Bash integration tests for multi-gigabyte file uploads
 - **Performance Validation**: Stress testing with throughput and memory efficiency metrics
 
 ### 📤 [Upload Integration Guide](./UPLOAD_INTEGRATION.md)
@@ -153,12 +155,35 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Configuration options and customization
 - Comprehensive API usage examples
 
-**Implementation Status**: ✅ **Production Ready** (v2.5)
-- RFC 7578 compliance with robust boundary detection
-- 661 lines of production-quality code
-- 7+ dedicated test cases covering edge cases
-- Integrated with upload handler and HTTP processing
+**Implementation Status**: ✅ **Production Ready** (v2.5.1)
+- RFC 7578 compliance with robust boundary detection and streaming support
+- Advanced streaming implementation for memory-efficient large file processing
+- 7+ dedicated test cases covering edge cases and streaming scenarios
+- Integrated with upload handler and HTTP processing with automatic mode selection
 - Zero external dependencies with pure Rust implementation
+- Prevents memory exhaustion for multi-gigabyte file uploads
+
+### 🌊 [HTTP Layer Streaming Documentation](./HTTP_STREAMING.md) ⭐
+**Audience**: Backend Developers, System Architects, Performance Engineers  
+**Purpose**: Advanced HTTP layer streaming implementation for efficient large file handling
+
+**Contents:**
+- **Automatic Streaming Logic**: Smart switching between memory and disk storage based on content size
+- **RequestBody Architecture**: Unified interface for memory and file-based request bodies
+- **Performance Optimization**: Memory-efficient handling from 1KB to 10GB+ uploads
+- **Resource Management**: Automatic temporary file cleanup and error recovery
+- **Security Features**: Secure temporary file creation and resource protection
+- **Integration Guide**: Seamless integration with existing upload handlers
+- **Testing Framework**: Comprehensive test coverage with dedicated HTTP streaming tests
+
+**Implementation Status**: ✅ **Production Ready** (v2.5)
+- **Automatic Mode Selection**: ≤1MB in memory, >1MB streamed to disk
+- **Zero Configuration**: Works transparently with existing upload handlers
+- **Resource Protection**: Prevents memory exhaustion from large uploads
+- **Backward Compatibility**: Existing code continues to work without modification
+- **Comprehensive Testing**: Dedicated HTTP streaming tests verify correct behavior
+- **Security Hardening**: Secure temporary file handling with automatic cleanup
+- **Performance Optimized**: Consistent performance regardless of upload size
 
 ### 📊 [Monitoring Guide](./MONITORING.md)
 **Audience**: Operators, Observability Engineers, SREs  

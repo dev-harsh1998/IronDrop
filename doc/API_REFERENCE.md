@@ -188,7 +188,13 @@ Content-Type: text/html; charset=utf-8
 ```
 
 #### `POST /upload` or `POST /?upload=true`
-Uploads one or more files to the server.
+Uploads one or more files to the server with automatic HTTP layer streaming for optimal performance.
+
+**HTTP Streaming Features (v2.5):**
+- **Automatic Mode Selection**: Small uploads (≤1MB) processed in memory, large uploads (>1MB) streamed to disk
+- **Memory Efficiency**: Prevents memory exhaustion from large uploads while maintaining fast processing for small files
+- **Resource Protection**: Automatic temporary file cleanup and error recovery
+- **Scalability**: Consistent performance from 1KB to 10GB uploads
 
 **Request:**
 ```http
@@ -208,6 +214,10 @@ Content-Type: image/jpeg
 <file-data>
 ------WebKitFormBoundary7MA4YWxkTrZu0gW--
 ```
+
+**Processing Modes:**
+- **Memory Mode** (≤1MB): Direct processing in memory for minimal latency
+- **Streaming Mode** (>1MB): Automatic streaming to temporary files with ~64KB memory footprint
 
 **Success Response (JSON):**
 ```json

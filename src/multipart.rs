@@ -883,95 +883,6 @@ impl<R: Read> MultipartIterator<R> {
         Ok(())
     }
 
-    /// Extract part data between current position and next boundary
-    fn extract_part_data(&mut self, content_start: usize) -> Result<Vec<u8>, AppError> {
-        // Set buffer position to start looking for next boundary after content
-        self.buffer_pos = content_start;
-
-        let mut data = Vec::new();
-        let mut total_read = 0;
-
-        loop {
-            // Try to find boundary in current buffer
-            match self.find_next_boundary()? {
-                Some((content_end, is_end)) => {
-                    // Extract remaining data up to boundary
-                    if content_start < content_end {
-                        data.extend_from_slice(&self.buffer[content_start..content_end]);
-                    }
-
-                    if is_end {
-                        self.finished = true;
-                    } else {
-                        // Move to after the boundary for next part
-                        self.skip_to_next_boundary_start(content_end)?;
-                    }
-
-                    if data.len() > self.config.max_part_size as usize {
-                        return Err(AppError::PayloadTooLarge(self.config.max_part_size));
-                    }
-
-                    return Ok(data);
-                }
-                None => {
-                    // No boundary found in current buffer
-                    if self.reader_exhausted {
-                        // No more data to read, take remaining data
-                        if content_start < self.buffer.len() {
-                            data.extend_from_slice(&self.buffer[content_start..]);
-                        }
-                        self.finished = true;
-
-                        if data.len() > self.config.max_part_size as usize {
-                            return Err(AppError::PayloadTooLarge(self.config.max_part_size));
-                        }
-
-                        return Ok(data);
-                    } else {
-                        // Extract data from current buffer (except for boundary search area)
-                        let boundary_search_area = self.boundary.len() + 10; // Keep some data for boundary detection
-                        let extractable_end = if self.buffer.len() > boundary_search_area {
-                            self.buffer.len() - boundary_search_area
-                        } else {
-                            content_start // Don't extract anything if buffer is too small
-                        };
-
-                        if content_start < extractable_end {
-                            let chunk = &self.buffer[content_start..extractable_end];
-                            data.extend_from_slice(chunk);
-                            total_read += chunk.len();
-
-                            // Check size limit
-                            if total_read > self.config.max_part_size as usize {
-                                return Err(AppError::PayloadTooLarge(self.config.max_part_size));
-                            }
-
-                            // Remove extracted data from buffer and adjust positions
-                            self.buffer.drain(content_start..extractable_end);
-                            self.buffer_pos = content_start;
-                        }
-
-                        // Continue reading more data to find the boundary
-                        if !self.fill_buffer()? {
-                            // Failed to read more data, take remaining data
-                            if content_start < self.buffer.len() {
-                                data.extend_from_slice(&self.buffer[content_start..]);
-                            }
-                            self.finished = true;
-
-                            if data.len() > self.config.max_part_size as usize {
-                                return Err(AppError::PayloadTooLarge(self.config.max_part_size));
-                            }
-
-                            return Ok(data);
-                        }
-                        // Continue loop to search again with more data
-                    }
-                }
-            }
-        }
-    }
-
     /// Skip to the start of next boundary after finding content end
     fn skip_to_next_boundary_start(&mut self, content_end: usize) -> Result<(), AppError> {
         let mut boundary_with_dashes = Vec::new();
@@ -1056,6 +967,125 @@ impl<R: Read> MultipartIterator<R> {
         }
 
         (0..=(haystack.len() - needle.len())).find(|&i| haystack[i..i + needle.len()] == *needle)
+    }
+
+    /// Create a memory-efficient part reader that processes data in smaller chunks
+    /// to reduce memory spikes during large file uploads
+    fn create_memory_efficient_part_reader(
+        &mut self,
+        content_start: usize,
+    ) -> Result<MultipartPartReader<Cursor<Vec<u8>>>, AppError> {
+        // Set buffer position to start looking for next boundary after content
+        self.buffer_pos = content_start;
+
+        let mut part_data = Vec::new();
+        const CHUNK_SIZE: usize = 64 * 1024; // Process in 64KB chunks
+
+        loop {
+            // Try to find boundary in current buffer
+            match self.find_next_boundary()? {
+                Some((content_end, is_end)) => {
+                    // Extract remaining data up to boundary
+                    if content_start < content_end {
+                        let remaining_data = &self.buffer[content_start..content_end];
+
+                        // Check size limit before adding
+                        if part_data.len() + remaining_data.len()
+                            > self.config.max_part_size as usize
+                        {
+                            return Err(AppError::PayloadTooLarge(self.config.max_part_size));
+                        }
+
+                        part_data.extend_from_slice(remaining_data);
+                    }
+
+                    if is_end {
+                        self.finished = true;
+                    } else {
+                        // Move to after the boundary for next part
+                        self.skip_to_next_boundary_start(content_end)?;
+                    }
+
+                    return Ok(MultipartPartReader::from_complete_data(
+                        Cursor::new(part_data),
+                        self.config.max_part_size,
+                    ));
+                }
+                None => {
+                    // No boundary found in current buffer
+                    if self.reader_exhausted {
+                        // No more data to read, take remaining data
+                        if content_start < self.buffer.len() {
+                            let remaining_data = &self.buffer[content_start..];
+
+                            if part_data.len() + remaining_data.len()
+                                > self.config.max_part_size as usize
+                            {
+                                return Err(AppError::PayloadTooLarge(self.config.max_part_size));
+                            }
+
+                            part_data.extend_from_slice(remaining_data);
+                        }
+                        self.finished = true;
+
+                        return Ok(MultipartPartReader::from_complete_data(
+                            Cursor::new(part_data),
+                            self.config.max_part_size,
+                        ));
+                    } else {
+                        // Extract data from current buffer in chunks, leaving space for boundary detection
+                        let boundary_search_area = self.boundary.len() + 10;
+                        let extractable_end = if self.buffer.len() > boundary_search_area {
+                            std::cmp::min(
+                                content_start + CHUNK_SIZE,
+                                self.buffer.len() - boundary_search_area,
+                            )
+                        } else {
+                            content_start
+                        };
+
+                        if content_start < extractable_end {
+                            let chunk = &self.buffer[content_start..extractable_end];
+
+                            // Check size limit
+                            if part_data.len() + chunk.len() > self.config.max_part_size as usize {
+                                return Err(AppError::PayloadTooLarge(self.config.max_part_size));
+                            }
+
+                            part_data.extend_from_slice(chunk);
+
+                            // Remove extracted data from buffer to free memory
+                            self.buffer.drain(content_start..extractable_end);
+                            self.buffer_pos = content_start;
+                        }
+
+                        // Continue reading more data
+                        if !self.fill_buffer()? {
+                            // End of stream
+                            if content_start < self.buffer.len() {
+                                let remaining_data = &self.buffer[content_start..];
+
+                                if part_data.len() + remaining_data.len()
+                                    > self.config.max_part_size as usize
+                                {
+                                    return Err(AppError::PayloadTooLarge(
+                                        self.config.max_part_size,
+                                    ));
+                                }
+
+                                part_data.extend_from_slice(remaining_data);
+                            }
+                            self.finished = true;
+
+                            return Ok(MultipartPartReader::from_complete_data(
+                                Cursor::new(part_data),
+                                self.config.max_part_size,
+                            ));
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1143,19 +1173,13 @@ impl<R: Read> Iterator for MultipartIterator<R> {
             }
         }
 
-        // Extract part data
-        let part_data = match self.extract_part_data(content_start) {
-            Ok(data) => data,
+        // Create a streaming reader that processes part data without loading it entirely into memory
+        let reader = match self.create_memory_efficient_part_reader(content_start) {
+            Ok(reader) => reader,
             Err(e) => return Some(Err(e)),
         };
 
         self.parts_count += 1;
-
-        // Create a cursor reader with the complete part data
-        let reader = MultipartPartReader::from_complete_data(
-            Cursor::new(part_data),
-            self.config.max_part_size,
-        );
 
         Some(Ok(MultipartPart {
             headers,
