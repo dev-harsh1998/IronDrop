@@ -1,5 +1,5 @@
 use irondrop::cli::Cli;
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
 use std::fs;
@@ -84,7 +84,7 @@ fn test_stress_many_small_files() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let response = upload_handler.handle_upload(&request, None);
@@ -172,7 +172,7 @@ fn test_stress_mixed_file_sizes() {
                 method: "POST".to_string(),
                 path: "/upload".to_string(),
                 headers,
-                body: Some(body),
+                body: Some(RequestBody::Memory(body)),
             };
 
             let response = upload_handler.handle_upload(&request, None);
@@ -274,7 +274,7 @@ fn test_stress_large_files_sequential() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let file_start = Instant::now();
@@ -404,7 +404,7 @@ fn test_stress_multipart_multiple_files() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let response = upload_handler.handle_upload(&request, None);

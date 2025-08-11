@@ -6,6 +6,7 @@ use crate::response::create_error_response;
 use crate::router::Router;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
+use std::fs::File;
 use std::io::prelude::*;
 use std::net::TcpStream;
 use std::path::PathBuf;
@@ -17,13 +18,40 @@ const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024 * 1024;
 /// Maximum size for request headers (8KB) to prevent header buffer overflow
 const MAX_HEADERS_SIZE: usize = 8 * 1024;
 
+/// Threshold for streaming request bodies to disk (128MB)
+pub const STREAM_TO_DISK_THRESHOLD: usize = 128 * 1024 * 1024;
+
 /// Represents a parsed incoming HTTP request.
 #[derive(Debug)]
 pub struct Request {
     pub method: String,
     pub path: String,
     pub headers: HashMap<String, String>,
-    pub body: Option<Vec<u8>>,
+    pub body: Option<RequestBody>,
+}
+
+/// Request body can be either in memory or streamed to disk for large uploads
+#[derive(Debug)]
+pub enum RequestBody {
+    /// Small bodies stored in memory
+    Memory(Vec<u8>),
+    /// Large bodies streamed to temporary file
+    File { path: PathBuf, size: u64 },
+}
+
+impl RequestBody {
+    /// Get the size of the request body in bytes
+    pub fn len(&self) -> usize {
+        match self {
+            RequestBody::Memory(data) => data.len(),
+            RequestBody::File { size, .. } => *size as usize,
+        }
+    }
+
+    /// Check if the request body is empty
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// Represents an outgoing HTTP response.
@@ -182,11 +210,12 @@ impl Request {
     }
 
     /// Read request body based on Content-Length header with security validations
+    /// Large bodies are streamed to disk to prevent memory exhaustion
     fn read_request_body(
         stream: &mut TcpStream,
         headers: &HashMap<String, String>,
         remaining_bytes: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, AppError> {
+    ) -> Result<Option<RequestBody>, AppError> {
         // Check if we have a Content-Length header
         let content_length = match headers.get("content-length") {
             Some(length_str) => match length_str.parse::<usize>() {
@@ -208,13 +237,31 @@ impl Request {
 
         // Validate content length against security limits
         if content_length == 0 {
-            return Ok(Some(Vec::new()));
+            return Ok(Some(RequestBody::Memory(Vec::new())));
         }
 
         if content_length > MAX_REQUEST_BODY_SIZE {
             return Err(AppError::PayloadTooLarge(MAX_REQUEST_BODY_SIZE as u64));
         }
 
+        // Decide whether to use memory or disk based on size
+        if content_length <= STREAM_TO_DISK_THRESHOLD {
+            // Small body - use memory
+            Self::read_body_to_memory(stream, content_length, remaining_bytes)
+                .map(|body| Some(RequestBody::Memory(body)))
+        } else {
+            // Large body - stream to disk
+            Self::read_body_to_disk(stream, content_length, remaining_bytes)
+                .map(|(path, size)| Some(RequestBody::File { path, size }))
+        }
+    }
+
+    /// Read small request body into memory
+    fn read_body_to_memory(
+        stream: &mut TcpStream,
+        content_length: usize,
+        remaining_bytes: Vec<u8>,
+    ) -> Result<Vec<u8>, AppError> {
         let mut body = Vec::with_capacity(content_length);
 
         // Use any remaining bytes from header parsing
@@ -225,7 +272,7 @@ impl Request {
         let bytes_needed = content_length - bytes_from_headers;
 
         if bytes_needed > 0 {
-            // Read the remaining body in chunks to avoid large allocations
+            // Read the remaining body in chunks
             let mut bytes_read = 0;
             let chunk_size = 8192; // 8KB chunks
             let mut buffer = vec![0; chunk_size];
@@ -235,7 +282,6 @@ impl Request {
 
                 match stream.read(&mut buffer[..to_read]) {
                     Ok(0) => {
-                        // Unexpected end of stream
                         return Err(AppError::BadRequest);
                     }
                     Ok(n) => {
@@ -257,8 +303,103 @@ impl Request {
             return Err(AppError::BadRequest);
         }
 
-        debug!("Successfully read request body: {} bytes", body.len());
-        Ok(Some(body))
+        debug!(
+            "Successfully read request body to memory: {} bytes",
+            body.len()
+        );
+        Ok(body)
+    }
+
+    /// Read large request body directly to disk to prevent memory exhaustion
+    fn read_body_to_disk(
+        stream: &mut TcpStream,
+        content_length: usize,
+        remaining_bytes: Vec<u8>,
+    ) -> Result<(PathBuf, u64), AppError> {
+        // Create temporary file for the request body
+        let temp_filename = format!(
+            "irondrop_request_{}_{:x}.tmp",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+
+        // Use system temp directory
+        let temp_dir = std::env::temp_dir();
+        let temp_path = temp_dir.join(&temp_filename);
+
+        let mut temp_file = File::create(&temp_path).map_err(|e| {
+            error!("Failed to create temporary file {temp_path:?}: {e}");
+            AppError::from(e)
+        })?;
+
+        let mut total_written = 0;
+
+        // Write any remaining bytes from header parsing
+        if !remaining_bytes.is_empty() {
+            let bytes_to_write = remaining_bytes.len().min(content_length);
+            temp_file
+                .write_all(&remaining_bytes[..bytes_to_write])
+                .map_err(|e| {
+                    let _ = std::fs::remove_file(&temp_path);
+                    AppError::from(e)
+                })?;
+            total_written += bytes_to_write;
+        }
+
+        // Stream remaining bytes directly to disk
+        let bytes_needed = content_length - total_written;
+        if bytes_needed > 0 {
+            let mut bytes_read = 0;
+            let chunk_size = 64 * 1024; // 64KB chunks for better disk I/O
+            let mut buffer = vec![0; chunk_size];
+
+            while bytes_read < bytes_needed {
+                let to_read = (bytes_needed - bytes_read).min(chunk_size);
+
+                match stream.read(&mut buffer[..to_read]) {
+                    Ok(0) => {
+                        let _ = std::fs::remove_file(&temp_path);
+                        return Err(AppError::BadRequest);
+                    }
+                    Ok(n) => {
+                        temp_file.write_all(&buffer[..n]).map_err(|e| {
+                            let _ = std::fs::remove_file(&temp_path);
+                            AppError::from(e)
+                        })?;
+                        bytes_read += n;
+                        total_written += n;
+                    }
+                    Err(e) => {
+                        let _ = std::fs::remove_file(&temp_path);
+                        if e.kind() == std::io::ErrorKind::TimedOut {
+                            warn!("Request body read timeout");
+                        }
+                        return Err(AppError::Io(e));
+                    }
+                }
+            }
+        }
+
+        // Ensure all data is written to disk
+        temp_file.sync_all().map_err(|e| {
+            let _ = std::fs::remove_file(&temp_path);
+            AppError::from(e)
+        })?;
+
+        // Verify we read exactly the expected amount
+        if total_written != content_length {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(AppError::BadRequest);
+        }
+
+        debug!(
+            "Successfully streamed request body to disk: {} bytes at {temp_path:?}",
+            total_written
+        );
+        Ok((temp_path, total_written as u64))
     }
 
     /// Simple URL decoding for percent-encoded paths
@@ -293,6 +434,17 @@ impl Request {
         }
 
         Ok(decoded)
+    }
+
+    /// Clean up any temporary files associated with this request
+    pub fn cleanup(&self) {
+        if let Some(RequestBody::File { path, .. }) = &self.body {
+            if let Err(e) = std::fs::remove_file(path) {
+                warn!("Failed to clean up temporary file {path:?}: {e}");
+            } else {
+                debug!("Cleaned up temporary file: {path:?}");
+            }
+        }
     }
 }
 
@@ -354,6 +506,9 @@ pub fn handle_client(
             }
         }
     }
+
+    // Clean up any temporary files created during request processing
+    request.cleanup();
 }
 
 // Static asset, favicon, upload, and health handlers moved to handlers.rs

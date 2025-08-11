@@ -1,5 +1,5 @@
 use irondrop::cli::Cli;
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
 use std::fs;
@@ -75,7 +75,7 @@ fn test_upload_performance_small_files() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let start = Instant::now();
@@ -137,7 +137,7 @@ fn test_upload_performance_medium_files() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let start = Instant::now();
@@ -197,7 +197,7 @@ fn test_concurrent_upload_simulation() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let upload_start = Instant::now();
@@ -269,7 +269,7 @@ fn test_memory_stability_repeated_uploads() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let start = Instant::now();
@@ -342,7 +342,7 @@ fn test_large_file_streaming_performance() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     println!("Starting large file upload...");

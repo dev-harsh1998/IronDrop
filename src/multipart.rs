@@ -78,7 +78,14 @@
 //!         ..Default::default()
 //!     };
 //!
-//!     let parser = MultipartParser::new(Cursor::new(body.clone()), &boundary, config)?;
+//!     // Create parser (example with memory body)
+//!     let data = match body {
+//!         irondrop::http::RequestBody::Memory(data) => data.clone(),
+//!         irondrop::http::RequestBody::File { path, .. } => {
+//!             std::fs::read(path)?
+//!         }
+//!     };
+//!     let parser = MultipartParser::new(Cursor::new(data), &boundary, config)?;
 //!
 //!     // Process each part
 //!     for part_result in parser {

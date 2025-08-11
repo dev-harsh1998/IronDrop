@@ -1,5 +1,5 @@
 use irondrop::cli::Cli;
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
 use std::fs;
@@ -76,7 +76,7 @@ fn test_memory_efficient_small_files() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let response = upload_handler.handle_upload(&request, None);
@@ -142,7 +142,7 @@ fn test_memory_efficient_medium_files() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let response = upload_handler.handle_upload(&request, None);
@@ -208,7 +208,7 @@ fn test_buffer_boundary_conditions() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let response = upload_handler.handle_upload(&request, None);
@@ -287,7 +287,7 @@ fn test_multiple_files_single_request_memory_efficiency() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     // Process the upload
@@ -366,7 +366,7 @@ fn test_streaming_with_various_patterns() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let response = upload_handler.handle_upload(&request, None);
@@ -420,7 +420,7 @@ fn test_memory_cleanup_after_errors() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -444,7 +444,7 @@ fn test_memory_cleanup_after_errors() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);
