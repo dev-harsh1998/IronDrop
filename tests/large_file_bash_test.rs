@@ -114,7 +114,7 @@ fn test_large_file_upload_with_bash_verification() {
             "fallocate",
             &["-l", &size_str, test_file_path.to_str().unwrap()],
         ) {
-            Ok(_) => println!("✅ Test file created successfully"),
+            Ok(_) => println!("Test file created successfully"),
             Err(e) => {
                 // Fallback to dd if fallocate is not available
                 println!("fallocate failed ({}), falling back to dd...", e);
@@ -130,7 +130,7 @@ fn test_large_file_upload_with_bash_verification() {
                         "status=none",
                     ],
                 ) {
-                    Ok(_) => println!("✅ Test file created with dd"),
+                    Ok(_) => println!("Test file created with dd"),
                     Err(e) => panic!("Failed to create test file: {}", e),
                 }
             }
@@ -229,17 +229,17 @@ fn test_large_file_upload_with_bash_verification() {
                         uploaded_file_path.to_str().unwrap(),
                     ],
                 ) {
-                    Ok(_) => println!("✅ Files are identical (cmp verification passed)"),
+                    Ok(_) => println!("Files are identical (cmp verification passed)"),
                     Err(e) => panic!("Files differ: {}", e),
                 }
 
                 println!(
-                    "✅ Large file upload test PASSED for {} MB file",
+                    "Large file upload test PASSED for {} MB file",
                     size / (1024 * 1024)
                 );
-                println!("   - Size verification: ✅");
-                println!("   - SHA1 verification: ✅");
-                println!("   - Byte comparison: ✅");
+                println!("   - Size verification: PASSED");
+                println!("   - SHA1 verification: PASSED");
+                println!("   - Byte comparison: PASSED");
             }
             Err(e) => panic!(
                 "Upload failed for {} MB file: {:?}",
@@ -366,9 +366,9 @@ fn test_very_large_file_upload_1gb_plus() {
                 "1GB+ file upload should be bit-perfect"
             );
 
-            println!("🎉 1GB+ file upload test PASSED!");
+            println!("1GB+ file upload test PASSED!");
             println!("   - File size: {} MB", size / (1024 * 1024));
-            println!("   - SHA1 match: ✅");
+            println!("   - SHA1 match: PASSED");
         }
         Err(e) => panic!("1GB+ upload failed: {:?}", e),
     }
@@ -515,10 +515,10 @@ fn test_multiple_large_files_bash_verification() {
                     filename
                 );
 
-                println!("✅ {} verified ({} MB)", filename, size / (1024 * 1024));
+                println!("{} verified ({} MB)", filename, size / (1024 * 1024));
             }
 
-            println!("🎉 Multi-file upload with bash verification PASSED!");
+            println!("Multi-file upload with bash verification PASSED!");
         }
         Err(e) => panic!("Multi-file upload failed: {:?}", e),
     }

@@ -53,14 +53,58 @@ use crate::templates::TemplateEngine;
 use glob::Pattern;
 use log::{error, info, warn};
 // Removed rand dependency
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 /// Temporary file prefix for atomic operations
 const TEMP_FILE_PREFIX: &str = ".irondrop_temp_";
+
+/// Optimized buffer size for memory-efficient streaming (reduced from 64KB to 8KB)
+const STREAM_BUFFER_SIZE: usize = 8 * 1024; // 8KB buffer
+
+/// Simple buffer pool for memory reuse during uploads
+struct BufferPool {
+    buffers: Arc<Mutex<Vec<Vec<u8>>>>,
+}
+
+impl BufferPool {
+    fn new() -> Self {
+        Self {
+            buffers: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn get_buffer(&self) -> Vec<u8> {
+        if let Ok(mut buffers) = self.buffers.lock() {
+            if let Some(mut buffer) = buffers.pop() {
+                buffer.clear();
+                buffer.resize(STREAM_BUFFER_SIZE, 0);
+                return buffer;
+            }
+        }
+        vec![0u8; STREAM_BUFFER_SIZE]
+    }
+
+    fn return_buffer(&self, buffer: Vec<u8>) {
+        if let Ok(mut buffers) = self.buffers.lock() {
+            if buffers.len() < 10 {
+                // Limit pool size to prevent memory bloat
+                buffers.push(buffer);
+            }
+        }
+    }
+}
+
+thread_local! {
+    static BUFFER_POOL: RefCell<BufferPool> = RefCell::new(BufferPool::new());
+}
+
+// UploadGuard removed since concurrent limiting is handled at server level
 
 /// Progress tracking information for uploads
 #[derive(Debug, Clone)]
@@ -121,6 +165,9 @@ pub struct UploadResult {
     /// Any warnings during processing
     pub warnings: Vec<String>,
 }
+
+// Concurrent upload limiting removed - should be handled at HTTP server level
+// to avoid interfering with single requests containing multiple files
 
 /// Comprehensive upload handler with security and configuration
 pub struct UploadHandler {
@@ -309,6 +356,10 @@ impl UploadHandler {
             return Err(AppError::upload_disabled());
         }
 
+        // Note: Concurrent upload limiting should be handled at the HTTP request level,
+        // not here, since a single request can contain multiple files.
+        // For now, we'll rely on the server's connection limiting.
+
         let start_time = std::time::Instant::now();
 
         // Track upload start
@@ -441,8 +492,8 @@ impl UploadHandler {
                 AppError::from(e)
             })?;
 
-            // Use a reasonably sized buffer for streaming
-            let mut buffer = [0u8; 64 * 1024]; // 64KB buffer
+            // Use a memory-optimized buffer from pool for streaming
+            let mut buffer = BUFFER_POOL.with(|pool| pool.borrow().get_buffer());
             let mut file_size: u64 = 0;
 
             // Stream data from part reader to file
@@ -476,6 +527,9 @@ impl UploadHandler {
                 let _ = fs::remove_file(&temp_path); // Cleanup on error
                 AppError::from(e)
             })?;
+
+            // Return buffer to pool for reuse
+            BUFFER_POOL.with(|pool| pool.borrow().return_buffer(buffer));
 
             // Update total bytes if we didn't have Content-Length
             if content_length.is_none() {

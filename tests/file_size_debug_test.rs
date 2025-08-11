@@ -62,7 +62,7 @@ fn test_debug_file_size_limits() {
 
                                     if data.len() != size {
                                         println!(
-                                            "❌ TRUNCATION DETECTED: Expected {}, got {}",
+                                            "TRUNCATION DETECTED: Expected {}, got {}",
                                             size,
                                             data.len()
                                         );
@@ -84,19 +84,19 @@ fn test_debug_file_size_limits() {
                                             );
                                         }
                                     } else {
-                                        println!("✅ Size correct");
+                                        println!("Size correct");
                                     }
                                 }
-                                Err(e) => println!("❌ Error reading data: {e:?}"),
+                                Err(e) => println!("Error reading data: {e:?}"),
                             }
                         }
-                        Err(e) => println!("❌ Error with part: {e:?}"),
+                        Err(e) => println!("Error with part: {e:?}"),
                     }
                 } else {
-                    println!("❌ Expected 1 part, got {}", parts.len());
+                    println!("Expected 1 part, got {}", parts.len());
                 }
             }
-            Err(e) => println!("❌ Parser creation failed: {e:?}"),
+            Err(e) => println!("Parser creation failed: {e:?}"),
         }
 
         println!("---");
