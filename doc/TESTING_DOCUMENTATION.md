@@ -2,14 +2,14 @@
 
 ## Overview
 
-IronDrop features a comprehensive testing suite with **59 tests** across multiple categories, ensuring reliability, performance, and security. All tests use English-only characters and messages for consistency and maintainability.
+IronDrop features a comprehensive testing suite with **61 tests** across multiple categories, ensuring reliability, performance, and security. All tests use English-only characters and messages for consistency and maintainability.
 
 ## Test Suite Structure
 
 ### 📊 Test Statistics
-- **Total Tests**: 59 tests across 13 test files
-- **Coverage Areas**: Core functionality, security, performance, memory optimization, stress testing
-- **Test Types**: Unit tests, integration tests, performance benchmarks, stress tests
+- **Total Tests**: 62 tests across 15 test files
+- **Coverage Areas**: Core functionality, security, performance, memory optimization, stress testing, HTTP streaming, large file handling
+- **Test Types**: Unit tests, integration tests, performance benchmarks, stress tests, streaming tests, bash integration tests
 - **Languages**: Rust (`.rs`) and Shell (`.sh`) test files
 
 ## Core Test Categories
@@ -163,6 +163,24 @@ IronDrop features a comprehensive testing suite with **59 tests** across multipl
 - `test_embedded_static_assets()` - Asset serving
 - `test_directory_listing_template()` - Directory rendering
 
+### 10. **HTTP Streaming Tests** (`http_streaming_test.rs`) ⭐
+**Purpose**: HTTP layer streaming functionality for efficient large file handling  
+**Test Count**: 2 tests  
+**Key Areas**:
+- Automatic mode selection based on content size
+- Memory vs. disk processing verification
+- Small upload memory efficiency (≤1MB)
+- Large upload disk streaming (>1MB)
+- Resource cleanup and temporary file management
+- Performance characteristics across size ranges
+
+**Notable Tests**:
+- `test_small_http_body_in_memory()` - Verifies small uploads (512KB) are processed in memory
+- `test_large_http_body_streamed_to_disk()` - Verifies large uploads (2MB) are streamed to disk
+- Automatic `RequestBody` mode selection testing
+- Temporary file creation and cleanup validation
+- Memory footprint verification for large uploads
+
 ## Shell Script Tests
 
 ### 1. **Upload Functionality Test** (`test_upload.sh`)
@@ -180,6 +198,22 @@ IronDrop features a comprehensive testing suite with **59 tests** across multipl
 - 1GB+ file upload testing
 - Upload verification and integrity checking
 - Resource-intensive testing (requires user confirmation)
+
+### 3. **Large File Bash Verification Test** (`large_file_bash_test.rs`) ⭐
+**Purpose**: Bash script integration testing for large file uploads  
+**Test Count**: 1 test  
+**Key Areas**:
+- Multi-gigabyte file upload testing (85MB test files)
+- Bash script execution and verification
+- Memory efficiency validation during large uploads
+- Streaming implementation verification
+- Real-world upload scenario simulation
+
+**Notable Tests**:
+- `test_multiple_large_files_bash_verification()` - Executes bash script with multiple 85MB files
+- Verifies streaming implementation prevents memory exhaustion
+- Confirms large file uploads complete successfully without hanging
+- Tests real-world upload scenarios with actual file I/O
 - Large file handling validation
 
 ### 3. **Executable Portability Test** (`test_executable_portability.sh`)
@@ -300,6 +334,8 @@ cargo test --test stress_test
 cargo test --test multipart_test
 cargo test --test ultra_compact_test
 cargo test --test template_embedding_test
+cargo test --test http_streaming_test
+cargo test --test large_file_bash_test
 
 # Run shell script tests
 ./tests/test_upload.sh

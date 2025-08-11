@@ -18,8 +18,9 @@ const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024 * 1024;
 /// Maximum size for request headers (8KB) to prevent header buffer overflow
 const MAX_HEADERS_SIZE: usize = 8 * 1024;
 
-/// Threshold for streaming request bodies to disk (128MB)
-pub const STREAM_TO_DISK_THRESHOLD: usize = 128 * 1024 * 1024;
+/// Threshold for streaming request bodies to disk (64MB)
+/// This ensures total memory usage stays well below 128MB
+pub const STREAM_TO_DISK_THRESHOLD: usize = 64 * 1024 * 1024;
 
 /// Represents a parsed incoming HTTP request.
 #[derive(Debug)]

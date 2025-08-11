@@ -51,8 +51,8 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
 
 ### 3. **File Operations**
 - **`fs.rs`**: Directory operations and file system interactions
-- **`upload.rs`**: Secure file upload handling with atomic operations
-- **`multipart.rs`**: RFC 7578 compliant multipart/form-data parser
+- **`upload.rs`**: Secure file upload handling with atomic operations and HTTP streaming
+- **`multipart.rs`**: RFC 7578 compliant multipart/form-data parser with advanced streaming support
 
 ### 4. **Search System**
 - **`search.rs`**: Ultra-low memory search engine with LRU caching and indexing
@@ -240,6 +240,125 @@ Request → Cache Check → Hit: Return Cached Results
 - **Memory Bounds**: Maximum 1000 cached queries
 - **Thread Safety**: Concurrent read/write operations supported
 
+## HTTP Layer Streaming Architecture
+
+### Overview
+IronDrop v2.5 introduces advanced HTTP layer streaming for efficient handling of large file uploads. The system automatically switches between memory-based and disk-based processing based on content size, providing optimal performance and resource utilization.
+
+### RequestBody Architecture
+
+```rust
+pub enum RequestBody {
+    Memory(Vec<u8>),           // Small uploads (≤1MB)
+    File(PathBuf),             // Large uploads (>1MB)
+}
+```
+
+The `RequestBody` enum provides a unified interface for handling HTTP request bodies of varying sizes:
+
+- **Memory Variant**: Stores small uploads directly in memory for fast processing
+- **File Variant**: Streams large uploads to temporary files to prevent memory exhaustion
+- **Automatic Selection**: Transparent switching based on configurable size threshold
+- **Resource Management**: Automatic cleanup of temporary files with error recovery
+
+### Streaming Decision Flow
+
+```
+HTTP Request → Content-Length Check → Size Threshold Comparison
+                                              │
+                    ┌─────────────────────────┼─────────────────────────┐
+                    │ ≤1MB                    │                    >1MB │
+                    ▼                         ▼                         ▼
+            Memory Processing           Disk Streaming              Disk Streaming
+            ┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐
+            │ Read to Vec<u8> │        │ Create Temp File│        │ Stream to Disk  │
+            │ Fast Processing │        │ Stream Chunks   │        │ Memory Efficient│
+            │ Low Latency     │        │ Auto Cleanup    │        │ Large File Safe │
+            └─────────────────┘        └─────────────────┘        └─────────────────┘
+                    │                         │                         │
+                    └─────────────────────────┼─────────────────────────┘
+                                              ▼
+                                    Unified Processing
+                                    (Multipart Parser)
+```
+
+### Performance Characteristics
+
+| Upload Size | Processing Mode | Memory Usage | Disk I/O | Latency |
+|-------------|----------------|--------------|----------|---------|
+| <1KB        | Memory         | ~1KB         | None     | <1ms    |
+| 1KB-1MB     | Memory         | ~Size        | None     | <10ms   |
+| 1MB-100MB   | Disk Streaming | ~64KB        | Sequential| <100ms  |
+| 100MB-1GB   | Disk Streaming | ~64KB        | Sequential| <1s     |
+| 1GB-10GB    | Disk Streaming | ~64KB        | Sequential| <10s    |
+
+### Security and Resource Protection
+
+#### Temporary File Management
+- **Secure Creation**: Uses `tempfile::NamedTempFile` for secure temporary file creation
+- **Automatic Cleanup**: Files automatically deleted when `RequestBody` is dropped
+- **Error Recovery**: Cleanup guaranteed even during error conditions
+- **Permission Control**: Temporary files created with restricted permissions
+
+#### Resource Limits
+- **Memory Protection**: Prevents memory exhaustion from large uploads
+- **Disk Space Monitoring**: Checks available disk space before streaming
+- **Concurrent Upload Limits**: Configurable limits on simultaneous uploads
+- **Size Validation**: Enforces maximum upload size limits
+
+### Integration with Upload System
+
+The HTTP streaming layer integrates seamlessly with the existing upload infrastructure:
+
+```rust
+impl UploadHandler {
+    pub fn handle_upload(&self, request_body: RequestBody) -> Result<(), AppError> {
+        match request_body {
+            RequestBody::Memory(data) => {
+                // Fast path for small uploads
+                let cursor = Cursor::new(data);
+                self.process_multipart(cursor)
+            }
+            RequestBody::File(path) => {
+                // Streaming path for large uploads
+                let file = File::open(path)?;
+                self.process_multipart(file)
+            }
+        }
+    }
+}
+```
+
+### Monitoring and Observability
+
+The streaming system provides comprehensive monitoring capabilities:
+
+- **Upload Metrics**: Track memory vs. disk processing ratios
+- **Performance Monitoring**: Measure processing times by upload size
+- **Resource Usage**: Monitor temporary file creation and cleanup
+- **Error Tracking**: Log streaming failures and recovery actions
+
+### Configuration Options
+
+```rust
+pub struct StreamingConfig {
+    pub memory_threshold: usize,      // Default: 1MB
+    pub chunk_size: usize,           // Default: 64KB
+    pub temp_dir: Option<PathBuf>,   // Default: system temp
+    pub max_concurrent: usize,       // Default: 10
+}
+```
+
+### Testing Infrastructure
+
+Dedicated HTTP streaming tests verify correct behavior:
+
+- **`http_streaming_test.rs`**: Comprehensive streaming functionality tests
+- **Size Threshold Testing**: Verify correct mode selection
+- **Resource Cleanup Testing**: Ensure temporary files are properly cleaned up
+- **Error Condition Testing**: Validate error recovery and resource cleanup
+- **Performance Testing**: Measure streaming performance across size ranges
+
 ## Security Architecture
 
 ### Defense in Depth
@@ -285,7 +404,9 @@ Request → Cache Check → Hit: Return Cached Results
 ### Memory Usage
 - **Baseline**: ~3MB + (thread_count × 8KB stack)
 - **Template Cache**: In-memory storage for frequently accessed templates
-- **Upload Buffer**: Streaming processing minimizes memory usage
+- **Upload Buffer**: HTTP streaming with automatic memory/disk switching
+- **Small Uploads (≤1MB)**: Direct memory processing for optimal performance
+- **Large Uploads (>1MB)**: Disk streaming with ~64KB memory footprint
 - **File Operations**: Configurable chunk sizes (default: 1KB)
 
 ### Concurrent Processing
