@@ -544,6 +544,9 @@ pub struct MultipartPart<R> {
 
 impl<R: Read> MultipartPart<R> {
     /// Read the entire part content as bytes
+    ///
+    /// Note: This loads the entire part content into memory. For large files,
+    /// consider using the reader directly with a buffer to stream the content.
     pub fn read_to_bytes(&mut self) -> Result<Vec<u8>, AppError> {
         let mut buffer = Vec::new();
         self.reader.read_to_end(&mut buffer).map_err(|e| {
@@ -554,6 +557,39 @@ impl<R: Read> MultipartPart<R> {
             }
         })?;
         Ok(buffer)
+    }
+
+    /// Stream content to a writer using a buffer of specified size
+    ///
+    /// This is more memory-efficient than read_to_bytes() for large files
+    pub fn stream_to<W: std::io::Write>(
+        &mut self,
+        writer: &mut W,
+        buffer_size: usize,
+    ) -> Result<u64, AppError> {
+        let mut buffer = vec![0; buffer_size];
+        let mut total_bytes = 0;
+
+        loop {
+            let bytes_read = self.reader.read(&mut buffer).map_err(|e| {
+                if e.to_string().contains("size limit") {
+                    AppError::PayloadTooLarge(self.reader.max_size)
+                } else {
+                    AppError::Io(e)
+                }
+            })?;
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            writer
+                .write_all(&buffer[..bytes_read])
+                .map_err(AppError::Io)?;
+            total_bytes += bytes_read as u64;
+        }
+
+        Ok(total_bytes)
     }
 
     /// Read the entire part content as a UTF-8 string
