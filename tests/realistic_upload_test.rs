@@ -2,7 +2,7 @@
 #![allow(clippy::expect_fun_call)]
 
 use irondrop::cli::Cli;
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
 use std::fs;
@@ -82,7 +82,7 @@ fn test_realistic_large_file_upload() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         // Process the upload
@@ -154,7 +154,7 @@ fn test_realistic_binary_file_upload() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     // Process the upload
@@ -241,7 +241,7 @@ fn test_realistic_multiple_large_files() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     // Process the upload
@@ -325,7 +325,7 @@ fn test_exact_boundary_cases() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let response = upload_handler.handle_upload(&request, None);

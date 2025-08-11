@@ -2,7 +2,7 @@
 #![allow(clippy::expect_fun_call)]
 
 use irondrop::cli::Cli;
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -176,7 +176,7 @@ fn test_large_file_upload_with_bash_verification() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         // Process the upload
@@ -332,7 +332,7 @@ fn test_very_large_file_upload_1gb_plus() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     println!("Processing 1GB+ upload...");
@@ -471,7 +471,7 @@ fn test_multiple_large_files_bash_verification() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     // Process the multi-file upload

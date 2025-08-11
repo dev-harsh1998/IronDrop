@@ -1,6 +1,6 @@
 //! Test for POST request body parsing functionality.
 
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
@@ -25,7 +25,14 @@ fn test_post_request_with_body() {
                 assert_eq!(request.path, "/test");
                 assert!(request.body.is_some());
                 let body = request.body.unwrap();
-                assert_eq!(body, b"Hello, world!");
+                match body {
+                    RequestBody::Memory(data) => {
+                        assert_eq!(data, b"Hello, world!");
+                    }
+                    RequestBody::File { .. } => {
+                        panic!("Expected memory body, got file body");
+                    }
+                }
                 assert_eq!(
                     request.headers.get("content-length"),
                     Some(&"13".to_string())

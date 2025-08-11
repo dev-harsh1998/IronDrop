@@ -64,9 +64,6 @@ use std::sync::{Arc, Mutex};
 /// Temporary file prefix for atomic operations
 const TEMP_FILE_PREFIX: &str = ".irondrop_temp_";
 
-/// Maximum RAM usage for uploads (128MB limit)
-const MAX_UPLOAD_RAM_USAGE: usize = 128 * 1024 * 1024; // 128MB
-
 /// Optimized buffer size for memory-efficient streaming
 const STREAM_BUFFER_SIZE: usize = 64 * 1024; // 64KB buffer for better I/O performance
 
@@ -380,8 +377,13 @@ impl UploadHandler {
             .as_ref()
             .ok_or_else(|| AppError::invalid_multipart("No request body"))?;
 
-        // Check total upload size
-        if body.len() as u64 > self.max_upload_size {
+        // Check total upload size based on body type
+        let body_size = match body {
+            crate::http::RequestBody::Memory(data) => data.len() as u64,
+            crate::http::RequestBody::File { size, .. } => *size,
+        };
+
+        if body_size > self.max_upload_size {
             return Err(AppError::payload_too_large(self.max_upload_size));
         }
 
@@ -402,16 +404,19 @@ impl UploadHandler {
         let boundary =
             MultipartParser::<Cursor<Vec<u8>>>::extract_boundary_from_content_type(content_type)?;
 
-        // Use disk-based streaming for large uploads to limit RAM usage
-        if body.len() > MAX_UPLOAD_RAM_USAGE {
-            self.handle_large_upload_disk_streaming(request, body, &boundary, stats, start_time)
-        } else {
-            self.handle_small_upload_memory(request, body, &boundary, stats, start_time)
+        // Handle based on body type (HTTP layer already decided memory vs disk)
+        match body {
+            crate::http::RequestBody::Memory(data) => {
+                self.handle_memory_upload(request, data, &boundary, stats, start_time)
+            }
+            crate::http::RequestBody::File { path, size } => {
+                self.handle_file_upload(request, path, *size, &boundary, stats, start_time)
+            }
         }
     }
 
-    /// Handle small uploads that fit in memory (< 256MB)
-    fn handle_small_upload_memory(
+    /// Handle uploads that are already in memory
+    fn handle_memory_upload(
         &mut self,
         request: &Request,
         body: &[u8],
@@ -446,79 +451,35 @@ impl UploadHandler {
         self.process_multipart_parts(parser, stats, start_time, request)
     }
 
-    /// Handle large uploads using disk-based streaming to limit RAM usage
-    fn handle_large_upload_disk_streaming(
+    /// Handle uploads that are already streamed to a file
+    fn handle_file_upload(
         &mut self,
         request: &Request,
-        body: &[u8],
+        temp_file_path: &PathBuf,
+        file_size: u64,
         boundary: &str,
         stats: Option<&crate::server::ServerStats>,
         start_time: std::time::Instant,
     ) -> Result<HttpResponse, AppError> {
-        // Check available disk space (need extra space for temporary file)
-        self.check_disk_space(body.len() as u64 * 2)?;
-
-        // Create a temporary file to store the request body
-        let temp_body_filename = format!(
-            "{}{}_body_{:x}.tmp",
-            TEMP_FILE_PREFIX,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        );
-        let temp_body_path = self.target_dir.join(&temp_body_filename);
-
-        // Write request body to temporary file in chunks to limit RAM usage
-        {
-            let mut temp_body_file = File::create(&temp_body_path).map_err(|e| {
-                error!("Failed to create temporary body file {temp_body_path:?}: {e}");
-                AppError::from(e)
-            })?;
-
-            // Write body to disk in chunks to limit memory usage
-            let mut remaining = body;
-            while !remaining.is_empty() {
-                let chunk_size = std::cmp::min(DISK_BUFFER_SIZE, remaining.len());
-                let chunk = &remaining[..chunk_size];
-
-                temp_body_file.write_all(chunk).map_err(|e| {
-                    error!("Failed to write to temporary body file {temp_body_path:?}: {e}");
-                    let _ = fs::remove_file(&temp_body_path);
-                    AppError::from(e)
-                })?;
-
-                remaining = &remaining[chunk_size..];
-            }
-
-            temp_body_file.sync_all().map_err(|e| {
-                error!("Failed to sync temporary body file {temp_body_path:?}: {e}");
-                let _ = fs::remove_file(&temp_body_path);
-                AppError::from(e)
-            })?;
-        }
+        // Check available disk space
+        self.check_disk_space(file_size)?;
 
         // Validate boundary exists in the file (read first chunk only)
         {
-            let mut temp_body_file = File::open(&temp_body_path).map_err(|e| {
-                error!("Failed to open temporary body file {temp_body_path:?}: {e}");
-                let _ = fs::remove_file(&temp_body_path);
+            let mut temp_body_file = File::open(temp_file_path).map_err(|e| {
+                error!("Failed to open temporary body file {temp_file_path:?}: {e}");
                 AppError::from(e)
             })?;
 
-            let mut boundary_check_buffer = vec![0u8; std::cmp::min(DISK_BUFFER_SIZE, body.len())];
+            let mut boundary_check_buffer =
+                vec![0u8; std::cmp::min(DISK_BUFFER_SIZE, file_size as usize)];
             let bytes_read = temp_body_file
                 .read(&mut boundary_check_buffer)
-                .map_err(|e| {
-                    let _ = fs::remove_file(&temp_body_path);
-                    AppError::from(e)
-                })?;
+                .map_err(AppError::from)?;
 
             let body_sample = String::from_utf8_lossy(&boundary_check_buffer[..bytes_read]);
             let expected_boundary = format!("--{boundary}");
             if !body_sample.contains(&expected_boundary) {
-                let _ = fs::remove_file(&temp_body_path);
                 return Err(AppError::invalid_multipart(
                     "Boundary not found in request body",
                 ));
@@ -526,9 +487,8 @@ impl UploadHandler {
         }
 
         // Create multipart parser using the temporary file
-        let temp_body_file = File::open(&temp_body_path).map_err(|e| {
-            error!("Failed to open temporary body file {temp_body_path:?}: {e}");
-            let _ = fs::remove_file(&temp_body_path);
+        let temp_body_file = File::open(temp_file_path).map_err(|e| {
+            error!("Failed to open temporary body file {temp_file_path:?}: {e}");
             AppError::from(e)
         })?;
 
@@ -536,17 +496,15 @@ impl UploadHandler {
             match MultipartParser::new(temp_body_file, boundary, self.multipart_config.clone()) {
                 Ok(p) => p,
                 Err(e) => {
-                    let _ = fs::remove_file(&temp_body_path);
                     return Err(e);
                 }
             };
 
-        let result = self.process_multipart_parts(parser, stats, start_time, request);
+        // Process the multipart data
+        // Note: We don't clean up the temp file here as it's managed by the HTTP layer
+        // The HTTP layer will clean it up after the request is complete
 
-        // Clean up temporary body file
-        let _ = fs::remove_file(&temp_body_path);
-
-        result
+        self.process_multipart_parts(parser, stats, start_time, request)
     }
 
     /// Process multipart parts from parser (common logic for both memory and disk-based parsing)

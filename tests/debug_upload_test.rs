@@ -5,7 +5,7 @@
 #![allow(clippy::expect_fun_call)]
 
 use irondrop::cli::Cli;
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use irondrop::multipart::{MultipartConfig, MultipartParser};
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
@@ -153,7 +153,7 @@ fn test_upload_handler_direct() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(multipart_body.into_bytes()),
+        body: Some(RequestBody::Memory(multipart_body.into_bytes())),
     };
 
     println!("Testing upload handler directly...");
@@ -220,7 +220,7 @@ fn test_upload_handler_no_extension_restrictions() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(multipart_body.into_bytes()),
+        body: Some(RequestBody::Memory(multipart_body.into_bytes())),
     };
 
     println!("Testing upload handler with no extension restrictions...");
@@ -322,7 +322,7 @@ fn test_request_creation() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(multipart_body.into_bytes()),
+        body: Some(RequestBody::Memory(multipart_body.into_bytes())),
     };
 
     println!(

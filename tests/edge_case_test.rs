@@ -1,5 +1,5 @@
 use irondrop::cli::Cli;
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
 use std::fs;
@@ -69,7 +69,7 @@ fn test_empty_file_upload() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -108,7 +108,7 @@ fn test_single_byte_file() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -151,7 +151,7 @@ fn test_malformed_multipart_boundary() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(malformed_body.to_vec()),
+        body: Some(RequestBody::Memory(malformed_body.to_vec())),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -179,7 +179,7 @@ fn test_missing_content_type() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(test_data.to_vec()),
+        body: Some(RequestBody::Memory(test_data.to_vec())),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -224,7 +224,7 @@ fn test_invalid_filename_characters() {
             method: "POST".to_string(),
             path: "/upload".to_string(),
             headers,
-            body: Some(body),
+            body: Some(RequestBody::Memory(body)),
         };
 
         let response = upload_handler.handle_upload(&request, None);
@@ -264,7 +264,7 @@ fn test_very_long_filename() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -303,7 +303,7 @@ fn test_boundary_at_buffer_edge() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -379,7 +379,7 @@ fn test_multiple_files_with_same_name() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -425,7 +425,7 @@ fn test_binary_data_with_boundary_patterns() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);
@@ -475,7 +475,7 @@ fn test_special_character_filename() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(body),
+        body: Some(RequestBody::Memory(body)),
     };
 
     let response = upload_handler.handle_upload(&request, None);

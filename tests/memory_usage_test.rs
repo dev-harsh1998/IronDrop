@@ -1,5 +1,5 @@
 use irondrop::cli::Cli;
-use irondrop::http::Request;
+use irondrop::http::{Request, RequestBody};
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
 use tempfile::TempDir;
@@ -59,7 +59,7 @@ fn test_large_upload_uses_disk_streaming() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(multipart_data),
+        body: Some(RequestBody::Memory(multipart_data)),
     };
 
     // This should succeed and use disk-based streaming
@@ -157,7 +157,7 @@ fn test_small_upload_uses_memory_processing() {
         method: "POST".to_string(),
         path: "/upload".to_string(),
         headers,
-        body: Some(multipart_data),
+        body: Some(RequestBody::Memory(multipart_data)),
     };
 
     // This should succeed and use memory-based processing
