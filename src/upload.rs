@@ -52,7 +52,7 @@ use crate::response::{get_mime_type, HttpResponse};
 use crate::templates::TemplateEngine;
 use glob::Pattern;
 use log::{error, info, warn};
-use rand;
+// Removed rand dependency
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -431,7 +431,7 @@ impl UploadHandler {
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_nanos(),
-                rand::random::<u32>() // Add randomness for uniqueness
+                std::process::id().wrapping_mul(0x12345678) // Use process ID with a multiplier for uniqueness
             );
             let temp_path = self.target_dir.join(&temp_filename);
 
