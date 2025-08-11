@@ -51,11 +51,12 @@ use crate::multipart::{MultipartConfig, MultipartParser};
 use crate::response::{get_mime_type, HttpResponse};
 use crate::templates::TemplateEngine;
 use glob::Pattern;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
+use rand;
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Temporary file prefix for atomic operations
@@ -406,13 +407,79 @@ impl UploadHandler {
             // Validate filename
             self.validate_filename(&original_filename)?;
 
-            // Read file content
-            let file_content = part.read_to_bytes()?;
-            total_bytes += file_content.len() as u64;
+            // Get file size from Content-Length header if available
+            let content_length = part
+                .headers
+                .headers
+                .get("content-length")
+                .and_then(|len| len.parse::<u64>().ok());
 
-            // Additional size check per file
-            if file_content.len() as u64 > self.max_file_size {
-                return Err(AppError::payload_too_large(self.max_file_size));
+            // Check file size limit early if we know the size
+            if let Some(length) = content_length {
+                if length > self.max_file_size {
+                    return Err(AppError::payload_too_large(self.max_file_size));
+                }
+                total_bytes += length;
+            }
+
+            // Create a temporary file for streaming the upload
+            let temp_filename = format!(
+                "{}{}_{}_{:x}.tmp",
+                TEMP_FILE_PREFIX,
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos(),
+                rand::random::<u32>() // Add randomness for uniqueness
+            );
+            let temp_path = self.target_dir.join(&temp_filename);
+
+            // Stream the file content directly to disk instead of loading it into memory
+            let mut temp_file = File::create(&temp_path).map_err(|e| {
+                error!("Failed to create temporary file {temp_path:?}: {e}");
+                AppError::from(e)
+            })?;
+
+            // Use a reasonably sized buffer for streaming
+            let mut buffer = [0u8; 64 * 1024]; // 64KB buffer
+            let mut file_size: u64 = 0;
+
+            // Stream data from part reader to file
+            loop {
+                match part.reader.read(&mut buffer) {
+                    Ok(0) => break, // End of file
+                    Ok(bytes_read) => {
+                        temp_file.write_all(&buffer[..bytes_read]).map_err(|e| {
+                            error!("Failed to write to temporary file {temp_path:?}: {e}");
+                            let _ = fs::remove_file(&temp_path); // Cleanup on error
+                            AppError::from(e)
+                        })?;
+                        file_size += bytes_read as u64;
+
+                        // Check size limit during streaming
+                        if file_size > self.max_file_size {
+                            let _ = fs::remove_file(&temp_path); // Cleanup
+                            return Err(AppError::payload_too_large(self.max_file_size));
+                        }
+                    }
+                    Err(e) => {
+                        let _ = fs::remove_file(&temp_path); // Cleanup on error
+                        return Err(AppError::Io(e));
+                    }
+                }
+            }
+
+            // Sync file to ensure data is written
+            temp_file.sync_all().map_err(|e| {
+                error!("Failed to sync temporary file {temp_path:?}: {e}");
+                let _ = fs::remove_file(&temp_path); // Cleanup on error
+                AppError::from(e)
+            })?;
+
+            // Update total bytes if we didn't have Content-Length
+            if content_length.is_none() {
+                total_bytes += file_size;
             }
 
             // Validate file extension
@@ -426,8 +493,14 @@ impl UploadHandler {
                 self.generate_unique_filename(&original_filename)?;
             let target_path = self.target_dir.join(&final_filename);
 
-            // Write file atomically
-            let saved_path = self.write_file_atomically(&target_path, &file_content)?;
+            // Rename the temporary file to the target path (atomic operation)
+            let saved_path = fs::rename(&temp_path, &target_path)
+                .map(|_| target_path.clone())
+                .map_err(|e| {
+                    error!("Failed to rename {temp_path:?} to {target_path:?}: {e}");
+                    let _ = fs::remove_file(&temp_path); // Cleanup on error
+                    AppError::from(e)
+                })?;
 
             if was_renamed {
                 warnings.push(format!(
@@ -439,7 +512,7 @@ impl UploadHandler {
                 original_name: original_filename,
                 saved_name: final_filename,
                 saved_path,
-                size: file_content.len() as u64,
+                size: file_size,
                 mime_type,
                 renamed: was_renamed,
             });
@@ -447,7 +520,7 @@ impl UploadHandler {
             info!(
                 "Successfully uploaded file: {} ({} bytes)",
                 uploaded_files.last().unwrap().saved_name,
-                file_content.len()
+                file_size
             );
         }
 
@@ -596,56 +669,9 @@ impl UploadHandler {
         ))
     }
 
-    /// Write file atomically using temporary file and rename
-    fn write_file_atomically(
-        &self,
-        target_path: &Path,
-        content: &[u8],
-    ) -> Result<PathBuf, AppError> {
-        // Create temporary file in same directory with unique name
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        let temp_filename = format!(
-            "{}{}_{}_{:x}.tmp",
-            TEMP_FILE_PREFIX,
-            std::process::id(),
-            nanos,
-            nanos.wrapping_mul(7919) // Simple hash to add more uniqueness
-        );
-        let temp_path = self.target_dir.join(temp_filename);
-
-        // Write to temporary file
-        {
-            let mut temp_file = File::create(&temp_path).map_err(|e| {
-                error!("Failed to create temporary file {temp_path:?}: {e}");
-                AppError::from(e)
-            })?;
-
-            temp_file.write_all(content).map_err(|e| {
-                error!("Failed to write to temporary file {temp_path:?}: {e}");
-                let _ = fs::remove_file(&temp_path); // Cleanup on error
-                AppError::from(e)
-            })?;
-
-            temp_file.sync_all().map_err(|e| {
-                error!("Failed to sync temporary file {temp_path:?}: {e}");
-                let _ = fs::remove_file(&temp_path); // Cleanup on error
-                AppError::from(e)
-            })?;
-        }
-
-        // Atomically rename temporary file to target
-        fs::rename(&temp_path, target_path).map_err(|e| {
-            error!("Failed to rename {temp_path:?} to {target_path:?}: {e}");
-            let _ = fs::remove_file(&temp_path); // Cleanup on error
-            AppError::from(e)
-        })?;
-
-        debug!("Successfully wrote file atomically to {target_path:?}");
-        Ok(target_path.to_path_buf())
-    }
+    // The write_file_atomically method has been removed as it's no longer used.
+    // File uploads now use direct streaming to disk with atomic rename operations
+    // to avoid loading entire files into memory.
 
     /// Generate appropriate response based on request Accept header
     fn generate_upload_response(

@@ -5,7 +5,8 @@ use irondrop::cli::Cli;
 use irondrop::http::Request;
 use irondrop::upload::UploadHandler;
 use std::collections::HashMap;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
@@ -46,7 +47,14 @@ fn run_command(cmd: &str, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-fn create_multipart_request_body(file_data: &[u8], filename: &str, boundary: &str) -> Vec<u8> {
+// This function was removed as we now use streaming approach for all file uploads
+
+fn create_multipart_request_body_streaming<R: Read>(
+    mut file: R,
+    file_size: usize,
+    filename: &str,
+    boundary: &str,
+) -> Vec<u8> {
     let header = format!(
         "--{}\r\n\
         Content-Disposition: form-data; name=\"file\"; filename=\"{}\"\r\n\
@@ -56,9 +64,24 @@ fn create_multipart_request_body(file_data: &[u8], filename: &str, boundary: &st
     );
     let footer = format!("\r\n--{}--\r\n", boundary);
 
-    let mut body = Vec::new();
+    // Pre-allocate the buffer with the right size to avoid reallocations
+    let total_size = header.len() + file_size + footer.len();
+    let mut body = Vec::with_capacity(total_size);
+
+    // Add the header
     body.extend_from_slice(header.as_bytes());
-    body.extend_from_slice(file_data);
+
+    // Stream the file content in chunks to avoid loading it all into memory
+    let mut buffer = vec![0u8; 64 * 1024]; // 64KB buffer
+    loop {
+        match file.read(&mut buffer) {
+            Ok(0) => break, // End of file
+            Ok(bytes_read) => body.extend_from_slice(&buffer[..bytes_read]),
+            Err(e) => panic!("Failed to read file: {}", e),
+        }
+    }
+
+    // Add the footer
     body.extend_from_slice(footer.as_bytes());
     body
 }
@@ -129,19 +152,18 @@ fn test_large_file_upload_with_bash_verification() {
             .to_string();
         println!("Original file SHA1: {}", original_checksum);
 
-        // Read the file into memory for upload
-        println!("Reading test file into memory for upload...");
-        let file_data = fs::read(&test_file_path).expect("Should be able to read test file");
-        assert_eq!(
-            file_data.len(),
-            size,
-            "File data should match expected size"
-        );
+        // Open file for streaming upload instead of loading into memory
+        println!("Opening file for streaming upload...");
+        let file = File::open(&test_file_path).expect("Should be able to open test file");
+        let file_size = fs::metadata(&test_file_path)
+            .expect("Should be able to read test file metadata")
+            .len() as usize;
+        assert_eq!(file_size, size, "File size should match expected size");
 
-        // Create multipart request
-        println!("Creating multipart request...");
+        // Create multipart request with streaming
+        println!("Creating multipart request with streaming...");
         let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
-        let body = create_multipart_request_body(&file_data, filename, boundary);
+        let body = create_multipart_request_body_streaming(file, file_size, filename, boundary);
 
         let mut headers = HashMap::new();
         headers.insert(
@@ -289,14 +311,15 @@ fn test_very_large_file_upload_1gb_plus() {
         .to_string();
     println!("Original SHA1: {}", original_checksum);
 
-    // Read file for upload (this will consume a lot of RAM)
-    println!("Reading file into memory for upload...");
-    let file_data = fs::read(&test_file_path).expect("Should read large file");
+    // Open file for streaming upload (no longer loads entire file into memory)
+    println!("Opening file for streaming upload...");
+    let file = File::open(&test_file_path).expect("Should open large file");
+    let file_size = file.metadata().expect("Should get file metadata").len() as usize;
 
     // Create and process upload
     println!("Creating multipart request...");
     let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
-    let body = create_multipart_request_body(&file_data, filename, boundary);
+    let body = create_multipart_request_body_streaming(file, file_size, filename, boundary);
 
     let mut headers = HashMap::new();
     headers.insert(
@@ -365,11 +388,12 @@ fn test_multiple_large_files_bash_verification() {
     ];
 
     let mut original_checksums = HashMap::new();
-    let mut file_data_map = HashMap::new();
+    let mut test_file_paths = Vec::new();
 
     // Create all test files and calculate their checksums
     for (size, filename) in &test_files {
         let test_file_path = temp_dir.path().join(format!("orig_{}", filename));
+        test_file_paths.push((test_file_path.clone(), *filename));
 
         println!("Creating {} ({} MB)...", filename, size / (1024 * 1024));
 
@@ -395,21 +419,15 @@ fn test_multiple_large_files_bash_verification() {
             .to_string();
 
         original_checksums.insert(*filename, checksum);
-
-        // Read file data for upload
-        let file_data = fs::read(&test_file_path).expect("Should read test file");
-        file_data_map.insert(*filename, file_data);
-
-        // Clean up original file
-        fs::remove_file(&test_file_path).ok();
     }
 
-    // Create multipart request with all files
+    // Create multipart request with all files - streaming approach
     let boundary = "multifile_bash_test_boundary";
     let mut body = Vec::new();
 
-    for (_, filename) in &test_files {
-        let file_data = &file_data_map[filename];
+    for (test_file_path, filename) in &test_file_paths {
+        let file = File::open(test_file_path).expect("Should open test file");
+        // We don't need file_size for streaming in this case
 
         body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
         body.extend_from_slice(
@@ -421,10 +439,26 @@ fn test_multiple_large_files_bash_verification() {
             )
             .as_bytes(),
         );
-        body.extend_from_slice(file_data);
+
+        // Stream file content in chunks
+        let mut buffer = vec![0u8; 64 * 1024]; // 64KB buffer
+        let mut file_reader = file;
+        loop {
+            match file_reader.read(&mut buffer) {
+                Ok(0) => break, // End of file
+                Ok(bytes_read) => body.extend_from_slice(&buffer[..bytes_read]),
+                Err(e) => panic!("Failed to read file {}: {}", filename, e),
+            }
+        }
+
         body.extend_from_slice(b"\r\n");
     }
     body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+
+    // Clean up original files
+    for (test_file_path, _) in test_file_paths {
+        fs::remove_file(&test_file_path).ok();
+    }
 
     let mut headers = HashMap::new();
     headers.insert(
