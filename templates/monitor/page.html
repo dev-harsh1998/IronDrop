@@ -15,6 +15,21 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script>
+    // Check if Chart.js loaded correctly
+    window.addEventListener('load', function() {
+      if (typeof Chart === 'undefined') {
+        console.error("Chart.js failed to load");
+        document.getElementById('status').textContent = 'Error: Chart.js failed to load';
+        document.getElementById('status').className = 'monitor-status status-error';
+      } else {
+        console.log("Chart.js loaded successfully");
+      }
+    });
+  </script>
 </head>
 <body>
   <div class="container">
@@ -22,6 +37,32 @@
       <h1 class="page-title">Server Monitor</h1>
     </div>
     <div id="status" class="monitor-status"></div>
+    
+    <!-- Chart Section -->
+    <div class="charts-container" id="chartsContainer">
+      <div class="chart-card">
+        <h2>Server Activity</h2>
+        <div class="chart-wrapper">
+          <canvas id="requestsChart"></canvas>
+          <div class="chart-fallback">Loading chart data...</div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h2>Memory Usage</h2>
+        <div class="chart-wrapper">
+          <canvas id="memoryChart"></canvas>
+          <div class="chart-fallback">Loading chart data...</div>
+        </div>
+      </div>
+      <div class="chart-card full-width">
+        <h2>Upload Stats</h2>
+        <div class="chart-wrapper">
+          <canvas id="uploadsChart"></canvas>
+          <div class="chart-fallback">Loading chart data...</div>
+        </div>
+      </div>
+    </div>
+    
     <div class="monitor-grid">
     <div class="monitor-card">
       <h2>Requests</h2>
@@ -76,54 +117,417 @@
     <footer class="monitor-footer">Auto-refreshes every 30s. &copy; IronDrop Monitor</footer>
   </div>
   <script>
+    // Utility functions
     function humanBytes(b){ if(b<1024) return b+" B"; const u=['KB','MB','GB','TB']; let i=-1; do{ b/=1024; i++; }while(b>=1024 && i<u.length-1); return b.toFixed(2)+' '+u[i]; }
     function prettyUptime(s){ const d=Math.floor(s/86400); s%=86400; const h=Math.floor(s/3600); s%=3600; const m=Math.floor(s/60); const sec=s%60; let out=[]; if(d) out.push(d+'d'); if(h) out.push(h+'h'); if(m) out.push(m+'m'); out.push(sec+'s'); return out.join(' '); }
+    
+    // Historical data storage - will be populated over time
+    const historyData = {
+      timestamps: [],
+      requests: {
+        total: [],
+        successful: [],
+        errors: []
+      },
+      memory: {
+        current: [],
+        peak: []
+      },
+      uploads: {
+        total: [],
+        successful: [],
+        failed: [],
+        bytes: []
+      }
+    };
+    
+    // Maximum number of data points to keep in history
+    const MAX_HISTORY_POINTS = 20;
+    
+    // Chart instances
+    let requestsChart, memoryChart, uploadsChart;
+    
+    // Initialize Charts
+    function initCharts() {
+      // Check if chart elements exist
+      const requestsElement = document.getElementById('requestsChart');
+      const memoryElement = document.getElementById('memoryChart');
+      const uploadsElement = document.getElementById('uploadsChart');
+      
+      if (!requestsElement || !memoryElement || !uploadsElement) {
+        console.error("Chart elements not found in DOM:", { 
+          requests: !!requestsElement, 
+          memory: !!memoryElement, 
+          uploads: !!uploadsElement 
+        });
+        throw new Error("Chart canvas elements not found");
+      }
+      
+      // Common chart options
+      const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 600
+        },
+        elements: {
+          point: {
+            radius: 3,
+            hoverRadius: 5
+          },
+          line: {
+            tension: 0.3
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              color: '#e5e5e5',
+              font: {
+                family: "'Inter', sans-serif",
+                size: 12
+              }
+            }
+          },
+          tooltip: {
+            backgroundColor: '#1a1a1a',
+            borderColor: 'rgba(64, 64, 64, 0.4)',
+            borderWidth: 1,
+            titleFont: {
+              family: "'Inter', sans-serif",
+              size: 12,
+              weight: 'normal'
+            },
+            bodyFont: {
+              family: "'Inter', sans-serif",
+              size: 12
+            },
+            padding: 10,
+            boxPadding: 4
+          }
+        },
+        scales: {
+          x: {
+            grid: {
+              color: 'rgba(255, 255, 255, 0.05)',
+              borderColor: 'rgba(255, 255, 255, 0.1)'
+            },
+            ticks: {
+              color: '#b0b0b0',
+              font: {
+                family: "'Inter', sans-serif",
+                size: 10
+              },
+              maxRotation: 0,
+              autoSkipPadding: 20
+            }
+          },
+          y: {
+            beginAtZero: true,
+            grid: {
+              color: 'rgba(255, 255, 255, 0.05)',
+              borderColor: 'rgba(255, 255, 255, 0.1)'
+            },
+            ticks: {
+              color: '#b0b0b0',
+              font: {
+                family: "'Inter', sans-serif",
+                size: 10
+              }
+            }
+          }
+        }
+      };
+      
+      // Requests Chart
+      const requestsCtx = document.getElementById('requestsChart').getContext('2d');
+      requestsChart = new Chart(requestsCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Total',
+              data: [],
+              borderColor: '#9CC8FF',
+              backgroundColor: 'rgba(156, 200, 255, 0.1)',
+              fill: true
+            },
+            {
+              label: 'Successful',
+              data: [],
+              borderColor: '#4ADE80',
+              backgroundColor: 'rgba(74, 222, 128, 0.1)',
+              fill: true
+            },
+            {
+              label: 'Errors',
+              data: [],
+              borderColor: '#F87171',
+              backgroundColor: 'rgba(248, 113, 113, 0.1)',
+              fill: true
+            }
+          ]
+        },
+        options: commonOptions
+      });
+      
+      // Memory Usage Chart
+      const memoryCtx = document.getElementById('memoryChart').getContext('2d');
+      memoryChart = new Chart(memoryCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Current (MB)',
+              data: [],
+              borderColor: '#60A5FA',
+              backgroundColor: 'rgba(96, 165, 250, 0.1)',
+              fill: true
+            },
+            {
+              label: 'Peak (MB)',
+              data: [],
+              borderColor: '#F59E0B',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              fill: true
+            }
+          ]
+        },
+        options: commonOptions
+      });
+      
+      // Uploads Chart
+      const uploadsCtx = document.getElementById('uploadsChart').getContext('2d');
+      uploadsChart = new Chart(uploadsCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Total Uploads',
+              data: [],
+              borderColor: '#9CC8FF',
+              backgroundColor: 'rgba(156, 200, 255, 0.1)',
+              fill: false
+            },
+            {
+              label: 'Successful',
+              data: [],
+              borderColor: '#4ADE80',
+              backgroundColor: 'rgba(74, 222, 128, 0.1)',
+              fill: false
+            },
+            {
+              label: 'Failed',
+              data: [],
+              borderColor: '#F87171',
+              backgroundColor: 'rgba(248, 113, 113, 0.1)',
+              fill: false
+            },
+            {
+              label: 'Upload Size (MB)',
+              data: [],
+              borderColor: '#A78BFA',
+              backgroundColor: 'rgba(167, 139, 250, 0.1)',
+              fill: false,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          ...commonOptions,
+          scales: {
+            ...commonOptions.scales,
+            y1: {
+              position: 'right',
+              beginAtZero: true,
+              grid: {
+                drawOnChartArea: false
+              },
+              ticks: {
+                color: '#A78BFA',
+                font: {
+                  family: "'Inter', sans-serif",
+                  size: 10
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // Update charts with new data
+    function updateCharts() {
+      console.log("Updating charts with history length:", historyData.timestamps.length);
+      
+      if (!historyData.timestamps.length) {
+        console.log("No history data yet, skipping chart update");
+        return;
+      }
+      
+      if (!requestsChart || !memoryChart || !uploadsChart) {
+        console.error("Charts not initialized");
+        return;
+      }
+      
+      // Hide all fallback texts once charts are working
+      document.querySelectorAll('.chart-fallback').forEach(el => {
+        el.style.display = 'none';
+      });
+      
+      // Format time labels for display
+      const timeLabels = historyData.timestamps.map(time => {
+        const date = new Date(time);
+        return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+      });
+      
+      // Update Requests Chart
+      requestsChart.data.labels = timeLabels;
+      requestsChart.data.datasets[0].data = historyData.requests.total;
+      requestsChart.data.datasets[1].data = historyData.requests.successful;
+      requestsChart.data.datasets[2].data = historyData.requests.errors;
+      requestsChart.update();
+      
+      // Update Memory Chart if available
+      if (historyData.memory.current.some(val => val !== null)) {
+        memoryChart.data.labels = timeLabels;
+        memoryChart.data.datasets[0].data = historyData.memory.current;
+        memoryChart.data.datasets[1].data = historyData.memory.peak;
+        memoryChart.update();
+      }
+      
+      // Update Uploads Chart
+      uploadsChart.data.labels = timeLabels;
+      uploadsChart.data.datasets[0].data = historyData.uploads.total;
+      uploadsChart.data.datasets[1].data = historyData.uploads.successful;
+      uploadsChart.data.datasets[2].data = historyData.uploads.failed;
+      uploadsChart.data.datasets[3].data = historyData.uploads.bytes.map(b => b / 1024 / 1024);
+      uploadsChart.update();
+    }
+    
+    // Add new data points to history
+    function addToHistory(data) {
+      // Add timestamp
+      historyData.timestamps.push(new Date().getTime());
+      
+      // Add requests data
+      historyData.requests.total.push(data.requests.total);
+      historyData.requests.successful.push(data.requests.successful);
+      historyData.requests.errors.push(data.requests.errors);
+      
+      // Add memory data if available
+      if (data.memory && data.memory.available) {
+        historyData.memory.current.push(data.memory.current_mb);
+        historyData.memory.peak.push(data.memory.peak_mb);
+      } else {
+        historyData.memory.current.push(null);
+        historyData.memory.peak.push(null);
+      }
+      
+      // Add upload data
+      historyData.uploads.total.push(data.uploads.total_uploads);
+      historyData.uploads.successful.push(data.uploads.successful_uploads);
+      historyData.uploads.failed.push(data.uploads.failed_uploads);
+      historyData.uploads.bytes.push(data.uploads.upload_bytes);
+      
+      // Trim history if needed
+      if (historyData.timestamps.length > MAX_HISTORY_POINTS) {
+        historyData.timestamps.shift();
+        historyData.requests.total.shift();
+        historyData.requests.successful.shift();
+        historyData.requests.errors.shift();
+        historyData.memory.current.shift();
+        historyData.memory.peak.shift();
+        historyData.uploads.total.shift();
+        historyData.uploads.successful.shift();
+        historyData.uploads.failed.shift();
+        historyData.uploads.bytes.shift();
+      }
+    }
+    
+    // Load data from API
     async function load(){
       try{
-        const res=await fetch('/monitor?json=1');
+        console.log("Fetching data from API...");
+        const res = await fetch('/monitor?json=1'); // Fix API path
         if(!res.ok) throw new Error('HTTP '+res.status);
-        const data=await res.json();
-        const r=data.requests, u=data.uploads, d=data.downloads, m=data.memory;
-        document.getElementById('req_total').textContent=r.total;
-        document.getElementById('req_success').textContent=r.successful;
-        document.getElementById('req_errors').textContent=r.errors;
-        const successRate = r.total? ((r.successful/r.total)*100).toFixed(2)+'%':'0%';
-        document.getElementById('req_success_rate').textContent=successRate;
-        document.getElementById('bytes_served').textContent=d.bytes_served;
-        document.getElementById('mb_served').textContent=(d.bytes_served/1024/1024).toFixed(2);
-        document.getElementById('up_total').textContent=u.total_uploads;
-        document.getElementById('up_success').textContent=u.successful_uploads;
-        document.getElementById('up_failed').textContent=u.failed_uploads;
-        document.getElementById('files_uploaded').textContent=u.files_uploaded;
-        document.getElementById('up_bytes').textContent=u.upload_bytes;
-        document.getElementById('up_mb').textContent=(u.upload_bytes/1024/1024).toFixed(2);
-        document.getElementById('avg_file_size').textContent=humanBytes(u.average_upload_size);
-        document.getElementById('largest_upload').textContent=humanBytes(u.largest_upload);
-        document.getElementById('concurrent_uploads').textContent=u.concurrent_uploads;
-        document.getElementById('avg_processing').textContent=u.average_processing_ms?.toFixed?u.average_processing_ms.toFixed(1):u.average_processing_ms;
-        document.getElementById('upload_success_rate').textContent=u.success_rate.toFixed?u.success_rate.toFixed(2)+'%':u.success_rate+'%';
+        
+        const data = await res.json();
+        console.log("Data received:", data);
+        const r = data.requests, u = data.uploads, d = data.downloads, m = data.memory;
+        
+        // Add data to history for charts
+        try {
+          addToHistory(data);
+          updateCharts();
+          console.log("Charts updated with new data");
+        } catch (chartErr) {
+          console.error("Error updating charts:", chartErr);
+        }
+        
+        // Update tables
+        document.getElementById('req_total').textContent = r.total;
+        document.getElementById('req_success').textContent = r.successful;
+        document.getElementById('req_errors').textContent = r.errors;
+        const successRate = r.total ? ((r.successful/r.total)*100).toFixed(2)+'%' : '0%';
+        document.getElementById('req_success_rate').textContent = successRate;
+        
+        document.getElementById('bytes_served').textContent = d.bytes_served;
+        document.getElementById('mb_served').textContent = (d.bytes_served/1024/1024).toFixed(2);
+        
+        document.getElementById('up_total').textContent = u.total_uploads;
+        document.getElementById('up_success').textContent = u.successful_uploads;
+        document.getElementById('up_failed').textContent = u.failed_uploads;
+        document.getElementById('files_uploaded').textContent = u.files_uploaded;
+        document.getElementById('up_bytes').textContent = u.upload_bytes;
+        document.getElementById('up_mb').textContent = (u.upload_bytes/1024/1024).toFixed(2);
+        document.getElementById('avg_file_size').textContent = humanBytes(u.average_upload_size);
+        document.getElementById('largest_upload').textContent = humanBytes(u.largest_upload);
+        document.getElementById('concurrent_uploads').textContent = u.concurrent_uploads;
+        document.getElementById('avg_processing').textContent = u.average_processing_ms?.toFixed ? u.average_processing_ms.toFixed(1) : u.average_processing_ms;
+        document.getElementById('upload_success_rate').textContent = u.success_rate.toFixed ? u.success_rate.toFixed(2)+'%' : u.success_rate+'%';
+        
         const memoryCard = document.getElementById('memory_card');
         if(m && m.available){
           memoryCard.style.display = 'block';
-          document.getElementById('mem_current').textContent=m.current_bytes ? humanBytes(m.current_bytes) : 'N/A';
-          document.getElementById('mem_current_mb').textContent=m.current_mb !== null ? m.current_mb.toFixed(2) : 'N/A';
-          document.getElementById('mem_peak').textContent=m.peak_bytes ? humanBytes(m.peak_bytes) : 'N/A';
-          document.getElementById('mem_peak_mb').textContent=m.peak_mb !== null ? m.peak_mb.toFixed(2) : 'N/A';
+          document.getElementById('mem_current').textContent = m.current_bytes ? humanBytes(m.current_bytes) : 'N/A';
+          document.getElementById('mem_current_mb').textContent = m.current_mb !== null ? m.current_mb.toFixed(2) : 'N/A';
+          document.getElementById('mem_peak').textContent = m.peak_bytes ? humanBytes(m.peak_bytes) : 'N/A';
+          document.getElementById('mem_peak_mb').textContent = m.peak_mb !== null ? m.peak_mb.toFixed(2) : 'N/A';
         } else {
           memoryCard.style.display = 'none';
         }
-        document.getElementById('uptime_secs').textContent=data.uptime_secs;
-        document.getElementById('uptime_pretty').textContent=prettyUptime(data.uptime_secs);
-        document.getElementById('last_updated').textContent=new Date().toLocaleTimeString();
-        document.getElementById('status').textContent='OK';
-        document.getElementById('status').className='monitor-status status-ok';
-      }catch(e){
-        document.getElementById('status').textContent='Error: '+e.message;
-        document.getElementById('status').className='monitor-status status-error';
+        
+        document.getElementById('uptime_secs').textContent = data.uptime_secs;
+        document.getElementById('uptime_pretty').textContent = prettyUptime(data.uptime_secs);
+        document.getElementById('last_updated').textContent = new Date().toLocaleTimeString();
+        
+        document.getElementById('status').textContent = 'OK';
+        document.getElementById('status').className = 'monitor-status status-ok';
+      } catch(e) {
+        document.getElementById('status').textContent = 'Error: '+e.message;
+        document.getElementById('status').className = 'monitor-status status-error';
       }
     }
-    load();
-    setInterval(load, 30000);
+    
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        console.log("Initializing charts...");
+        initCharts();
+        console.log("Charts initialized, loading data...");
+        load();
+        setInterval(load, 30000); // Refresh every 30 seconds
+      } catch(err) {
+        console.error("Error in initialization:", err);
+        document.getElementById('status').textContent = 'Chart Error: ' + err.message;
+        document.getElementById('status').className = 'monitor-status status-error';
+      }
+    });
   </script>
 </body>
 </html>

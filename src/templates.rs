@@ -527,7 +527,10 @@ impl TemplateEngine {
     pub fn render_monitor_page(&self) -> Result<String, AppError> {
         let page_title = "Monitor";
         let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/monitor/styles.css">"#;
-        let page_scripts = r#"<script src="/_irondrop/static/monitor/script.js"></script>"#;
+        let page_scripts = r#"
+            <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+            <script src="/_irondrop/static/monitor/script.js"></script>
+        "#;
         let header_actions = r#"<a href="/" class="btn btn-light">← Back to Files</a>"#;
 
         let variables = HashMap::new();
