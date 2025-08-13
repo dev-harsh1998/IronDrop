@@ -114,7 +114,7 @@
       </table>
     </div>
     </div>
-    <footer class="monitor-footer">Auto-refreshes every 30s. &copy; IronDrop Monitor</footer>
+    <footer class="monitor-footer">Auto-refreshes every 2s. &copy; IronDrop Monitor</footer>
   </div>
   <script>
     // Utility functions
@@ -521,7 +521,7 @@
         initCharts();
         console.log("Charts initialized, loading data...");
         load();
-        setInterval(load, 30000); // Refresh every 30 seconds
+        setInterval(load, 2000); // Refresh every 2 seconds
       } catch(err) {
         console.error("Error in initialization:", err);
         document.getElementById('status').textContent = 'Chart Error: ' + err.message;

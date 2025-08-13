@@ -644,8 +644,8 @@ function init() {
     // Initial load
     loadMetrics();
 
-    // Auto-refresh every 5 seconds
-    setInterval(loadMetrics, 5000);
+    // Auto-refresh every 2 seconds
+    setInterval(loadMetrics, 2000);
 
     // Add manual refresh capability (optional)
     document.addEventListener('keydown', (e) => {
