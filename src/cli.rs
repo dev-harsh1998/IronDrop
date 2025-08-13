@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use clap::Parser;
-use log::warn;
+use log::info;
 use std::path::PathBuf;
 
 // Defines the command-line interface using clap. 🎉
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 #[derive(Parser, Clone)]
 #[command(
      author = "Harshit Jain",
-     version = "2.5.0", //  Version of our IronDrop - feels like we're shipping software! 🚢
+     version = "2.5.1", //  Version of our IronDrop - feels like we're shipping software! 🚢
      long_about = "This is a simple configurable download server that serves files from a directory with sophisticated error reporting and handling.\n It can be used to share files with others or to download files from a remote server.\n The server can be configured to serve only specific file extensions and can be run on a specific host and port.\n If the requested path is a directory, the server will generate an HTML page with a list of files and subdirectories in the directory.\n The server will respond with detailed error logs for various scenarios, enhancing operational visibility.\n The server can be configured to serve only specific file extensions and can be run on a specific host and port.\n The server will respond with a 403 Forbidden error if the requested file extension is not allowed.\n The server will respond with a 404 Not Found error if the requested file or directory does not exist.\n The server will respond with a 400 Bad Request error if the request is invalid.\n Follow & conribute with devlopment efforts at: git.harsh1998.dev \n Author: Harshit Jain, UI Design by: Sonu Kr. Saw\n",
      about = "A simple configurable download server with sophisticated error reporting." // Short description for `irondrop --help`.
  )]
@@ -54,11 +54,11 @@ pub struct Cli {
     #[arg(long)]
     pub password: Option<String>,
 
-    /// Enable file upload functionality - Allows clients to upload files to the server. Upload endpoint will be available at /upload. 📤
+    /// Enable direct streaming upload functionality - Allows clients to upload files using efficient direct disk streaming. Upload endpoint available at /_irondrop/upload. 📤
     #[arg(long)]
     pub enable_upload: Option<bool>,
 
-    /// Maximum upload file size in MB - Limits the size of files that can be uploaded to prevent abuse and manage storage. 📏
+    /// Optional upload size limit in MB - Set a maximum file size for uploads. If not specified, uploads are unlimited using direct streaming. 📏
     #[arg(long, value_parser = validate_upload_size)]
     pub max_upload_size: Option<u64>,
 
@@ -67,7 +67,7 @@ pub struct Cli {
     pub config_file: Option<String>,
 }
 
-/// Validate upload size is within safe bounds (1-10240 MB)
+/// Validate upload size (minimum 1 MB, no upper limit for direct streaming)
 fn validate_upload_size(s: &str) -> Result<u64, String> {
     let size: u64 = s
         .parse()
@@ -77,12 +77,7 @@ fn validate_upload_size(s: &str) -> Result<u64, String> {
         return Err("Upload size must be greater than 0 MB".to_string());
     }
 
-    if size > 10240 {
-        return Err(
-            "Upload size must not exceed 10240 MB (10 GB) for security reasons".to_string(),
-        );
-    }
-
+    // No upper limit since we're using direct disk streaming
     Ok(size)
 }
 
@@ -117,10 +112,10 @@ impl Cli {
         // Validate upload configuration consistency
         if self.enable_upload.unwrap_or(false) {
             // Warn if upload size is very large
-            let max_size = self.max_upload_size.unwrap_or(10240);
+            let max_size = self.max_upload_size.unwrap_or(u64::MAX / (1024 * 1024));
             if max_size > 2048 {
-                warn!(
-                    "Large upload size limit configured: {max_size} MB. Ensure adequate server resources."
+                info!(
+                    "Large upload size limit configured: {max_size} MB. Using direct disk streaming for efficient memory usage."
                 );
             }
         }
@@ -142,8 +137,10 @@ impl Cli {
     /// Convert upload size from MB to bytes with overflow checking
     pub fn max_upload_size_bytes(&self) -> u64 {
         // Safe conversion from u64 MB to u64 bytes
-        // Since we limit to 10240 MB max, this can't overflow
-        self.max_upload_size.unwrap_or(10240) * 1024 * 1024
+        // No upper limit - direct streaming handles any size efficiently
+        self.max_upload_size
+            .map(|size| size * 1024 * 1024)
+            .unwrap_or(u64::MAX)
     }
 
     /// Get the resolved upload directory, using OS defaults if not specified
@@ -169,8 +166,9 @@ mod tests {
 
         // Invalid sizes
         assert!(validate_upload_size("0").is_err());
-        assert!(validate_upload_size("10241").is_err());
-        assert!(validate_upload_size("18446744073709551615").is_err()); // u64::MAX
+        // No upper limit anymore - direct streaming handles any size
+        assert!(validate_upload_size("10241").is_ok());
+        assert!(validate_upload_size("18446744073709551615").is_ok()); // u64::MAX is valid now
         assert!(validate_upload_size("-1").is_err());
         assert!(validate_upload_size("abc").is_err());
     }

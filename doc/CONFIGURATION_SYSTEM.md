@@ -1,4 +1,4 @@
-## IronDrop Configuration System (v2.5)
+## IronDrop Configuration System (v2.5.1)
 
 ### Overview
 IronDrop 2.5 introduces a first‑class configuration system with hierarchical precedence and zero external dependencies. It complements (not replaces) the existing CLI flags, enabling reproducible deployments, easier automation, and environment portability. The system is intentionally simple: an internal INI parser (`src/config/ini_parser.rs`) plus a composition layer (`src/config/mod.rs`) that merges values from multiple sources.
@@ -139,7 +139,7 @@ Planned ideas (not yet implemented):
 Symptom | Likely Cause | Fix
 --------|--------------|----
 "Config file specified but not found" | Wrong path to `--config-file` | Use absolute path or place file in working dir
-Upload larger than expected limit rejected | `max_size` parsed lower than intended | Ensure suffix (e.g., `10GB` not `10G`)
+Upload larger than expected limit rejected | `max_upload_size` parsed lower than intended | Ensure suffix (e.g., `5GB` not `5G`)
 Verbose logging not active | Only `detailed` set in INI | Use `verbose = true` OR `--verbose`
 Auth not enforced | Missing `[auth]` values | Supply both `username` and `password`
 

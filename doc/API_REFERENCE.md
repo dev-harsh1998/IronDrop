@@ -31,7 +31,7 @@ User-Agent: <client-identifier>
 #### Response Headers
 ```http
 # Standard headers
-Server: IronDrop/2.5.0
+Server: IronDrop/2.5.1
 Content-Type: <mime-type>
 Content-Length: <content-length>
 Connection: keep-alive
@@ -194,7 +194,7 @@ Uploads one or more files to the server with automatic HTTP layer streaming for 
 - **Automatic Mode Selection**: Small uploads (≤1MB) processed in memory, large uploads (>1MB) streamed to disk
 - **Memory Efficiency**: Prevents memory exhaustion from large uploads while maintaining fast processing for small files
 - **Resource Protection**: Automatic temporary file cleanup and error recovery
-- **Scalability**: Consistent performance from 1KB to 10GB uploads
+- **Scalability**: Consistent performance with constant memory usage regardless of upload size
 
 **Request:**
 ```http
@@ -423,7 +423,7 @@ Basic health check endpoint.
 ```json
 {
   "status": "healthy",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "uptime_seconds": 3600,
   "timestamp": "2024-01-01T12:00:00Z"
 }
@@ -436,7 +436,7 @@ Detailed server status and statistics.
 ```json
 {
   "status": "healthy",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "uptime_seconds": 3600,
   "timestamp": "2024-01-01T12:00:00Z",
   "statistics": {
@@ -522,7 +522,7 @@ API information and capabilities.
 ```json
 {
   "name": "IronDrop",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Lightweight file server with upload capabilities",
   "endpoints": {
     "directory_listing": {
@@ -824,4 +824,4 @@ All inputs are validated:
 - File names for path traversal attempts
 - HTTP headers for malformed content
 
-This API reference covers all functionality available in IronDrop v2.5 and provides comprehensive examples for client integration.
+This API reference covers all functionality available in IronDrop v2.5.1 and provides comprehensive examples for client integration.

@@ -150,15 +150,7 @@ class UploadManager {
     }
 
     validateFile(file) {
-        const maxSize = 10 * 1024 * 1024 * 1024; // 10GB
-
-        if (file.size > maxSize) {
-            return {
-                valid: false,
-                error: `${file.name} is too large (max 10GB)`
-            };
-        }
-
+        // No size limit - direct streaming handles any file size efficiently
         return { valid: true };
     }
 
@@ -328,11 +320,6 @@ class UploadManager {
         fileInfo.status = 'uploading';
         this.updateQueueItem(fileInfo);
 
-        // Create form data
-        const formData = new FormData();
-        formData.append('file', file);
-
-
         // Get current path from URL or default to /
         const currentPath = this.getCurrentPath();
 
@@ -354,7 +341,6 @@ class UploadManager {
         // Completion handlers
         xhr.addEventListener('load', () => {
             this.uploads.delete(id);
-
 
             if (xhr.status >= 200 && xhr.status < 300) {
                 fileInfo.status = 'completed';
@@ -390,12 +376,16 @@ class UploadManager {
             // Don't update status here as file might be removed
         });
 
-        // Send request
+        // Send request with raw binary data
         const uploadPath = this.getUploadPath();
         xhr.open('POST', uploadPath);
+        
+        // Set headers for direct binary upload
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+        xhr.setRequestHeader('X-Filename', file.name);
 
-
-        xhr.send(formData);
+        // Send raw file data instead of FormData
+        xhr.send(file);
     }
 
     getCurrentPath() {

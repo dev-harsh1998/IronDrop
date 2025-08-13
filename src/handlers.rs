@@ -7,7 +7,7 @@ use std::sync::Arc;
 use crate::error::AppError;
 use crate::http::{Request, Response, ResponseBody};
 use crate::search::{perform_search, SearchParams, SearchResult};
-use crate::upload::UploadHandler;
+use crate::upload::DirectUploadHandler;
 use crate::utils::parse_query_params;
 use log::debug;
 use std::time::Instant;
@@ -127,7 +127,7 @@ pub fn create_health_check_response() -> Response {
         r#"{{
     "status": "healthy",
     "service": "irondrop",
-    "version": "2.5.0",
+    "version": "2.5.1",
     "timestamp": {timestamp},
     "features": [
         "rate_limiting",
@@ -282,9 +282,9 @@ pub fn handle_upload_request(
     // Resolve target directory
     let upload_handler = if let Some(base) = base_dir {
         let target_dir = crate::utils::resolve_upload_directory(base, upload_to)?;
-        UploadHandler::new_with_directory(cli, target_dir)?
+        DirectUploadHandler::new_with_directory(cli, target_dir)?
     } else {
-        UploadHandler::new(cli)?
+        DirectUploadHandler::new(cli)?
     };
 
     let mut upload_handler = upload_handler;

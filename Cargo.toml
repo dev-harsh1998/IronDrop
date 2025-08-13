@@ -1,6 +1,6 @@
 [package]
 name = "irondrop"
-version = "2.5.0"
+version = "2.5.1"
 edition = "2021"
 license = "GPL"
 license_file = "LICENSE"

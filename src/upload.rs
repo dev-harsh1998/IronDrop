@@ -1,71 +1,48 @@
-//! Comprehensive file upload handler for IronDrop
+//! Direct file upload handler for IronDrop
 //!
-//! This module provides secure, efficient file upload handling with:
-//! - Cross-platform OS download directory detection
-//! - Multipart form-data parsing integration
-//! - Comprehensive security validations
-//! - Atomic file operations with temporary files
-//! - Duplicate filename conflict resolution
-//! - Progress tracking capabilities
-//! - Integration with existing CLI configuration and error systems
+//! This module provides a simplified, efficient direct upload system that:
+//! - Processes raw HTTP body data without multipart parsing
+//! - Uses a 2MB threshold for memory vs disk streaming
+//! - Provides comprehensive security validations
+//! - Supports filename extraction from URL path or headers
+//! - Implements atomic file operations with temporary files
+//! - Includes progress tracking capabilities
 //!
-//! # Security Features
-//! - Extension validation using glob patterns from CLI configuration
-//! - Filename sanitization to prevent path traversal attacks
-//! - Size limit enforcement per file and total upload
-//! - Disk space checking before upload operations
-//! - MIME type validation against allowed types
-//! - Rate limiting integration ready
+//! # Design Philosophy
+//!
+//! This implementation removes all multipart parsing complexity and focuses on:
+//! - Direct binary data streaming
+//! - Memory efficiency for large files
+//! - Simple, robust error handling
+//! - Security-first approach
 //!
 //! # Example Usage
-//! ```rust,no_run
-//! use irondrop::upload::UploadHandler;
-//! use irondrop::cli::Cli;
-//! use std::path::PathBuf;
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let cli = Cli {
-//!     directory: PathBuf::from("/tmp"),
-//!     listen: Some("127.0.0.1".to_string()),
-//!     port: Some(8080),
-//!     allowed_extensions: Some("*.txt,*.pdf".to_string()),
-//!     threads: Some(4),
-//!     chunk_size: Some(1024),
-//!     verbose: Some(false),
-//!     detailed_logging: Some(false),
-//!     username: None,
-//!     password: None,
-//!     enable_upload: Some(true),
-//!     max_upload_size: Some(10),
-//!     config_file: None,
-//! };
-//! let mut upload_handler = UploadHandler::new(&cli)?;
-//! # Ok(())
-//! # }
-//! ```
+//! The direct upload handler processes raw binary uploads without multipart parsing,
+//! providing constant memory usage regardless of file size.
 
 use crate::cli::Cli;
 use crate::error::AppError;
-use crate::http::Request;
-use crate::multipart::{MultipartConfig, MultipartParser};
+use crate::http::{Request, RequestBody};
 use crate::response::{get_mime_type, HttpResponse};
 use crate::templates::TemplateEngine;
 use glob::Pattern;
-use log::{error, info, warn};
-// Removed rand dependency
+use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{Cursor, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
+
+/// Memory threshold: files <= 2MB processed in memory, >2MB streamed to disk
+const MEMORY_THRESHOLD: u64 = 2 * 1024 * 1024; // 2MB
 
 /// Temporary file prefix for atomic operations
 const TEMP_FILE_PREFIX: &str = ".irondrop_temp_";
 
-/// Size of temporary disk buffer for large uploads
-const DISK_BUFFER_SIZE: usize = 1024 * 1024; // 1MB disk buffer
-
-// UploadGuard removed since concurrent limiting is handled at server level
+/// Buffer size for streaming operations
+const STREAM_BUFFER_SIZE: usize = 64 * 1024; // 64KB
 
 /// Progress tracking information for uploads
 #[derive(Debug, Clone)]
@@ -74,22 +51,18 @@ pub struct UploadProgress {
     pub total_size: u64,
     /// Bytes processed so far
     pub processed_size: u64,
-    /// Number of files processed
-    pub files_processed: usize,
-    /// Total number of files expected
-    pub total_files: usize,
     /// Current processing stage
     pub stage: UploadStage,
 }
 
 /// Different stages of upload processing
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UploadStage {
-    /// Parsing multipart data
-    Parsing,
-    /// Validating files
+    /// Receiving upload data
+    Receiving,
+    /// Validating file
     Validating,
-    /// Writing files to disk
+    /// Writing file to disk
     Writing,
     /// Finalizing upload
     Finalizing,
@@ -100,7 +73,7 @@ pub enum UploadStage {
 /// Information about a successfully uploaded file
 #[derive(Debug, Clone)]
 pub struct UploadedFile {
-    /// Original filename from client
+    /// Original filename (from URL path or header)
     pub original_name: String,
     /// Final filename on disk (may be different due to conflicts)
     pub saved_name: String,
@@ -117,44 +90,34 @@ pub struct UploadedFile {
 /// Upload operation result
 #[derive(Debug)]
 pub struct UploadResult {
-    /// Successfully uploaded files
-    pub uploaded_files: Vec<UploadedFile>,
+    /// Successfully uploaded file
+    pub uploaded_file: UploadedFile,
     /// Upload processing time in milliseconds
     pub processing_time_ms: u64,
-    /// Total bytes processed
-    pub total_bytes: u64,
     /// Any warnings during processing
     pub warnings: Vec<String>,
 }
 
-// Concurrent upload limiting removed - should be handled at HTTP server level
-// to avoid interfering with single requests containing multiple files
-
-/// Comprehensive upload handler with security and configuration
-pub struct UploadHandler {
+/// Direct upload handler with security and configuration
+pub struct DirectUploadHandler {
     /// Target directory for uploads
     target_dir: PathBuf,
-    /// Maximum total upload size in bytes
+    /// Maximum upload size in bytes
     max_upload_size: u64,
-    /// Maximum size per individual file
-    max_file_size: u64,
     /// Allowed file extensions (glob patterns)
     allowed_extensions: Vec<Pattern>,
     /// Whether upload functionality is enabled
     upload_enabled: bool,
-    /// Multipart parser configuration
-    multipart_config: MultipartConfig,
 }
 
-impl UploadHandler {
-    /// Create a new upload handler from CLI configuration
+impl DirectUploadHandler {
+    /// Create a new direct upload handler from CLI configuration
     pub fn new(cli: &Cli) -> Result<Self, AppError> {
         if !cli.enable_upload.unwrap_or(false) {
             return Err(AppError::upload_disabled());
         }
 
         // Always use the directory being served as the base for uploads
-        // Individual upload directories will be determined dynamically
         Self::new_with_directory(cli, cli.directory.clone())
     }
 
@@ -180,51 +143,12 @@ impl UploadHandler {
             .map_err(AppError::from)?;
 
         let max_upload_bytes = cli.max_upload_size_bytes();
-        let max_file_size = max_upload_bytes; // Individual file can be as large as total limit
-
-        // Configure multipart parser with security settings
-        // Extract just the file extensions from glob patterns for multipart validation
-        let simple_extensions: Vec<String> = allowed_extensions
-            .iter()
-            .filter_map(|pattern| {
-                let pattern_str = pattern.as_str();
-                if pattern_str == "*" || pattern_str == "*.*" || pattern_str == "**" {
-                    None // Wildcard patterns mean allow all, so don't add any restriction
-                } else if let Some(stripped) = pattern_str.strip_prefix("*.") {
-                    if stripped == "*" {
-                        None // "*.*" case - allow all extensions
-                    } else {
-                        Some(stripped.to_lowercase()) // Remove "*." and convert to lowercase
-                    }
-                } else if let Some(stripped) = pattern_str.strip_prefix(".") {
-                    if stripped == "*" {
-                        None // ".*" case - allow all extensions
-                    } else {
-                        Some(stripped.to_lowercase()) // Remove "." and convert to lowercase
-                    }
-                } else {
-                    Some(pattern_str.to_lowercase()) // Use as-is but lowercase
-                }
-            })
-            .collect();
-
-        let multipart_config = MultipartConfig {
-            max_parts: 50, // Allow up to 50 files per upload
-            max_part_size: max_file_size,
-            max_filename_length: 255,
-            max_field_name_length: 100,
-            max_headers_size: 8 * 1024,
-            allowed_extensions: simple_extensions,
-            allowed_mime_types: Vec::new(), // Use extension-based validation instead
-        };
 
         Ok(Self {
             target_dir,
             max_upload_size: max_upload_bytes,
-            max_file_size,
             allowed_extensions,
             upload_enabled: true,
-            multipart_config,
         })
     }
 
@@ -288,7 +212,7 @@ impl UploadHandler {
         }
     }
 
-    /// Handle a file upload request with statistics tracking  
+    /// Handle a direct file upload request with statistics tracking
     pub fn handle_upload_with_stats(
         &mut self,
         request: &Request,
@@ -307,7 +231,7 @@ impl UploadHandler {
         result
     }
 
-    /// Handle a file upload request with statistics tracking
+    /// Handle a direct file upload request
     pub fn handle_upload(
         &mut self,
         request: &Request,
@@ -325,309 +249,58 @@ impl UploadHandler {
         }
 
         // Validate request method
-        if request.method != "POST" {
+        if request.method != "POST" && request.method != "PUT" {
             return Err(AppError::MethodNotAllowed);
         }
 
         // Get request body
-        let body = request
-            .body
-            .as_ref()
-            .ok_or_else(|| AppError::invalid_multipart("No request body"))?;
+        let body = request.body.as_ref().ok_or(AppError::BadRequest)?;
 
-        // Check total upload size based on body type
+        // Check total upload size
         let body_size = match body {
-            crate::http::RequestBody::Memory(data) => data.len() as u64,
-            crate::http::RequestBody::File { size, .. } => *size,
+            RequestBody::Memory(data) => data.len() as u64,
+            RequestBody::File { size, .. } => *size,
         };
 
         if body_size > self.max_upload_size {
             return Err(AppError::payload_too_large(self.max_upload_size));
         }
 
-        // Extract content type and boundary
-        let content_type = request
-            .headers
-            .get("content-type")
-            .ok_or_else(|| AppError::invalid_multipart("Missing Content-Type header"))?;
+        // Extract filename from URL path or Content-Disposition header
+        let filename = self.extract_filename(request)?;
 
-        // Validate that this is actually multipart/form-data
-        if !content_type
-            .to_lowercase()
-            .starts_with("multipart/form-data")
-        {
-            return Err(AppError::invalid_multipart("Not multipart/form-data"));
-        }
+        // Validate filename
+        self.validate_filename(&filename)?;
 
-        let boundary =
-            MultipartParser::<Cursor<Vec<u8>>>::extract_boundary_from_content_type(content_type)?;
+        // Validate file extension
+        self.validate_file_extension(&filename)?;
 
-        // Handle based on body type (HTTP layer already decided memory vs disk)
-        match body {
-            crate::http::RequestBody::Memory(data) => {
-                self.handle_memory_upload(request, data, &boundary, stats, start_time)
-            }
-            crate::http::RequestBody::File { path, size } => {
-                self.handle_file_upload(request, path, *size, &boundary, stats, start_time)
-            }
-        }
-    }
-
-    /// Handle uploads that are already in memory
-    fn handle_memory_upload(
-        &mut self,
-        request: &Request,
-        body: &[u8],
-        boundary: &str,
-        stats: Option<&crate::server::ServerStats>,
-        start_time: std::time::Instant,
-    ) -> Result<HttpResponse, AppError> {
         // Check available disk space
-        self.check_disk_space(body.len() as u64)?;
+        self.check_disk_space(body_size)?;
 
-        // Additional validation: check if the boundary actually appears in the body
-        let body_str = String::from_utf8_lossy(body);
-        let expected_boundary = format!("--{boundary}");
-        if !body_str.contains(&expected_boundary) {
-            return Err(AppError::invalid_multipart(
-                "Boundary not found in request body",
-            ));
-        }
-
-        // Create multipart parser and handle parsing errors
-        let parser = match MultipartParser::new(
-            Cursor::new(body.to_vec()),
-            boundary,
-            self.multipart_config.clone(),
-        ) {
-            Ok(p) => p,
-            Err(e) => {
-                return Err(e);
-            }
+        // Process upload based on body type and size
+        let uploaded_file = if body_size <= MEMORY_THRESHOLD {
+            self.handle_memory_upload(body, &filename)?
+        } else {
+            self.handle_streaming_upload(body, &filename)?
         };
-
-        self.process_multipart_parts(parser, stats, start_time, request)
-    }
-
-    /// Handle uploads that are already streamed to a file
-    fn handle_file_upload(
-        &mut self,
-        request: &Request,
-        temp_file_path: &PathBuf,
-        file_size: u64,
-        boundary: &str,
-        stats: Option<&crate::server::ServerStats>,
-        start_time: std::time::Instant,
-    ) -> Result<HttpResponse, AppError> {
-        // Check available disk space
-        self.check_disk_space(file_size)?;
-
-        // Validate boundary exists in the file (read first chunk only)
-        {
-            let mut temp_body_file = File::open(temp_file_path).map_err(|e| {
-                error!("Failed to open temporary body file {temp_file_path:?}: {e}");
-                AppError::from(e)
-            })?;
-
-            let mut boundary_check_buffer =
-                vec![0u8; std::cmp::min(DISK_BUFFER_SIZE, file_size as usize)];
-            let bytes_read = temp_body_file
-                .read(&mut boundary_check_buffer)
-                .map_err(AppError::from)?;
-
-            let body_sample = String::from_utf8_lossy(&boundary_check_buffer[..bytes_read]);
-            let expected_boundary = format!("--{boundary}");
-            if !body_sample.contains(&expected_boundary) {
-                return Err(AppError::invalid_multipart(
-                    "Boundary not found in request body",
-                ));
-            }
-        }
-
-        // Create multipart parser using the temporary file
-        let temp_body_file = File::open(temp_file_path).map_err(|e| {
-            error!("Failed to open temporary body file {temp_file_path:?}: {e}");
-            AppError::from(e)
-        })?;
-
-        let parser =
-            match MultipartParser::new(temp_body_file, boundary, self.multipart_config.clone()) {
-                Ok(p) => p,
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-
-        // Process the multipart data
-        // Note: We don't clean up the temp file here as it's managed by the HTTP layer
-        // The HTTP layer will clean it up after the request is complete
-
-        self.process_multipart_parts(parser, stats, start_time, request)
-    }
-
-    /// Process multipart parts from parser (common logic for both memory and disk-based parsing)
-    fn process_multipart_parts<R: Read>(
-        &mut self,
-        parser: MultipartParser<R>,
-        stats: Option<&crate::server::ServerStats>,
-        start_time: std::time::Instant,
-        request: &Request,
-    ) -> Result<HttpResponse, AppError> {
-        // Process all parts
-        let mut uploaded_files = Vec::new();
-        let mut total_bytes = 0u64;
-        let mut warnings = Vec::new();
-        let mut part_count = 0;
-
-        for part_result in parser {
-            let mut part = match part_result {
-                Ok(p) => p,
-                Err(e) => {
-                    // If there's an error processing parts, it could be malformed data
-                    return Err(e);
-                }
-            };
-
-            part_count += 1;
-            if part_count > self.multipart_config.max_parts {
-                return Err(AppError::invalid_multipart("Too many parts"));
-            }
-
-            // Skip non-file form fields for now
-            if !part.is_file() {
-                continue;
-            }
-
-            let original_filename = part
-                .filename
-                .as_ref()
-                .ok_or_else(|| AppError::invalid_multipart("Missing filename in file part"))?
-                .clone();
-
-            // Validate filename
-            self.validate_filename(&original_filename)?;
-
-            // Get file size from Content-Length header if available
-            let content_length = part
-                .headers
-                .headers
-                .get("content-length")
-                .and_then(|len| len.parse::<u64>().ok());
-
-            // Check file size limit early if we know the size
-            if let Some(length) = content_length {
-                if length > self.max_file_size {
-                    return Err(AppError::payload_too_large(self.max_file_size));
-                }
-                total_bytes += length;
-            }
-
-            // For file-based uploads, use stream_to method to avoid creating another temp file
-            let temp_filename = format!(
-                "{}{}_{}_{:x}.tmp",
-                TEMP_FILE_PREFIX,
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_nanos(),
-                std::process::id().wrapping_mul(0x12345678) // Use process ID with a multiplier for uniqueness
-            );
-            let temp_path = self.target_dir.join(&temp_filename);
-
-            // Stream the file content directly to disk using the efficient stream_to method
-            let mut temp_file = File::create(&temp_path).map_err(|e| {
-                error!("Failed to create temporary file {temp_path:?}: {e}");
-                AppError::from(e)
-            })?;
-
-            // Use the multipart part's stream_to method for efficient streaming
-            let file_size = part.stream_to(&mut temp_file, 64 * 1024).map_err(|e| {
-                error!("Failed to stream to temporary file {temp_path:?}: {e}");
-                let _ = fs::remove_file(&temp_path); // Cleanup on error
-                e
-            })?;
-
-            // Check size limit after streaming
-            if file_size > self.max_file_size {
-                let _ = fs::remove_file(&temp_path); // Cleanup
-                return Err(AppError::payload_too_large(self.max_file_size));
-            }
-
-            // Sync file to ensure data is written
-            temp_file.sync_all().map_err(|e| {
-                error!("Failed to sync temporary file {temp_path:?}: {e}");
-                let _ = fs::remove_file(&temp_path); // Cleanup on error
-                AppError::from(e)
-            })?;
-
-            // Update total bytes if we didn't have Content-Length
-            if content_length.is_none() {
-                total_bytes += file_size;
-            }
-
-            // Validate file extension
-            self.validate_file_extension(&original_filename)?;
-
-            // Determine MIME type
-            let mime_type = get_mime_type(Path::new(&original_filename)).to_string();
-
-            // Generate unique filename to avoid conflicts
-            let (final_filename, was_renamed) =
-                self.generate_unique_filename(&original_filename)?;
-            let target_path = self.target_dir.join(&final_filename);
-
-            // Rename the temporary file to the target path (atomic operation)
-            let saved_path = fs::rename(&temp_path, &target_path)
-                .map(|_| target_path.clone())
-                .map_err(|e| {
-                    error!("Failed to rename {temp_path:?} to {target_path:?}: {e}");
-                    let _ = fs::remove_file(&temp_path); // Cleanup on error
-                    AppError::from(e)
-                })?;
-
-            if was_renamed {
-                warnings.push(format!(
-                    "File '{original_filename}' was renamed to '{final_filename}' to avoid conflicts"
-                ));
-            }
-
-            uploaded_files.push(UploadedFile {
-                original_name: original_filename,
-                saved_name: final_filename,
-                saved_path,
-                size: file_size,
-                mime_type,
-                renamed: was_renamed,
-            });
-
-            info!(
-                "Successfully uploaded file: {} ({} bytes)",
-                uploaded_files.last().unwrap().saved_name,
-                file_size
-            );
-        }
 
         let processing_time = start_time.elapsed().as_millis() as u64;
 
-        // Calculate largest file size for statistics
-        let largest_file = uploaded_files.iter().map(|f| f.size).max().unwrap_or(0);
-
         let upload_result = UploadResult {
-            uploaded_files,
+            uploaded_file,
             processing_time_ms: processing_time,
-            total_bytes,
-            warnings,
+            warnings: Vec::new(),
         };
 
         // Record successful upload statistics
         if let Some(stats) = stats {
             stats.record_upload_request(
                 true, // success
-                upload_result.uploaded_files.len() as u64,
-                upload_result.total_bytes,
+                1,    // file count
+                upload_result.uploaded_file.size,
                 processing_time,
-                largest_file,
+                upload_result.uploaded_file.size, // largest file is the only file
             );
             stats.finish_upload();
         }
@@ -636,14 +309,285 @@ impl UploadHandler {
         self.generate_upload_response(request, upload_result)
     }
 
+    /// Extract filename from URL path or headers
+    fn extract_filename(&self, request: &Request) -> Result<String, AppError> {
+        // First, try to get filename from Content-Disposition header
+        if let Some(content_disposition) = request.headers.get("content-disposition") {
+            if let Some(filename) = Self::parse_filename_from_disposition(content_disposition) {
+                return Ok(filename);
+            }
+        }
+
+        // Next, try to get filename from custom X-Filename header
+        if let Some(filename) = request.headers.get("x-filename") {
+            if !filename.trim().is_empty() {
+                return Ok(filename.trim().to_string());
+            }
+        }
+
+        // Finally, extract from URL path (last segment after /, excluding query params)
+        let path_without_query = request.path.split('?').next().unwrap_or(&request.path);
+        let path_segments: Vec<&str> = path_without_query.split('/').collect();
+        if let Some(last_segment) = path_segments.last() {
+            if !last_segment.is_empty() && last_segment.contains('.') {
+                return Ok(last_segment.to_string());
+            }
+        }
+
+        // If no filename found anywhere, generate a default one
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        Ok(format!("upload_{}.bin", timestamp))
+    }
+
+    /// Parse filename from Content-Disposition header
+    fn parse_filename_from_disposition(disposition: &str) -> Option<String> {
+        for part in disposition.split(';') {
+            let part = part.trim();
+            if part.to_lowercase().starts_with("filename=") {
+                let filename_part = &part[9..]; // Skip "filename="
+                let filename = filename_part.trim_matches('"').trim();
+                if !filename.is_empty() {
+                    return Some(filename.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    /// Handle uploads that fit in memory (≤2MB)
+    fn handle_memory_upload(
+        &mut self,
+        body: &RequestBody,
+        filename: &str,
+    ) -> Result<UploadedFile, AppError> {
+        debug!("Processing memory upload for file: {}", filename);
+
+        let data = match body {
+            RequestBody::Memory(data) => data,
+            RequestBody::File { path, .. } => {
+                // If body is in file but small enough for memory processing,
+                // read it into memory for simpler handling
+                return self.handle_file_based_upload(path, filename);
+            }
+        };
+
+        // Generate unique filename to avoid conflicts
+        let (final_filename, was_renamed) = self.generate_unique_filename(filename)?;
+        let target_path = self.target_dir.join(&final_filename);
+
+        // Create temporary file for atomic write
+        let temp_filename = format!(
+            "{}{}_{}_{:x}.tmp",
+            TEMP_FILE_PREFIX,
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+            data.len() // Use data length as part of unique identifier
+        );
+        let temp_path = self.target_dir.join(&temp_filename);
+
+        // Write data to temporary file
+        {
+            let mut temp_file = File::create(&temp_path).map_err(|e| {
+                error!("Failed to create temporary file {temp_path:?}: {e}");
+                AppError::from(e)
+            })?;
+
+            temp_file.write_all(data).map_err(|e| {
+                error!("Failed to write data to temporary file {temp_path:?}: {e}");
+                let _ = fs::remove_file(&temp_path); // Cleanup on error
+                AppError::from(e)
+            })?;
+
+            temp_file.sync_all().map_err(|e| {
+                error!("Failed to sync temporary file {temp_path:?}: {e}");
+                let _ = fs::remove_file(&temp_path); // Cleanup on error
+                AppError::from(e)
+            })?;
+        }
+
+        // Atomically rename temporary file to final location
+        fs::rename(&temp_path, &target_path).map_err(|e| {
+            error!("Failed to rename {temp_path:?} to {target_path:?}: {e}");
+            let _ = fs::remove_file(&temp_path); // Cleanup on error
+            AppError::from(e)
+        })?;
+
+        // Determine MIME type
+        let mime_type = get_mime_type(&target_path).to_string();
+
+        info!(
+            "Successfully uploaded file: {} ({} bytes) to {}",
+            final_filename,
+            data.len(),
+            target_path.display()
+        );
+
+        Ok(UploadedFile {
+            original_name: filename.to_string(),
+            saved_name: final_filename,
+            saved_path: target_path,
+            size: data.len() as u64,
+            mime_type,
+            renamed: was_renamed,
+        })
+    }
+
+    /// Handle uploads that are streamed to disk (>2MB)
+    fn handle_streaming_upload(
+        &mut self,
+        body: &RequestBody,
+        filename: &str,
+    ) -> Result<UploadedFile, AppError> {
+        debug!("Processing streaming upload for file: {}", filename);
+
+        match body {
+            RequestBody::Memory(_) => {
+                // This shouldn't happen due to size checks, but handle gracefully
+                return self.handle_memory_upload(body, filename);
+            }
+            RequestBody::File { path, size: _ } => self.handle_file_based_upload(path, filename),
+        }
+    }
+
+    /// Handle uploads from file (used for both small files read from disk and large streaming files)
+    fn handle_file_based_upload(
+        &mut self,
+        source_path: &PathBuf,
+        filename: &str,
+    ) -> Result<UploadedFile, AppError> {
+        debug!(
+            "Processing file-based upload: {} -> {}",
+            source_path.display(),
+            filename
+        );
+
+        // Generate unique filename to avoid conflicts
+        let (final_filename, was_renamed) = self.generate_unique_filename(filename)?;
+        let target_path = self.target_dir.join(&final_filename);
+
+        // Create temporary file for atomic operation
+        let temp_filename = format!(
+            "{}{}_{}_{:x}.tmp",
+            TEMP_FILE_PREFIX,
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+            source_path.to_string_lossy().len() // Use path length as part of unique identifier
+        );
+        let temp_path = self.target_dir.join(&temp_filename);
+
+        // Stream copy from source to temporary file
+        let file_size = {
+            let source_file = File::open(source_path).map_err(|e| {
+                error!("Failed to open source file {source_path:?}: {e}");
+                AppError::from(e)
+            })?;
+
+            let temp_file = File::create(&temp_path).map_err(|e| {
+                error!("Failed to create temporary file {temp_path:?}: {e}");
+                AppError::from(e)
+            })?;
+
+            // Use buffered streams for better performance
+            let mut reader = BufReader::new(source_file);
+            let mut writer = BufWriter::new(temp_file);
+
+            let mut buffer = vec![0u8; STREAM_BUFFER_SIZE];
+            let mut total_bytes = 0u64;
+
+            loop {
+                let bytes_read = reader.read(&mut buffer).map_err(|e| {
+                    error!("Failed to read from source file {source_path:?}: {e}");
+                    let _ = fs::remove_file(&temp_path); // Cleanup on error
+                    AppError::from(e)
+                })?;
+
+                if bytes_read == 0 {
+                    break; // EOF
+                }
+
+                writer.write_all(&buffer[..bytes_read]).map_err(|e| {
+                    error!("Failed to write to temporary file {temp_path:?}: {e}");
+                    let _ = fs::remove_file(&temp_path); // Cleanup on error
+                    AppError::from(e)
+                })?;
+
+                total_bytes += bytes_read as u64;
+
+                // Check size limit during streaming
+                if total_bytes > self.max_upload_size {
+                    let _ = fs::remove_file(&temp_path); // Cleanup
+                    return Err(AppError::payload_too_large(self.max_upload_size));
+                }
+            }
+
+            // Ensure all data is written
+            writer.flush().map_err(|e| {
+                error!("Failed to flush temporary file {temp_path:?}: {e}");
+                let _ = fs::remove_file(&temp_path); // Cleanup on error
+                AppError::from(e)
+            })?;
+
+            // Sync to disk
+            writer
+                .into_inner()
+                .map_err(|e| {
+                    error!("Failed to finalize temporary file {temp_path:?}: {e}");
+                    let _ = fs::remove_file(&temp_path); // Cleanup on error
+                    AppError::from(e.into_error())
+                })?
+                .sync_all()
+                .map_err(|e| {
+                    error!("Failed to sync temporary file {temp_path:?}: {e}");
+                    let _ = fs::remove_file(&temp_path); // Cleanup on error
+                    AppError::from(e)
+                })?;
+
+            total_bytes
+        };
+
+        // Atomically rename temporary file to final location
+        fs::rename(&temp_path, &target_path).map_err(|e| {
+            error!("Failed to rename {temp_path:?} to {target_path:?}: {e}");
+            let _ = fs::remove_file(&temp_path); // Cleanup on error
+            AppError::from(e)
+        })?;
+
+        // Determine MIME type
+        let mime_type = get_mime_type(&target_path).to_string();
+
+        info!(
+            "Successfully uploaded file: {} ({} bytes) to {}",
+            final_filename,
+            file_size,
+            target_path.display()
+        );
+
+        Ok(UploadedFile {
+            original_name: filename.to_string(),
+            saved_name: final_filename,
+            saved_path: target_path,
+            size: file_size,
+            mime_type,
+            renamed: was_renamed,
+        })
+    }
+
     /// Check available disk space
     fn check_disk_space(&self, required_bytes: u64) -> Result<(), AppError> {
-        // Simple heuristic: Check if we have at least 2x the required space
+        // Simple heuristic: Check if we can create a test file
         // In a production system, you might use platform-specific APIs to get actual disk space
 
-        // For now, we'll create a test file to check if we can write
-        // This isn't a perfect disk space check but provides basic validation
-        let test_size = std::cmp::min(required_bytes / 10, 1024 * 1024); // Test with 10% or max 1MB
+        let test_size = std::cmp::min(required_bytes / 100, 1024 * 1024); // Test with 1% or max 1MB
         let test_path = self.target_dir.join(".space_test");
 
         match OpenOptions::new()
@@ -753,10 +697,6 @@ impl UploadHandler {
         ))
     }
 
-    // The write_file_atomically method has been removed as it's no longer used.
-    // File uploads now use direct streaming to disk with atomic rename operations
-    // to avoid loading entire files into memory.
-
     /// Generate appropriate response based on request Accept header
     fn generate_upload_response(
         &self,
@@ -782,40 +722,30 @@ impl UploadHandler {
 
     /// Generate JSON response for API clients
     fn generate_json_response(&self, result: UploadResult) -> Result<HttpResponse, AppError> {
-        let files_json: Vec<String> = result.uploaded_files.iter().map(|file| {
-            format!(
-                r#"{{"name": "{}", "originalName": "{}", "size": {}, "mimeType": "{}", "renamed": {}}}"#,
-                file.saved_name,
-                file.original_name,
-                file.size,
-                file.mime_type,
-                file.renamed
-            )
-        }).collect();
-
-        let warnings_json: Vec<String> = result
-            .warnings
-            .iter()
-            .map(|w| format!(r#""{}""#, w.replace('"', r#"\""#)))
-            .collect();
+        let file = &result.uploaded_file;
 
         let response_body = format!(
             r#"{{
     "status": "success",
     "message": "Upload completed successfully",
-    "files": [{}],
+    "file": {{
+        "name": "{}",
+        "originalName": "{}",
+        "size": {},
+        "mimeType": "{}",
+        "renamed": {}
+    }},
     "statistics": {{
-        "filesUploaded": {},
-        "totalBytes": {},
         "processingTimeMs": {}
     }},
-    "warnings": [{}]
+    "warnings": []
 }}"#,
-            files_json.join(", "),
-            result.uploaded_files.len(),
-            result.total_bytes,
-            result.processing_time_ms,
-            warnings_json.join(", ")
+            file.saved_name,
+            file.original_name,
+            file.size,
+            file.mime_type,
+            file.renamed,
+            result.processing_time_ms
         );
 
         Ok(HttpResponse::new(200, "OK")
@@ -829,52 +759,29 @@ impl UploadHandler {
 
     /// Generate HTML response for form submissions
     fn generate_html_response(&self, result: UploadResult) -> Result<HttpResponse, AppError> {
-        let files_list = result
-            .uploaded_files
-            .iter()
-            .map(|file| {
-                let rename_note = if file.renamed {
-                    format!(" <em>(renamed from {})</em>", file.original_name)
-                } else {
-                    String::new()
-                };
+        let file = &result.uploaded_file;
 
-                format!(
-                    r#"<li><strong>{}</strong>{} - {} bytes</li>"#,
-                    file.saved_name,
-                    rename_note,
-                    format_bytes(file.size)
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let warnings_html = if result.warnings.is_empty() {
-            String::new()
+        let rename_note = if file.renamed {
+            format!(" <em>(renamed from {})</em>", file.original_name)
         } else {
-            let warnings_list = result
-                .warnings
-                .iter()
-                .map(|w| format!(r#"<li>{w}</li>"#))
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            format!(
-                r#"<div class="warnings">
-                    <h3>⚠️ Warnings</h3>
-                    <ul>{warnings_list}</ul>
-                </div>"#
-            )
+            String::new()
         };
 
-        // Use the template engine instead of inline HTML
+        let files_list = format!(
+            r#"<li><strong>{}</strong>{} - {} bytes</li>"#,
+            file.saved_name,
+            rename_note,
+            format_bytes(file.size)
+        );
+
+        // Use the template engine
         let template_engine = TemplateEngine::new();
         let response_body = template_engine.render_upload_success(
-            result.uploaded_files.len(),
-            &format_bytes(result.total_bytes),
+            1, // one file uploaded
+            &format_bytes(file.size),
             result.processing_time_ms,
             &files_list,
-            &warnings_html,
+            "", // no warnings
         )?;
 
         Ok(HttpResponse::new(200, "OK").with_html_body(response_body))
@@ -902,6 +809,10 @@ impl UploadHandler {
                 .map(|p| p.as_str())
                 .collect::<Vec<_>>()
                 .join(", "),
+        );
+        info.insert(
+            "memory_threshold_mb".to_string(),
+            (MEMORY_THRESHOLD / 1024 / 1024).to_string(),
         );
         info
     }
@@ -955,7 +866,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let cli = create_test_cli(temp_dir.path().to_path_buf());
 
-        let handler = UploadHandler::new(&cli);
+        let handler = DirectUploadHandler::new(&cli);
         assert!(handler.is_ok());
 
         let handler = handler.unwrap();
@@ -970,7 +881,7 @@ mod tests {
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());
         cli.enable_upload = Some(false);
 
-        let result = UploadHandler::new(&cli);
+        let result = DirectUploadHandler::new(&cli);
         assert!(matches!(result, Err(AppError::UploadDisabled)));
     }
 
@@ -978,7 +889,7 @@ mod tests {
     fn test_filename_validation() {
         let temp_dir = TempDir::new().unwrap();
         let cli = create_test_cli(temp_dir.path().to_path_buf());
-        let handler = UploadHandler::new(&cli).unwrap();
+        let handler = DirectUploadHandler::new(&cli).unwrap();
 
         // Valid filenames
         assert!(handler.validate_filename("document.txt").is_ok());
@@ -1001,7 +912,7 @@ mod tests {
     fn test_unique_filename_generation() {
         let temp_dir = TempDir::new().unwrap();
         let cli = create_test_cli(temp_dir.path().to_path_buf());
-        let handler = UploadHandler::new(&cli).unwrap();
+        let handler = DirectUploadHandler::new(&cli).unwrap();
 
         // Create an existing file
         let existing_path = temp_dir.path().join("test.txt");
@@ -1031,7 +942,7 @@ mod tests {
 
     #[test]
     fn test_detect_download_directory() {
-        let result = UploadHandler::detect_os_download_directory();
+        let result = DirectUploadHandler::detect_os_download_directory();
         assert!(result.is_ok());
 
         let dir = result.unwrap();
@@ -1044,7 +955,7 @@ mod tests {
     fn test_extension_validation() {
         let temp_dir = TempDir::new().unwrap();
         let cli = create_test_cli(temp_dir.path().to_path_buf());
-        let handler = UploadHandler::new(&cli).unwrap();
+        let handler = DirectUploadHandler::new(&cli).unwrap();
 
         // Allowed extensions (from CLI: *.txt,*.pdf)
         assert!(handler.validate_file_extension("document.txt").is_ok());
@@ -1053,5 +964,31 @@ mod tests {
         // Not allowed extensions
         assert!(handler.validate_file_extension("document.exe").is_err());
         assert!(handler.validate_file_extension("document.jpg").is_err());
+    }
+
+    #[test]
+    fn test_filename_extraction_from_disposition() {
+        // Test various Content-Disposition formats
+        assert_eq!(
+            DirectUploadHandler::parse_filename_from_disposition("attachment; filename=test.txt"),
+            Some("test.txt".to_string())
+        );
+
+        assert_eq!(
+            DirectUploadHandler::parse_filename_from_disposition(
+                "attachment; filename=\"quoted-file.pdf\""
+            ),
+            Some("quoted-file.pdf".to_string())
+        );
+
+        assert_eq!(
+            DirectUploadHandler::parse_filename_from_disposition("inline"),
+            None
+        );
+
+        assert_eq!(
+            DirectUploadHandler::parse_filename_from_disposition("attachment; filename="),
+            None
+        );
     }
 }

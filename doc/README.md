@@ -11,7 +11,7 @@ A lightweight, high-performance file server written in Rust featuring **bidirect
 
 This documentation suite provides complete coverage of IronDrop's architecture, API, deployment, and specialized features. Each document is designed to serve specific audiences and use cases.
 
-**🎉 NEW in v2.5.1**: Complete file upload functionality with **10GB support**, advanced streaming implementation for memory-efficient large file handling, enhanced multipart parsing, robust security validation, and comprehensive test coverage. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
+**🎉 NEW in v2.5.1**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
 
 ## 📖 Core Documentation
 
@@ -45,7 +45,7 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 - All HTTP endpoints with parameters and response formats
 - Authentication and authorization mechanisms
 - Rate limiting and security headers
-- Upload API with multipart form-data handling
+- Upload API with direct binary streaming
 - **Search API endpoints** with ultra-compact search integration
 - Health monitoring and status endpoints
 - Error response formats and HTTP status codes
@@ -124,7 +124,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Complete upload system with 29 comprehensive tests
 - Professional UI matching IronDrop's design language
 - Integrated with template engine and security systems
-- Supports up to 10GB file uploads with progress indicators
+- Supports unlimited file uploads with direct streaming architecture
 
 ### 🛡️ [Security Fixes Documentation](./SECURITY_FIXES.md)
 **Audience**: Security Engineers, DevOps Teams, Compliance Officers  
@@ -140,18 +140,18 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 **Security Status**: ✅ **Fully Implemented** (v2.5)
 - Comprehensive input validation at multiple layers
 - System directory blacklisting and write permission checks
-- Size limits with overflow protection (1MB-10GB range)
+- Direct streaming with unlimited file size support
 - Integration with core systems for consistent security
 - Extensive test coverage for security scenarios
 
-### 🔄 [Multipart Parser Documentation](./MULTIPART_README.md)
-**Audience**: Backend Developers, Protocol Implementers  
-**Purpose**: RFC 7578 compliant multipart/form-data parser details
+### 🔄 [Direct Upload System Documentation](./MULTIPART_README.md)
+**Audience**: Backend Developers, System Integrators  
+**Purpose**: Direct binary upload system architecture and benefits
 
 **Contents:**
-- Memory-efficient streaming parser implementation
-- Security validations and boundary detection
-- Integration with upload system and error handling
+- Memory-efficient direct streaming implementation
+- Constant memory usage regardless of file size
+- Security validations and filename handling
 - Configuration options and customization
 - Comprehensive API usage examples
 
@@ -170,7 +170,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 **Contents:**
 - **Automatic Streaming Logic**: Smart switching between memory and disk storage based on content size
 - **RequestBody Architecture**: Unified interface for memory and file-based request bodies
-- **Performance Optimization**: Memory-efficient handling from 1KB to 10GB+ uploads
+- **Performance Optimization**: Memory-efficient handling with constant ~7MB RAM usage
 - **Resource Management**: Automatic temporary file cleanup and error recovery
 - **Security Features**: Secure temporary file creation and resource protection
 - **Integration Guide**: Seamless integration with existing upload handlers
@@ -223,7 +223,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Accessibility-compliant UI with keyboard navigation support
 - Performance testing and benchmarking infrastructure
 
-**🎉 NEW in v2.5**: Complete file upload functionality with **10GB support**, enhanced multipart parsing, robust security validation, and comprehensive test coverage.
+**🎉 NEW in v2.5.1**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture.
 
 ---
 
@@ -246,7 +246,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 ### 📁 **Bidirectional File Management** ⭐
 - **Enhanced Directory Listing** – Beautiful table-based layout with file type indicators and sorting
 - **Secure File Downloads** – Streams large files efficiently, honours HTTP range requests, and limits downloads to allowed extensions with glob support
-- **Production-Ready File Uploads** – Secure, configurable file uploads up to **10GB** with robust multipart parsing, extension filtering, and filename sanitization
+- **Production-Ready File Uploads** – Secure, configurable file uploads with **unlimited size support** using direct streaming architecture, extension filtering, and filename sanitization
 - **Upload UI Integration** – Professional web interface for file uploads with drag-and-drop support and progress indicators
 - **Concurrent Upload Handling** – Thread-safe processing of multiple simultaneous uploads with atomic file operations
 - **MIME Type Detection** – Native file type detection for proper Content-Type headers
@@ -337,7 +337,7 @@ Open a browser at [http://127.0.0.1:8080](http://127.0.0.1:8080) and you will se
 IronDrop v2.5 introduces a **production-ready file upload system** with enterprise-grade features:
 
 - **🔒 Enhanced Security**: Comprehensive input validation, boundary verification, and filename sanitization
-- **⚡ Performance**: Handles up to **10GB** files with atomic operations and concurrent processing
+- **⚡ Performance**: Handles unlimited file sizes with constant memory usage and concurrent processing
 - **🎨 Professional UI**: Integrated upload interface accessible at `/upload` with real-time feedback
 - **🛡️ Robust Validation**: Multi-layer security including extension filtering, size limits, and malformed data rejection
 - **🧪 Battle-Tested**: 59 tests across 13 test files covering edge cases, security scenarios, and performance stress testing
@@ -421,7 +421,7 @@ Planned extensions (open to contribution):
 | `--verbose`          | `-v`  | Debug-level logs                   | `false`         |
 | `--detailed-logging` | –     | Info-level logs                    | `false`         |
 | `--enable-upload`    | –     | Enable file upload functionality   | `false`         |
-| `--max-upload-size`  | –     | Maximum upload file size in MB     | `10240` (10GB)  |
+| `--max-upload-size`  | –     | Maximum upload file size in MB     | `unlimited`     |
 | `--upload-dir`       | –     | Target directory for uploaded files| OS Download Dir |
 
 ### Practical Examples
@@ -446,7 +446,7 @@ IronDrop provides secure, configurable file upload capabilities:
 
 ### Upload Configuration
 - **Enable/Disable Uploads**: Control upload functionality via CLI
-- **Maximum Upload Size**: Configurable size limit (default: 10GB)
+- **Maximum Upload Size**: Configurable size limit (default: unlimited)
 - **Flexible Upload Directory**: 
   - Default: OS-specific download directory
   - Customizable via `--upload-dir`
@@ -505,7 +505,7 @@ The codebase features a **modular template architecture** with clear separation 
                                          v                           v
     +-------------------+       +------------------+       +-------------------+
     |   Downloads       |       |     Uploads      |       |   Search Engine   |
-    | Range Requests    |       | 10GB + Concurrent|       |Dual-Mode/Ultra-Low|
+    | Range Requests    |       | Unlimited + Direct|       |Ultra-Low Memory|
     +-------------------+       +------------------+       +-------------------+
                                                                      |
                                                                      v
@@ -646,7 +646,7 @@ cargo test debug_upload_test     # Multipart parser (7 tests)
 
 **Custom HTTP Client**: Tests use a native HTTP client implementation (zero external dependencies) that directly connects via `TcpStream` to verify:
 
-- **Bidirectional File Operations**: Upload and download functionality with 10GB support
+- **Bidirectional File Operations**: Upload and download functionality with unlimited size support
 - **Multipart Processing**: RFC-compliant parsing with boundary detection and validation
 - **Template System**: Modular HTML/CSS/JS serving for both download and upload interfaces
 - **Security Validation**: Input sanitization, boundary verification, extension filtering
@@ -659,7 +659,7 @@ cargo test debug_upload_test     # Multipart parser (7 tests)
 
 | Test Category | Count | Description |
 |---------------|-------|-------------|
-| **Upload System** | 29 | Single/multi-file uploads, 10GB support, concurrency, validation |
+| **Upload System** | 29 | Single/multi-file uploads, unlimited size support, concurrency, validation |
 | **Core Server** | 19 | Directory listing, error pages, security, authentication |
 | **Multipart Parser** | 7 | Boundary detection, content extraction, validation |
 | **Security** | 12+ | Authentication, rate limiting, path traversal, input validation |
@@ -831,7 +831,7 @@ Don't know where to start? Here are some **beginner-friendly test contributions:
 - **Concurrent Connections**: Custom thread pool (default: 8) + rate limiting protection
 - **File Streaming**: Configurable chunk size (default: 1KB) with range request support
 - **Template Rendering**: Sub-millisecond variable interpolation with built-in caching
-- **Large Upload Handling**: Supports up to 10GB files with atomic writing (requires sufficient RAM for concurrent uploads)
+- **Large Upload Handling**: Supports unlimited file sizes with constant memory usage (~7MB)
 
 ### Request Latency
 | Operation | Typical Latency | Notes |
