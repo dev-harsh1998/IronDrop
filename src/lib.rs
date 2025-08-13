@@ -23,7 +23,6 @@ pub mod fs;
 pub mod handlers;
 pub mod http;
 pub mod middleware;
-pub mod multipart;
 pub mod response;
 pub mod router;
 pub mod search;

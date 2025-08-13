@@ -201,12 +201,16 @@ impl Config {
         }
 
         // INI file (supports file size format like "10GB")
+        // Try new field name first, then fall back to old field name for compatibility
         if let Some(size_bytes) = ini.get_file_size("upload", "max_upload_size") {
             return size_bytes;
         }
+        if let Some(size_bytes) = ini.get_file_size("upload", "max_size") {
+            return size_bytes;
+        }
 
-        // Default: 10GB in bytes
-        10240u64 * 1024 * 1024
+        // Default: Very large limit (effectively unlimited with direct streaming)
+        u64::MAX
     }
 
     fn get_username(ini: &IniConfig, cli: &Cli) -> Option<String> {
@@ -335,7 +339,7 @@ mod tests {
         assert_eq!(config.chunk_size, 1024);
         assert_eq!(config.directory, temp_dir.path());
         assert!(!config.enable_upload);
-        assert_eq!(config.max_upload_size, 10240 * 1024 * 1024);
+        assert_eq!(config.max_upload_size, u64::MAX); // No limit with direct streaming
         assert_eq!(config.username, None);
         assert_eq!(config.password, None);
         assert_eq!(config.allowed_extensions, vec!["*.zip", "*.txt"]);

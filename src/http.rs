@@ -565,7 +565,7 @@ fn send_response(
     );
 
     // Add standard server headers first
-    response_str.push_str("Server: irondrop/2.5.0\r\n");
+    response_str.push_str("Server: irondrop/2.5.1\r\n");
     response_str.push_str("Connection: close\r\n");
 
     // Add response-specific headers
@@ -628,7 +628,6 @@ fn send_error_response(stream: &mut TcpStream, error: AppError, log_prefix: &str
         AppError::MethodNotAllowed => (405, "Method Not Allowed"),
         // Upload-specific error mappings
         AppError::PayloadTooLarge(_) => (413, "Payload Too Large"),
-        AppError::InvalidMultipart(_) => (400, "Bad Request"),
         AppError::InvalidFilename(_) => (400, "Bad Request"),
         AppError::UploadDiskFull(_) => (507, "Insufficient Storage"),
         AppError::UnsupportedMediaType(_) => (415, "Unsupported Media Type"),
