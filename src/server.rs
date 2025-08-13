@@ -494,15 +494,53 @@ fn get_process_memory_bytes() -> Option<u64> {
     {
         use std::ffi::c_void;
 
+        // time_value_t (seconds + microseconds) used in mach_task_basic_info
         #[repr(C)]
+        #[allow(non_camel_case_types)]
+        struct time_value_t {
+            seconds: i32,
+            microseconds: i32,
+        }
+
+        // Layout aligned with <mach/task_info.h> (basic flavor)
+        #[repr(C)]
+        #[allow(non_camel_case_types)]
         struct mach_task_basic_info {
             virtual_size: u64,
             resident_size: u64,
             resident_size_max: u64,
-            user_time: [u64; 2],
-            system_time: [u64; 2],
+            user_time: time_value_t,
+            system_time: time_value_t,
             policy: i32,
             suspend_count: i32,
+        }
+
+        // TASK_VM_INFO fallback struct (subset; order matters)
+        #[repr(C)]
+        #[allow(non_camel_case_types)]
+        struct task_vm_info {
+            virtual_size: u64,
+            region_count: i32,
+            page_size: i32,
+            resident_size: u64,
+            resident_size_peak: u64,
+            device: u64,
+            device_peak: u64,
+            internal: u64,
+            internal_peak: u64,
+            external: u64,
+            external_peak: u64,
+            reusable: u64,
+            reusable_peak: u64,
+            purgeable_volatile_pmap: u64,
+            purgeable_volatile_resident: u64,
+            purgeable_volatile_virtual: u64,
+            compressed: u64,
+            compressed_peak: u64,
+            compressed_lifetime: u64,
+            phys_footprint: u64,
+            min_address: u64,
+            max_address: u64,
         }
 
         extern "C" {
@@ -515,25 +553,41 @@ fn get_process_memory_bytes() -> Option<u64> {
             ) -> i32;
         }
 
-        const MACH_TASK_BASIC_INFO: u32 = 20;
-        const MACH_TASK_BASIC_INFO_COUNT: u32 = 10;
+        const MACH_TASK_BASIC_INFO: u32 = 20; // flavor constant
+        const TASK_VM_INFO: u32 = 22; // fallback flavor
+                                      // natural_t == u32; express counts in u32 units
+        const MACH_TASK_BASIC_INFO_COUNT: u32 =
+            (std::mem::size_of::<mach_task_basic_info>() / std::mem::size_of::<u32>()) as u32;
+        const TASK_VM_INFO_COUNT: u32 =
+            (std::mem::size_of::<task_vm_info>() / std::mem::size_of::<u32>()) as u32;
 
         unsafe {
-            let mut info: mach_task_basic_info = mem::zeroed();
+            let mut basic: mach_task_basic_info = mem::zeroed();
             let mut count = MACH_TASK_BASIC_INFO_COUNT;
-
-            let result = task_info(
+            let r_basic = task_info(
                 mach_task_self(),
                 MACH_TASK_BASIC_INFO,
-                &mut info as *mut _ as *mut c_void,
+                &mut basic as *mut _ as *mut c_void,
                 &mut count,
             );
-
-            if result == 0 {
-                return Some(info.resident_size);
+            if r_basic == 0 && basic.resident_size > 0 {
+                return Some(basic.resident_size as u64);
             }
+            debug!("mach_task_basic_info failed (code {r_basic}), trying TASK_VM_INFO");
+            let mut vm: task_vm_info = mem::zeroed();
+            let mut vm_count = TASK_VM_INFO_COUNT;
+            let r_vm = task_info(
+                mach_task_self(),
+                TASK_VM_INFO,
+                &mut vm as *mut _ as *mut c_void,
+                &mut vm_count,
+            );
+            if r_vm == 0 && vm.resident_size > 0 {
+                return Some(vm.resident_size as u64);
+            }
+            debug!("TASK_VM_INFO failed (code {r_vm}) on macOS");
         }
-        debug!("Memory tracking unavailable: failed to get memory info on macOS");
+        debug!("Memory tracking unavailable: macOS APIs failed");
         None
     }
 
