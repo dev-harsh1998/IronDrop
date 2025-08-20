@@ -977,6 +977,7 @@ mod tests {
             enable_upload: Some(true),
             max_upload_size: Some(100), // 100MB for testing
             config_file: None,
+            log_file: None,
         }
     }
 

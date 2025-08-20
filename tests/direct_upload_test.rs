@@ -22,6 +22,7 @@ fn create_test_cli(upload_dir: PathBuf) -> Cli {
         enable_upload: Some(true),
         max_upload_size: Some(100), // 100MB
         config_file: None,
+        log_file: None,
     }
 }
 

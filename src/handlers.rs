@@ -127,7 +127,7 @@ pub fn create_health_check_response() -> Response {
         r#"{{
     "status": "healthy",
     "service": "irondrop",
-    "version": "2.5.1",
+    "version": "{}",
     "timestamp": {timestamp},
     "features": [
         "rate_limiting",
@@ -139,7 +139,8 @@ pub fn create_health_check_response() -> Response {
         "request_timeouts",
         "panic_recovery"
     ]
-}}"#
+}}"#,
+        crate::VERSION
     );
     Response {
         status_code: 200,

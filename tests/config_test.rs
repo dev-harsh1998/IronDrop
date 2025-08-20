@@ -178,6 +178,7 @@ verbose = false
         enable_upload: Some(false),
         max_upload_size: Some(10240),
         config_file: Some(config_file.to_string_lossy().to_string()),
+        log_file: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -222,6 +223,7 @@ max_upload_size = 1GB
         enable_upload: None,
         max_upload_size: None,
         config_file: Some(explicit_config.to_string_lossy().to_string()),
+        log_file: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -250,6 +252,7 @@ fn test_config_defaults() {
         enable_upload: Some(false),
         max_upload_size: Some(10240),
         config_file: None,
+        log_file: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -287,6 +290,7 @@ fn test_config_file_load_error() {
         enable_upload: Some(false),
         max_upload_size: Some(10240),
         config_file: Some(nonexistent_config.to_string_lossy().to_string()),
+        log_file: None,
     };
 
     let result = Config::load(&cli);
@@ -350,6 +354,7 @@ directory = {}
         enable_upload: None,
         max_upload_size: None,
         config_file: Some(config_file.to_string_lossy().to_string()),
+        log_file: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -390,6 +395,7 @@ port = 9999
         enable_upload: None,
         max_upload_size: None,
         config_file: Some(config_file.to_string_lossy().to_string()),
+        log_file: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");

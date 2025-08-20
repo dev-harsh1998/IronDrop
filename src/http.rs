@@ -638,7 +638,7 @@ fn send_response(
     );
 
     // Add standard server headers first
-    response_str.push_str("Server: irondrop/2.5.1\r\n");
+    response_str.push_str(&format!("Server: irondrop/{}\r\n", crate::VERSION));
     response_str.push_str("Connection: close\r\n");
 
     // Add response-specific headers

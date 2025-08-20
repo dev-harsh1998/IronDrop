@@ -163,6 +163,7 @@ impl TemplateEngine {
         base_variables.insert("PAGE_SCRIPTS".to_string(), page_scripts.to_string());
         base_variables.insert("HEADER_ACTIONS".to_string(), header_actions.to_string());
         base_variables.insert("PAGE_CONTENT".to_string(), content);
+        base_variables.insert("VERSION".to_string(), crate::VERSION.to_string());
 
         // Render the base template
         self.render("base", &base_variables)

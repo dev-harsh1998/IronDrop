@@ -8,7 +8,7 @@ use std::path::PathBuf;
 #[derive(Parser, Clone)]
 #[command(
      author = "Harshit Jain",
-     version = "2.5.1", //  Version of our IronDrop - feels like we're shipping software! 🚢
+     version = crate::VERSION, //  Version of our IronDrop - feels like we're shipping software! 🚢
      long_about = "This is a simple configurable download server that serves files from a directory with sophisticated error reporting and handling.\n It can be used to share files with others or to download files from a remote server.\n The server can be configured to serve only specific file extensions and can be run on a specific host and port.\n If the requested path is a directory, the server will generate an HTML page with a list of files and subdirectories in the directory.\n The server will respond with detailed error logs for various scenarios, enhancing operational visibility.\n The server can be configured to serve only specific file extensions and can be run on a specific host and port.\n The server will respond with a 403 Forbidden error if the requested file extension is not allowed.\n The server will respond with a 404 Not Found error if the requested file or directory does not exist.\n The server will respond with a 400 Bad Request error if the request is invalid.\n Follow & conribute with devlopment efforts at: git.harsh1998.dev \n Author: Harshit Jain, UI Design by: Sonu Kr. Saw\n",
      about = "A simple configurable download server with sophisticated error reporting." // Short description for `irondrop --help`.
  )]

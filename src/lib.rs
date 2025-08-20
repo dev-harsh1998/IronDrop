@@ -16,6 +16,10 @@
 ///
 /// This library contains the core logic for the server. The `run` function
 /// initializes and starts the server based on command-line arguments.
+
+/// The version of IronDrop, automatically derived from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod cli;
 pub mod config;
 pub mod error;
