@@ -1,6 +1,6 @@
 use crate::error::AppError;
 use crate::templates::{get_error_description, TemplateEngine};
-use log::{debug, error};
+use log::{debug, error, trace};
 use std::io::prelude::*;
 use std::net::TcpStream;
 use std::path::Path;
@@ -104,6 +104,16 @@ impl HttpResponse {
 
     pub fn send(self, stream: &mut TcpStream, log_prefix: &str) -> Result<(), AppError> {
         debug!(
+            "{} Sending HTTP response: {} {}",
+            log_prefix, self.status_code, self.status_text
+        );
+        trace!("{} Response headers: {:?}", log_prefix, self.headers);
+        trace!(
+            "{} Response body size: {} bytes",
+            log_prefix,
+            self.body.len()
+        );
+        debug!(
             "{} Sending response - Status: {}, Body Length: {}",
             log_prefix,
             self.status_code,
@@ -147,6 +157,7 @@ impl HttpResponse {
 
 /// Create error response with beautiful HTML error page
 pub fn create_error_response(status_code: u16, status_text: &str) -> HttpResponse {
+    debug!("Creating error response: {} {}", status_code, status_text);
     let error_page = generate_error_page(status_code, status_text);
     let mut response = HttpResponse::new(status_code, status_text).with_html_body(error_page);
 
@@ -165,6 +176,11 @@ pub fn send_response(
     body: &str,
     log_prefix: &str,
 ) -> Result<(), AppError> {
+    debug!(
+        "{} Sending simple response: {} {}",
+        log_prefix, status_code, status_text
+    );
+    trace!("{} Response body: {} chars", log_prefix, body.len());
     let response = if status_code >= 400 {
         create_error_response(status_code, status_text)
     } else {

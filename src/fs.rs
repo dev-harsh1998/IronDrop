@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::AppError;
 use crate::templates::TemplateEngine;
-use log::debug;
+use log::{debug, trace};
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -14,18 +14,30 @@ pub fn generate_directory_listing(
     config: Option<&Config>,
 ) -> Result<String, AppError> {
     debug!("Generating directory listing for: '{}'", path.display());
+    trace!("Request path: '{}'", request_path);
 
     let mut entries = Vec::new();
 
     // Collect and sort entries
+    trace!("Reading directory entries from: {}", path.display());
     for entry in fs::read_dir(path)? {
         let entry = entry?;
         let metadata = entry.metadata()?;
         let file_name = entry.file_name().into_string().unwrap_or_default();
 
+        trace!(
+            "Found entry: {} ({})",
+            file_name,
+            if metadata.is_dir() {
+                "directory"
+            } else {
+                "file"
+            }
+        );
         entries.push((entry.path(), file_name, metadata));
     }
 
+    debug!("Found {} entries, sorting...", entries.len());
     // Sort: directories first, then alphabetically
     entries.sort_by(|a, b| {
         let a_is_dir = a.2.is_dir();
@@ -44,6 +56,7 @@ pub fn generate_directory_listing(
         request_path
     };
 
+    debug!("Preparing {} entries for template rendering", entries.len());
     // Prepare entries data for template
     let mut template_entries = Vec::new();
 
@@ -74,10 +87,15 @@ pub fn generate_directory_listing(
         template_entries.push((link_name, size, modified));
     }
 
+    debug!("Creating template engine and rendering directory listing");
     // Create template engine with embedded templates
     let engine = TemplateEngine::new();
 
     // Render using template with conditional upload button
+    trace!(
+        "Upload enabled: {}",
+        config.map(|c| c.enable_upload).unwrap_or(false)
+    );
     engine.render_directory_listing(
         display_path,
         &template_entries,
@@ -157,9 +175,23 @@ pub struct FileDetails {
 
 impl FileDetails {
     pub fn new(path: PathBuf, chunk_size: usize) -> Result<Self, io::Error> {
+        debug!("Opening file for streaming: {}", path.display());
+        trace!("Chunk size: {} bytes", chunk_size);
+
         let file = File::open(&path)?;
         let metadata = file.metadata()?;
         let size = metadata.len();
+
+        debug!(
+            "File opened successfully: {} bytes, chunk size: {}",
+            size, chunk_size
+        );
+        trace!(
+            "File metadata - size: {}, is_file: {}",
+            size,
+            metadata.is_file()
+        );
+
         Ok(FileDetails {
             path,
             file,

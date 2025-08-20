@@ -6,7 +6,7 @@ use crate::http::handle_client;
 use crate::middleware::AuthMiddleware;
 use crate::router::Router;
 use glob::Pattern;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, TcpListener};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -54,6 +54,7 @@ impl RateLimiter {
     }
 
     pub fn check_rate_limit(&self, ip: IpAddr) -> bool {
+        trace!("Checking rate limit for IP: {}", ip);
         let mut connections = self.connections.lock().unwrap();
         let now = Instant::now();
 
@@ -65,8 +66,17 @@ impl RateLimiter {
             total_connections: 0,
         });
 
+        trace!(
+            "IP {} current state: requests={}, active_conns={}, total_conns={}",
+            ip,
+            conn_info.request_count,
+            conn_info.active_connections,
+            conn_info.total_connections
+        );
+
         // Reset counter if more than a minute has passed
         if now.duration_since(conn_info.last_reset) >= Duration::from_secs(60) {
+            trace!("Resetting request counter for IP {} (minute elapsed)", ip);
             conn_info.request_count = 0;
             conn_info.last_reset = now;
         }
@@ -88,6 +98,13 @@ impl RateLimiter {
         conn_info.last_activity = now;
         conn_info.total_connections += 1;
 
+        trace!(
+            "Rate limit check passed for IP {}: new counts - requests={}, active_conns={}",
+            ip,
+            conn_info.request_count,
+            conn_info.active_connections
+        );
+
         // Check if this IP has too many stored connections
         if conn_info.total_connections > self.max_connections_per_ip {
             warn!("IP {ip} has exceeded max stored connections limit");
@@ -97,18 +114,31 @@ impl RateLimiter {
     }
 
     pub fn release_connection(&self, ip: IpAddr) {
+        trace!("Releasing connection for IP: {}", ip);
         if let Ok(mut connections) = self.connections.lock() {
             if let Some(conn_info) = connections.get_mut(&ip) {
+                let old_count = conn_info.active_connections;
                 conn_info.active_connections = conn_info.active_connections.saturating_sub(1);
                 conn_info.last_activity = Instant::now();
+                trace!(
+                    "IP {} active connections: {} -> {}",
+                    ip,
+                    old_count,
+                    conn_info.active_connections
+                );
+            } else {
+                trace!("No connection info found for IP {} during release", ip);
             }
         }
     }
 
     pub fn cleanup_old_entries(&self) {
+        trace!("Starting manual cleanup of old rate limiter entries");
         let mut connections = self.connections.lock().unwrap();
         let now = Instant::now();
         let initial_count = connections.len();
+
+        trace!("Rate limiter has {} entries before cleanup", initial_count);
 
         // Reduced retention time from 5 minutes to 2 minutes
         connections
@@ -117,6 +147,8 @@ impl RateLimiter {
         let cleaned_count = initial_count - connections.len();
         if cleaned_count > 0 {
             debug!("Cleaned up {} old rate limiter entries", cleaned_count);
+        } else {
+            trace!("No old entries to clean up");
         }
     }
 
@@ -138,6 +170,11 @@ impl RateLimiter {
                         let now = Instant::now();
                         let initial_count = connections.len();
 
+                        trace!(
+                            "Auto-cleanup checking {} rate limiter entries",
+                            initial_count
+                        );
+
                         // Clean up entries older than 2 minutes
                         connections.retain(|_, info| {
                             now.duration_since(info.last_activity) < Duration::from_secs(120)
@@ -149,6 +186,8 @@ impl RateLimiter {
                                 "Auto-cleanup removed {} rate limiter entries",
                                 cleaned_count
                             );
+                        } else {
+                            trace!("Auto-cleanup: no entries to remove");
                         }
                     }
                 }
@@ -158,9 +197,15 @@ impl RateLimiter {
 
     /// Perform aggressive cleanup when memory pressure is detected
     pub fn cleanup_on_memory_pressure(&self) {
+        debug!("Starting aggressive cleanup due to memory pressure");
         let mut connections = self.connections.lock().unwrap();
         let now = Instant::now();
         let initial_count = connections.len();
+
+        trace!(
+            "Memory pressure cleanup: checking {} entries",
+            initial_count
+        );
 
         // More aggressive cleanup - remove entries older than 30 seconds
         connections.retain(|_, info| {
@@ -174,6 +219,8 @@ impl RateLimiter {
                 "Memory pressure cleanup removed {} rate limiter entries",
                 cleaned_count
             );
+        } else {
+            trace!("Memory pressure cleanup: no entries removed");
         }
     }
 
@@ -182,8 +229,14 @@ impl RateLimiter {
         if let Ok(connections) = self.connections.lock() {
             let entry_count = connections.len();
             let estimated_memory = entry_count * std::mem::size_of::<(IpAddr, ConnectionInfo)>();
+            trace!(
+                "Rate limiter stats: {} entries, ~{} bytes",
+                entry_count,
+                estimated_memory
+            );
             (entry_count, estimated_memory)
         } else {
+            trace!("Failed to acquire rate limiter lock for stats");
             (0, 0)
         }
     }
@@ -262,20 +315,26 @@ impl ServerStats {
     }
 
     pub fn record_request(&self, success: bool, bytes: u64) {
+        trace!("Recording request: success={}, bytes={}", success, bytes);
+
         if let Ok(mut total) = self.total_requests.lock() {
             *total += 1;
+            trace!("Total requests now: {}", *total);
         }
 
         if success {
             if let Ok(mut successful) = self.successful_requests.lock() {
                 *successful += 1;
+                trace!("Successful requests now: {}", *successful);
             }
         } else if let Ok(mut errors) = self.error_requests.lock() {
             *errors += 1;
+            trace!("Error requests now: {}", *errors);
         }
 
         if let Ok(mut total_bytes) = self.bytes_served.lock() {
             *total_bytes += bytes;
+            trace!("Total bytes served now: {}", *total_bytes);
         }
     }
 
@@ -315,9 +374,19 @@ impl ServerStats {
         processing_time_ms: u64,
         largest_file: u64,
     ) {
+        trace!(
+            "Recording upload: success={}, files={}, bytes={}, time={}ms, largest={}",
+            success,
+            files_count,
+            upload_bytes,
+            processing_time_ms,
+            largest_file
+        );
+
         // Increment total uploads
         if let Ok(mut total) = self.total_uploads.lock() {
             *total += 1;
+            trace!("Total uploads now: {}", *total);
         }
 
         // Track success/failure
@@ -438,26 +507,37 @@ impl ServerStats {
     /// Check if memory pressure is detected (memory usage > 15MB)
     /// This triggers aggressive cleanup in rate limiter and other components
     pub fn check_memory_pressure(&self, rate_limiter: Option<&RateLimiter>) -> bool {
+        trace!("Checking memory pressure");
         let (current_memory, _, available) = self.get_memory_usage();
 
         if available {
             if let Some(memory) = current_memory {
                 // Trigger cleanup if memory exceeds 15MB (baseline is ~4MB)
                 let memory_mb = memory / (1024 * 1024);
+                trace!("Current memory usage: {}MB", memory_mb);
+
                 if memory_mb > 15 {
                     warn!("Memory pressure detected: {}MB usage", memory_mb);
 
                     // Trigger rate limiter cleanup if provided
                     if let Some(limiter) = rate_limiter {
+                        debug!("Triggering rate limiter cleanup due to memory pressure");
                         limiter.cleanup_on_memory_pressure();
                     }
 
                     // Clear search cache if available
+                    debug!("Clearing search cache due to memory pressure");
                     crate::search::clear_cache();
 
                     return true;
+                } else {
+                    trace!("Memory usage within normal limits: {}MB", memory_mb);
                 }
+            } else {
+                trace!("Memory usage unavailable but tracking is enabled");
             }
+        } else {
+            trace!("Memory tracking not available");
         }
         false
     }
@@ -475,12 +555,25 @@ impl ServerStats {
         let should_refresh = {
             let last_check = self.last_memory_check.lock().unwrap();
             match *last_check {
-                Some(last) => now.duration_since(last) >= Duration::from_secs(5),
-                None => true,
+                Some(last) => {
+                    let elapsed = now.duration_since(last);
+                    let should_refresh = elapsed >= Duration::from_secs(5);
+                    trace!(
+                        "Memory cache check: elapsed={}s, should_refresh={}",
+                        elapsed.as_secs(),
+                        should_refresh
+                    );
+                    should_refresh
+                }
+                None => {
+                    trace!("First memory check, refreshing");
+                    true
+                }
             }
         };
 
         if should_refresh {
+            trace!("Refreshing memory statistics");
             let current_memory_opt = get_process_memory_bytes();
 
             // Update availability status
@@ -1048,7 +1141,13 @@ pub fn run_server(
     shutdown_rx: Option<mpsc::Receiver<()>>,
     addr_tx: Option<mpsc::Sender<SocketAddr>>,
 ) -> Result<(), AppError> {
+    debug!(
+        "Starting server with configuration: verbose={:?}, detailed_logging={:?}",
+        cli.verbose, cli.detailed_logging
+    );
+
     let base_dir = Arc::new(cli.directory.canonicalize()?);
+    trace!("Base directory resolved to: {:?}", base_dir);
 
     if !base_dir.is_dir() {
         return Err(AppError::DirectoryNotFound(
@@ -1057,6 +1156,7 @@ pub fn run_server(
     }
 
     // Initialize the search subsystem with caching and indexing
+    debug!("Initializing search subsystem");
     crate::search::initialize_search(base_dir.as_ref().clone());
 
     let allowed_extensions = Arc::new(
@@ -1067,18 +1167,23 @@ pub fn run_server(
             .map(|ext| Pattern::new(ext.trim()))
             .collect::<Result<Vec<Pattern>, _>>()?,
     );
+    trace!("Allowed extensions: {} patterns", allowed_extensions.len());
 
     let bind_address = format!(
         "{}:{}",
         cli.listen.as_ref().unwrap_or(&"127.0.0.1".to_string()),
         cli.port.unwrap_or(8080)
     );
+    debug!("Binding server to address: {}", bind_address);
     let listener = TcpListener::bind(&bind_address)?;
     let local_addr = listener.local_addr()?;
     listener.set_nonblocking(true)?;
+    debug!("Server bound successfully to: {}", local_addr);
 
     // Initialize security and monitoring systems
+    debug!("Initializing rate limiter: 120 req/min, 10 concurrent per IP");
     let rate_limiter = Arc::new(RateLimiter::new(120, 10)); // 120 req/min, 10 concurrent per IP
+    debug!("Initializing server statistics");
     let stats = Arc::new(ServerStats::new());
 
     if let Some(tx) = addr_tx {
@@ -1098,19 +1203,24 @@ pub fn run_server(
     info!("⚡ Security: Rate limiting enabled (120 req/min, 10 concurrent per IP)");
     info!("📊 Monitoring: Statistics collection enabled");
 
-    let pool = ThreadPool::new(cli.threads.unwrap_or(8));
+    let thread_count = cli.threads.unwrap_or(8);
+    debug!("Creating thread pool with {} threads", thread_count);
+    let pool = ThreadPool::new(thread_count);
     let username = Arc::new(cli.username.clone());
     let password = Arc::new(cli.password.clone());
     let cli_arc = Arc::new(cli);
 
     // Build shared internal router once (with middleware)
+    debug!("Building internal router with middleware");
     let mut router = Router::new();
     if cli_arc.username.is_some() && cli_arc.password.is_some() {
+        debug!("Adding authentication middleware to router");
         router.add_middleware(Box::new(AuthMiddleware::new(
             cli_arc.username.clone(),
             cli_arc.password.clone(),
         )));
     }
+    debug!("Registering internal routes");
     register_internal_routes(
         &mut router,
         Some(cli_arc.clone()),
@@ -1123,11 +1233,13 @@ pub fn run_server(
     // This replaces the old 5-minute cleanup task
 
     // Start background stats reporting with memory pressure monitoring
+    debug!("Starting background statistics reporting thread");
     let stats_reporter = stats.clone();
     let rate_limiter_monitor = rate_limiter.clone();
     thread::spawn(move || {
         loop {
             thread::sleep(Duration::from_secs(300)); // Report every 5 minutes
+            trace!("Background stats reporting cycle starting");
             let (total, successful, errors, bytes, uptime) = stats_reporter.get_stats();
             let upload_stats = stats_reporter.get_upload_stats();
             let (current_memory, peak_memory, memory_available) = stats_reporter.get_memory_usage();
@@ -1182,6 +1294,7 @@ pub fn run_server(
         }
     });
 
+    debug!("Entering main server loop");
     'server_loop: loop {
         if let Some(ref rx) = shutdown_rx {
             if rx.try_recv().is_ok() {
@@ -1193,6 +1306,7 @@ pub fn run_server(
         match listener.accept() {
             Ok((stream, peer_addr)) => {
                 let client_ip = peer_addr.ip();
+                trace!("Accepted connection from: {}", peer_addr);
 
                 // Check rate limits
                 if !rate_limiter.check_rate_limit(client_ip) {
@@ -1200,6 +1314,7 @@ pub fn run_server(
                     drop(stream); // Close connection immediately
                     continue;
                 }
+                trace!("Rate limit check passed for: {}", client_ip);
 
                 // Ensure the accepted stream is in blocking mode
                 if let Err(e) = stream.set_nonblocking(false) {
@@ -1207,6 +1322,7 @@ pub fn run_server(
                     rate_limiter.release_connection(client_ip);
                     continue;
                 }
+                trace!("Stream set to blocking mode for: {}", client_ip);
 
                 let (
                     base_dir,
@@ -1230,7 +1346,11 @@ pub fn run_server(
                     shared_router.clone(),
                 );
 
+                trace!("Submitting client {} to thread pool", client_ip);
                 pool.execute(move || {
+                    trace!("Thread pool worker starting for client: {}", client_ip);
+                    let start_time = Instant::now();
+
                     let result = handle_client_with_stats(
                         stream,
                         peer_addr,
@@ -1244,16 +1364,26 @@ pub fn run_server(
                         &router,
                     );
 
+                    let processing_time = start_time.elapsed();
+                    trace!(
+                        "Client {} processing completed in {:?}",
+                        client_ip,
+                        processing_time
+                    );
+
                     // Release rate limit connection
                     rate_limiter.release_connection(client_ip);
 
                     // Log any errors
                     if let Err(e) = result {
                         warn!("⚠️  Client handling error: {e}");
+                    } else {
+                        trace!("Client {} handled successfully", client_ip);
                     }
                 });
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                // No connections available, sleep briefly
                 std::thread::sleep(Duration::from_millis(100));
                 continue;
             }
@@ -1314,8 +1444,12 @@ fn handle_client_with_stats(
     cli_config: Option<&crate::cli::Cli>,
     router: &Arc<crate::router::Router>,
 ) -> Result<(), AppError> {
+    let client_ip = peer_addr.ip();
+    trace!("Starting client handler for: {}", client_ip);
+
     let start = Instant::now();
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        trace!("Calling handle_client for: {}", client_ip);
         handle_client(
             stream,
             base_dir,
@@ -1332,24 +1466,40 @@ fn handle_client_with_stats(
     let success = result.is_ok();
     let processing_time = start.elapsed();
 
+    trace!(
+        "Client {} processing result: success={}, time={:?}",
+        client_ip,
+        success,
+        processing_time
+    );
+
     // On panic, record failure (normal success/failure & bytes recorded in handle_client)
     if !success {
+        error!("Client {} handler panicked, recording failure", client_ip);
         stats.record_request(false, 0);
     }
 
     if processing_time > Duration::from_millis(1000) {
         warn!(
             "⏱️  Slow request from {}: {}ms",
-            peer_addr.ip(),
+            client_ip,
+            processing_time.as_millis()
+        );
+    } else if processing_time > Duration::from_millis(100) {
+        debug!(
+            "Request from {} took {}ms",
+            client_ip,
             processing_time.as_millis()
         );
     }
 
     if result.is_err() {
+        error!("Client {} handler panicked with error", client_ip);
         return Err(AppError::InternalServerError(
             "Client handler panicked".to_string(),
         ));
     }
 
+    trace!("Client {} handler completed successfully", client_ip);
     Ok(())
 }

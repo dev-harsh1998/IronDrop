@@ -1,6 +1,7 @@
 //! Template loading and rendering system for modular HTML
 
 use crate::error::AppError;
+use log::{debug, trace};
 use std::collections::HashMap;
 
 // Embed templates at compile time
@@ -430,6 +431,11 @@ impl TemplateEngine {
         upload_enabled: bool,
         current_path: &str,
     ) -> Result<String, AppError> {
+        debug!(
+            "Rendering directory listing: path='{}', entries={}, upload_enabled={}",
+            path, entry_count, upload_enabled
+        );
+        trace!("Directory listing current path: {}", current_path);
         let mut variables = HashMap::new();
         variables.insert("PATH".to_string(), path.to_string());
         variables.insert("ENTRY_COUNT".to_string(), entry_count.to_string());
@@ -513,18 +519,24 @@ impl TemplateEngine {
         status_text: &str,
         description: &str,
     ) -> Result<String, AppError> {
+        debug!(
+            "Rendering error page: {} {} - {}",
+            status_code, status_text, description
+        );
         // Use the new base template system
         self.render_error_page_new(status_code, status_text, description)
     }
 
     /// Generate upload page HTML using base template system
     pub fn render_upload_page(&self, path: &str) -> Result<String, AppError> {
+        debug!("Rendering upload page for path: {}", path);
         // Use the new base template system
         self.render_upload_page_new(path)
     }
 
     /// Render monitor page using the base template system
     pub fn render_monitor_page(&self) -> Result<String, AppError> {
+        debug!("Rendering monitor page");
         let page_title = "Monitor";
         let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/monitor/styles.css">"#;
         let page_scripts = r#"

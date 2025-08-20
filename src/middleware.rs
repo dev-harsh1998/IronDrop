@@ -7,6 +7,7 @@
 use crate::error::AppError;
 use crate::http::Request;
 use base64::Engine;
+use log::{debug, trace, warn};
 
 /// Middleware trait – middlewares can inspect a request before it reaches a handler.
 /// Returning `Ok(())` continues the chain; returning `Err(AppError)` aborts processing.
@@ -27,28 +28,63 @@ impl AuthMiddleware {
 
     fn is_authenticated(&self, auth_header: Option<&String>) -> bool {
         let (Some(user), Some(pass)) = (&self.username, &self.password) else {
+            trace!("Authentication disabled - allowing request");
             return true; // auth disabled
         };
 
+        debug!("Authentication required - checking credentials");
+
         let header = match auth_header {
-            Some(h) => h,
-            None => return false,
+            Some(h) => {
+                trace!("Authorization header found");
+                h
+            }
+            None => {
+                debug!("No Authorization header provided");
+                return false;
+            }
         };
         let credentials = match header.strip_prefix("Basic ") {
-            Some(c) => c,
-            None => return false,
+            Some(c) => {
+                trace!("Basic authentication scheme detected");
+                c
+            }
+            None => {
+                debug!("Invalid authentication scheme (not Basic)");
+                return false;
+            }
         };
         let decoded = match base64::engine::general_purpose::STANDARD.decode(credentials) {
-            Ok(d) => d,
-            Err(_) => return false,
+            Ok(d) => {
+                trace!("Successfully decoded base64 credentials");
+                d
+            }
+            Err(_) => {
+                debug!("Failed to decode base64 credentials");
+                return false;
+            }
         };
         let decoded_str = match String::from_utf8(decoded) {
-            Ok(s) => s,
-            Err(_) => return false,
+            Ok(s) => {
+                trace!("Successfully converted credentials to UTF-8");
+                s
+            }
+            Err(_) => {
+                debug!("Invalid UTF-8 in decoded credentials");
+                return false;
+            }
         };
         if let Some((provided_user, provided_pass)) = decoded_str.split_once(':') {
-            provided_user == user && provided_pass == pass
+            trace!("Parsed username from credentials: '{}'", provided_user);
+            let auth_result = provided_user == user && provided_pass == pass;
+            if auth_result {
+                debug!("Authentication successful for user: '{}'", provided_user);
+            } else {
+                warn!("Authentication failed for user: '{}'", provided_user);
+            }
+            auth_result
         } else {
+            debug!("Invalid credential format (missing colon separator)");
             false
         }
     }

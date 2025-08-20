@@ -22,6 +22,7 @@
 use crate::error::AppError;
 use crate::http::{Request, Response};
 use crate::middleware::Middleware;
+use log::{debug, trace};
 
 /// Type alias for a request handler closure.
 pub type Handler = Box<dyn Fn(&Request) -> Result<Response, AppError> + Send + Sync + 'static>;
@@ -92,12 +93,17 @@ impl Router {
     /// Attempt to resolve a request to a registered route.
     /// Returns Some(Result<..>) if a route matched, or None if no route matched.
     pub fn route(&self, request: &Request) -> Option<Result<Response, AppError>> {
+        debug!("Routing request: {} {}", request.method, request.path);
+        trace!("Available routes: {}", self.routes.len());
+
         // Run middleware chain first
         for mw in &self.middleware {
             if let Err(e) = mw.handle(request) {
+                debug!("Middleware rejected request: {:?}", e);
                 return Some(Err(e));
             }
         }
+        trace!("Middleware chain passed for request");
 
         let method = request.method.to_uppercase();
         // Match against the path without query string so routes like "/_irondrop/upload?x=y" work
@@ -115,9 +121,15 @@ impl Router {
                 MatchKind::Prefix => path_only.starts_with(&entry.path),
             };
             if is_match {
+                debug!(
+                    "Route matched: {} {} ({:?})",
+                    entry.method, entry.path, entry.kind
+                );
                 return Some((entry.handler)(request));
             }
         }
+
+        debug!("No route matched for: {} {}", request.method, request.path);
         None
     }
 }

@@ -4,7 +4,7 @@ use crate::error::AppError;
 use crate::fs::FileDetails;
 use crate::response::create_error_response;
 use crate::router::Router;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -43,10 +43,12 @@ pub enum RequestBody {
 impl RequestBody {
     /// Get the size of the request body in bytes
     pub fn len(&self) -> usize {
-        match self {
+        let size = match self {
             RequestBody::Memory(data) => data.len(),
             RequestBody::File { size, .. } => *size as usize,
-        }
+        };
+        trace!("RequestBody size: {} bytes", size);
+        size
     }
 
     /// Check if the request body is empty
@@ -72,26 +74,38 @@ pub enum ResponseBody {
 impl Request {
     /// Enhanced HTTP request parser with better performance and compliance
     pub fn from_stream(stream: &mut TcpStream) -> Result<Self, AppError> {
+        trace!("Starting HTTP request parsing from stream");
         // Set a reasonable timeout for reading requests
         stream.set_read_timeout(Some(std::time::Duration::from_secs(30)))?;
 
         // Read the entire HTTP headers in chunks for better performance
         let (headers_data, remaining_bytes) = Self::read_headers_with_remaining(stream)?;
+        debug!(
+            "Received headers ({} bytes), remaining buffer: {} bytes",
+            headers_data.len(),
+            remaining_bytes.len()
+        );
 
         // Parse the headers
         let mut lines = headers_data.lines();
 
         // Parse request line
         let request_line = lines.next().ok_or(AppError::BadRequest)?;
+        trace!("Request line: {}", request_line);
         let parts: Vec<&str> = request_line.split_whitespace().collect();
 
         if parts.len() != 3 {
+            debug!("Invalid request line format: {}", request_line);
             return Err(AppError::BadRequest);
         }
 
         let method = parts[0].to_string();
         let path = Self::decode_url(parts[1])?;
         let version = parts[2];
+
+        debug!("Parsed request: {} {}", method, path);
+        trace!("Raw path before decoding: {}", parts[1]);
+        trace!("HTTP version: {}", version);
 
         // Validate HTTP version
         if !version.starts_with("HTTP/1.") {
@@ -109,6 +123,7 @@ impl Request {
             if let Some((key, value)) = line.split_once(':') {
                 let key = key.trim().to_lowercase();
                 let value = value.trim().to_string();
+                trace!("Header: {} = {}", key, value);
 
                 // Handle multiple header values (comma-separated)
                 if let Some(existing) = headers.get(&key) {
@@ -121,6 +136,18 @@ impl Request {
 
         // Read request body if present
         let body = Self::read_request_body(stream, &headers, remaining_bytes)?;
+
+        if let Some(ref body) = body {
+            debug!("Request body parsed: {} bytes", body.len());
+            match body {
+                RequestBody::Memory(_) => trace!("Body stored in memory"),
+                RequestBody::File { path, size } => {
+                    trace!("Body streamed to file: {} ({} bytes)", path.display(), size);
+                }
+            }
+        } else {
+            trace!("No request body");
+        }
 
         debug!(
             "Parsed request: {} {} (headers: {}, body_size: {})",
@@ -463,16 +490,34 @@ pub fn handle_client(
     router: &Arc<Router>,
 ) {
     let log_prefix = format!("[{}]", stream.peer_addr().unwrap());
+    debug!("{} Handling client connection", log_prefix);
+    trace!(
+        "{} Client connection established, starting request processing",
+        log_prefix
+    );
 
     let request = match Request::from_stream(&mut stream) {
-        Ok(req) => req,
+        Ok(req) => {
+            debug!(
+                "{} Successfully parsed request: {} {}",
+                log_prefix, req.method, req.path
+            );
+            trace!(
+                "{} Request headers count: {}",
+                log_prefix,
+                req.headers.len()
+            );
+            req
+        }
         Err(e) => {
             warn!("{log_prefix} Failed to parse request: {e}");
+            debug!("{} Sending error response for parse failure", log_prefix);
             send_error_response(&mut stream, e, &log_prefix);
             return;
         }
     };
 
+    let start_time = std::time::Instant::now();
     let response_result = route_request(
         &request,
         base_dir,
@@ -484,23 +529,37 @@ pub fn handle_client(
         stats,
         router,
     );
+    let processing_time = start_time.elapsed();
+    debug!("{} Request processed in {:?}", log_prefix, processing_time);
 
     match response_result {
-        Ok(response) => match send_response(&mut stream, response, &log_prefix) {
-            Ok(body_bytes) => {
-                if let Some(stats) = stats {
-                    stats.record_request(true, body_bytes);
+        Ok(response) => {
+            trace!("{} Response status: {}", log_prefix, response.status_code);
+            match send_response(&mut stream, response, &log_prefix) {
+                Ok(body_bytes) => {
+                    trace!(
+                        "{} Response sent successfully, {} bytes",
+                        log_prefix,
+                        body_bytes
+                    );
+                    if let Some(stats) = stats {
+                        stats.record_request(true, body_bytes);
+                    }
+                }
+                Err(e) => {
+                    error!("{log_prefix} Failed to send response: {e}");
+                    if let Some(stats) = stats {
+                        stats.record_request(false, 0);
+                    }
                 }
             }
-            Err(e) => {
-                error!("{log_prefix} Failed to send response: {e}");
-                if let Some(stats) = stats {
-                    stats.record_request(false, 0);
-                }
-            }
-        },
+        }
         Err(e) => {
             warn!("{log_prefix} Error processing request: {e}");
+            debug!(
+                "{} Sending error response for processing failure",
+                log_prefix
+            );
             send_error_response(&mut stream, e, &log_prefix);
             if let Some(stats) = stats {
                 stats.record_request(false, 0);
@@ -527,17 +586,26 @@ fn route_request(
     _stats: Option<&crate::server::ServerStats>,
     router: &Arc<Router>,
 ) -> Result<Response, AppError> {
+    trace!("Routing {} {} through router", request.method, request.path);
     // Authentication is now handled by middleware in the router
     // First check if router handles the request (internal routes)
     if let Some(router_response) = router.route(request) {
+        debug!(
+            "Route found in router for {} {}",
+            request.method, request.path
+        );
+        trace!("Router handler execution starting");
         return router_response;
     }
 
     // All non-internal paths (not starting with /_irondrop/) are treated as file / directory lookup
     if request.path.starts_with("/_irondrop/") {
+        debug!("Internal path {} not found in router", request.path);
         return Err(AppError::NotFound);
     }
 
+    debug!("Handling file request for path: {}", request.path);
+    trace!("Using file handler for non-internal path");
     // Handle file and directory serving via dedicated handler
     crate::handlers::handle_file_request(
         request,
@@ -558,6 +626,11 @@ fn send_response(
         "{} {} {}",
         log_prefix, response.status_code, response.status_text
     );
+    debug!(
+        "{} Preparing response headers ({} custom headers)",
+        log_prefix,
+        response.headers.len()
+    );
 
     let mut response_str = format!(
         "HTTP/1.1 {} {}\r\n",
@@ -570,6 +643,7 @@ fn send_response(
 
     // Add response-specific headers
     for (key, value) in response.headers {
+        trace!("{} Response header: {}: {}", log_prefix, key, value);
         response_str.push_str(&format!("{key}: {value}\r\n"));
     }
 
@@ -592,17 +666,35 @@ fn send_response(
 
     response_str.push_str("\r\n");
 
+    debug!(
+        "{} Sending response headers ({} bytes)",
+        log_prefix,
+        response_str.len()
+    );
     stream.write_all(response_str.as_bytes())?;
 
     // Send body and count only body bytes (exclude headers for stats)
     let mut body_sent: u64 = 0;
+    debug!("{} Starting body transmission", log_prefix);
     match response.body {
         ResponseBody::Text(_) | ResponseBody::Binary(_) => {
+            trace!(
+                "{} Sending {} bytes of text/binary data",
+                log_prefix,
+                body_bytes.len()
+            );
             stream.write_all(&body_bytes)?;
             body_sent += body_bytes.len() as u64;
         }
         ResponseBody::Stream(mut file_details) => {
+            trace!(
+                "{} Streaming file: {} bytes, chunk size: {}",
+                log_prefix,
+                file_details.size,
+                file_details.chunk_size
+            );
             let mut buffer = vec![0; file_details.chunk_size];
+            let mut chunks_sent = 0;
             loop {
                 let bytes_read = file_details.file.read(&mut buffer)?;
                 if bytes_read == 0 {
@@ -610,7 +702,20 @@ fn send_response(
                 }
                 stream.write_all(&buffer[..bytes_read])?;
                 body_sent += bytes_read as u64;
+                chunks_sent += 1;
+                if chunks_sent % 100 == 0 {
+                    trace!(
+                        "{} Streamed {} chunks ({} bytes so far)",
+                        log_prefix,
+                        chunks_sent,
+                        body_sent
+                    );
+                }
             }
+            debug!(
+                "{} File streaming completed: {} chunks, {} bytes total",
+                log_prefix, chunks_sent, body_sent
+            );
         }
     }
 

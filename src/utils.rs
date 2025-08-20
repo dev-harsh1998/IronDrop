@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use log::{debug, trace};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
@@ -66,6 +67,7 @@ pub fn get_request_path(request_line: &str) -> &str {
 
 /// Parse query parameters from a URL
 pub fn parse_query_params(url: &str) -> HashMap<String, String> {
+    trace!("Parsing query parameters from URL: {}", url);
     let mut params = HashMap::new();
 
     if let Some(query_start) = url.find('?') {
@@ -121,6 +123,10 @@ pub fn resolve_upload_directory(
     base_dir: &Path,
     upload_to: Option<&str>,
 ) -> Result<PathBuf, AppError> {
+    debug!(
+        "Resolving upload directory: base_dir={:?}, upload_to={:?}",
+        base_dir, upload_to
+    );
     match upload_to {
         Some(path_str) => {
             // Parse and validate the upload path

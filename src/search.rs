@@ -9,7 +9,7 @@
 //! - Cache-aligned structures: Optimize for CPU cache lines
 
 use crate::error::AppError;
-use log::{debug, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,6 +31,7 @@ pub struct SearchResult {
 }
 
 /// Search parameters
+#[derive(Debug)]
 pub struct SearchParams {
     pub query: String,
     pub path: String,
@@ -834,6 +835,15 @@ impl UltraLowMemoryIndex {
 
     /// Ultra-fast search using radix acceleration and binary search
     pub fn search(&self, query: &str, limit: usize) -> Vec<SearchResult> {
+        debug!(
+            "UltraLowMemoryIndex search: query='{}', limit={}",
+            query, limit
+        );
+        trace!(
+            "Index stats: {} entries, {} bytes memory",
+            self.get_entry_count(),
+            self.get_memory_usage()
+        );
         let start = Instant::now();
         let query_lower = query.to_lowercase();
         let mut candidate_ids = Vec::new();
@@ -1114,16 +1124,38 @@ impl ConcurrentUltraLowMemoryIndex {
 
     /// Perform search with minimal lock contention
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>, AppError> {
+        debug!(
+            "ConcurrentUltraLowMemoryIndex search: query='{}', limit={}",
+            query, limit
+        );
+        let _start_time = Instant::now();
         let cache_key = format!("{query}:{limit}");
+        debug!(
+            "Starting concurrent search for query: '{}' with limit: {}",
+            query, limit
+        );
+        trace!("Cache key generated: {}", cache_key);
 
         // Try cache first (quick lock)
         {
             if let Ok(mut cache) = self.search_cache.try_lock() {
+                trace!("Acquired cache lock for search query");
                 if let Some(cached_results) = cache.get(&cache_key) {
+                    debug!(
+                        "Cache hit for query: '{}', returning {} results",
+                        query,
+                        cached_results.len()
+                    );
+                    trace!("Cache hit saved search time");
                     return Ok(cached_results);
                 }
             }
         }
+
+        debug!(
+            "Cache miss for query: '{}', performing full index search",
+            query
+        );
 
         // Perform search with read lock (allows concurrent searches)
         let results = {
@@ -1131,12 +1163,35 @@ impl ConcurrentUltraLowMemoryIndex {
                 .index
                 .read()
                 .map_err(|_| AppError::InternalServerError("Index lock poisoned".to_string()))?;
-            index_guard.search(query, limit)
+            trace!("Acquired index read lock for search");
+            let index_stats = (
+                index_guard.get_entry_count(),
+                index_guard.get_memory_usage(),
+            );
+            trace!(
+                "Index contains {} entries, using {} bytes",
+                index_stats.0,
+                index_stats.1
+            );
+            let start_time = std::time::Instant::now();
+            let search_results = index_guard.search(query, limit);
+            let search_time = start_time.elapsed();
+            debug!(
+                "Index search completed in {:?}, found {} results",
+                search_time,
+                search_results.len()
+            );
+            trace!(
+                "Search performance: {:.2} results/ms",
+                search_results.len() as f64 / search_time.as_millis().max(1) as f64
+            );
+            search_results
         };
 
         // Cache results (quick lock)
         if let Ok(mut cache) = self.search_cache.try_lock() {
             cache.put(cache_key, results.clone());
+            trace!("Results cached for future queries");
         }
 
         Ok(results)
@@ -1248,30 +1303,68 @@ pub fn perform_search(
     base_dir: &Path,
     params: &SearchParams,
 ) -> Result<Vec<SearchResult>, AppError> {
+    debug!(
+        "Starting search: query='{}', path='{}', limit={}, offset={}",
+        params.query, params.path, params.limit, params.offset
+    );
+    trace!(
+        "Search parameters: case_sensitive={}",
+        params.case_sensitive
+    );
     let start = Instant::now();
+    debug!(
+        "Performing search with query: '{}', limit: {}, offset: {}",
+        params.query, params.limit, params.offset
+    );
+    trace!(
+        "Search parameters - path: '{}', case_sensitive: {}",
+        params.path,
+        params.case_sensitive
+    );
 
     // Get ultra-low memory concurrent index
     let concurrent_index = {
         let index_guard = ULTRA_LOW_MEMORY_INDEX.read().unwrap();
         match &*index_guard {
-            Some(index) => index.clone(),
+            Some(index) => {
+                debug!("Using ultra-low memory index for search");
+                let stats = index.get_stats().unwrap_or((0, 0, false));
+                trace!(
+                    "Index stats - entries: {}, memory: {} bytes, updating: {}",
+                    stats.0,
+                    stats.1,
+                    stats.2
+                );
+                index.clone()
+            }
             None => {
+                error!("Ultra-low memory search index not initialized");
                 return Err(AppError::InternalServerError(
                     "Ultra-low memory search index not initialized".to_string(),
-                ))
+                ));
             }
         }
     };
 
     // Perform ultra-fast radix-accelerated search
+    trace!(
+        "Starting radix-accelerated search with expanded limit: {}",
+        params.limit * 2
+    );
     let mut results = concurrent_index.search(&params.query, params.limit * 2)?;
+    debug!("Index search returned {} initial results", results.len());
 
     // If index search returns no results, fall back to filesystem search
     if results.is_empty() {
         info!(
             "Ultra-low memory index search returned no results, falling back to filesystem search"
         );
+        debug!("Initiating parallel filesystem search as fallback");
         results = perform_parallel_search(base_dir, params)?;
+        trace!(
+            "Filesystem search fallback returned {} results",
+            results.len()
+        );
     }
 
     // Sort by relevance score (stable sort to maintain order for equal scores)

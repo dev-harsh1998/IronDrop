@@ -33,18 +33,29 @@ pub struct Config {
 impl Config {
     /// Load configuration with precedence: CLI args > INI file > Defaults
     pub fn load(cli: &Cli) -> Result<Self, String> {
+        log::debug!("Starting configuration loading process");
+        log::trace!("CLI config_file parameter: {:?}", cli.config_file);
+
         // Try to load configuration file
         let config_file = Self::find_config_file(cli)?;
+        log::debug!("Config file discovery result: {:?}", config_file);
+
         let ini = if let Some(path) = config_file {
             log::info!("Loading configuration from: {}", path.display());
-            IniConfig::load_file(&path)?
+            let ini_config = IniConfig::load_file(&path)?;
+            log::debug!(
+                "Successfully parsed INI configuration with {} sections",
+                ini_config.sections().len()
+            );
+            ini_config
         } else {
             log::info!("No configuration file found, using defaults and CLI overrides");
             IniConfig::new()
         };
 
         // Build configuration with precedence
-        Ok(Self {
+        log::debug!("Building final configuration with precedence rules");
+        let config = Self {
             listen: Self::get_listen(&ini, cli),
             port: Self::get_port(&ini, cli),
             threads: Self::get_threads(&ini, cli),
@@ -60,7 +71,18 @@ impl Config {
 
             verbose: Self::get_verbose(&ini, cli),
             detailed_logging: Self::get_detailed_logging(&ini, cli),
-        })
+        };
+
+        log::debug!("Configuration loading completed successfully");
+        log::trace!(
+            "Final config - listen: {}, port: {}, threads: {}, upload_enabled: {}",
+            config.listen,
+            config.port,
+            config.threads,
+            config.enable_upload
+        );
+
+        Ok(config)
     }
 
     /// Find configuration file in order of preference

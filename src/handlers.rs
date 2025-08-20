@@ -9,7 +9,7 @@ use crate::http::{Request, Response, ResponseBody};
 use crate::search::{perform_search, SearchParams, SearchResult};
 use crate::upload::DirectUploadHandler;
 use crate::utils::parse_query_params;
-use log::debug;
+use log::{debug, error, trace};
 use std::time::Instant;
 
 /// Register all internal routes under /_irondrop/.
@@ -230,6 +230,7 @@ pub fn handle_upload_form_request(
     cli_config: Option<&crate::cli::Cli>,
     _base_dir: Option<&std::path::PathBuf>,
 ) -> Result<Response, AppError> {
+    debug!("Handling upload form request for path: {}", request.path);
     let cli = cli_config.ok_or_else(|| {
         AppError::InternalServerError(
             "CLI configuration not available for upload handling".to_string(),
@@ -266,12 +267,28 @@ pub fn handle_upload_request(
     stats: Option<&crate::server::ServerStats>,
     base_dir: Option<&std::path::PathBuf>,
 ) -> Result<Response, AppError> {
+    debug!(
+        "Processing upload request: method={}, path={}",
+        request.method, request.path
+    );
+    trace!("Upload request headers: {:?}", request.headers);
+    debug!(
+        "Handling upload request from {}",
+        request.headers.get("host").map_or("unknown", |v| v)
+    );
+    trace!(
+        "Upload request headers: {:?}",
+        request.headers.keys().collect::<Vec<_>>()
+    );
+
     let cli = cli_config.ok_or_else(|| {
+        error!("CLI configuration not available for upload handling");
         AppError::InternalServerError(
             "CLI configuration not available for upload handling".to_string(),
         )
     })?;
     if !cli.enable_upload.unwrap_or(false) {
+        debug!("Upload disabled in configuration");
         return Err(AppError::upload_disabled());
     }
 
@@ -281,31 +298,59 @@ pub fn handle_upload_request(
 
     // Resolve target directory
     let upload_handler = if let Some(base) = base_dir {
+        debug!(
+            "Resolving upload directory - base: {}, upload_to: {:?}",
+            base.display(),
+            upload_to
+        );
         let target_dir = crate::utils::resolve_upload_directory(base, upload_to)?;
+        debug!("Target upload directory: {}", target_dir.display());
+        trace!("Target directory exists: {}", target_dir.exists());
         DirectUploadHandler::new_with_directory(cli, target_dir)?
     } else {
+        debug!("Using default upload handler without base directory");
         DirectUploadHandler::new(cli)?
     };
 
     let mut upload_handler = upload_handler;
-    let http_response = upload_handler.handle_upload_with_stats(request, stats)?;
-    let mut headers = HashMap::new();
-    for (k, v) in http_response.headers {
-        headers.insert(k, v);
+    let start_time = std::time::Instant::now();
+
+    match upload_handler.handle_upload_with_stats(request, stats) {
+        Ok(http_response) => {
+            let upload_time = start_time.elapsed();
+            debug!("Upload completed successfully in {:?}", upload_time);
+            trace!("Upload response status: {}", http_response.status_code);
+
+            let mut headers = HashMap::new();
+            for (k, v) in http_response.headers {
+                headers.insert(k, v);
+            }
+            let body = ResponseBody::Text(String::from_utf8_lossy(&http_response.body).to_string());
+            Ok(Response {
+                status_code: http_response.status_code,
+                status_text: http_response.status_text,
+                headers,
+                body,
+            })
+        }
+        Err(e) => {
+            let upload_time = start_time.elapsed();
+            error!("Upload failed after {:?}: {}", upload_time, e);
+            debug!("Upload error details: {:?}", e);
+            Err(e)
+        }
     }
-    let body = ResponseBody::Text(String::from_utf8_lossy(&http_response.body).to_string());
-    Ok(Response {
-        status_code: http_response.status_code,
-        status_text: http_response.status_text,
-        headers,
-        body,
-    })
 }
 
 pub fn handle_monitor_request(
     request: &Request,
     stats: Option<&crate::server::ServerStats>,
 ) -> Result<Response, AppError> {
+    debug!("Handling monitor request for path: {}", request.path);
+    trace!(
+        "Monitor request query params: {:?}",
+        parse_query_params(&request.path)
+    );
     // Check if JSON response is requested
     if request.path.contains("json=1") {
         return Ok(create_monitor_json(stats));
@@ -401,15 +446,35 @@ pub fn handle_file_request(
     chunk_size: usize,
     cli_config: Option<&crate::cli::Cli>,
 ) -> Result<Response, AppError> {
+    debug!(
+        "Handling file request: method={}, path={}",
+        request.method, request.path
+    );
+    trace!("Base directory: {:?}, chunk size: {}", base_dir, chunk_size);
     use crate::fs::{generate_directory_listing, FileDetails};
     use crate::response::get_mime_type;
     use log::debug;
     use std::path::PathBuf;
 
+    debug!("Handling file request for path: {}", request.path);
+    trace!(
+        "Base directory: {}, chunk_size: {}",
+        base_dir.display(),
+        chunk_size
+    );
+    trace!(
+        "Allowed extensions: {:?}",
+        allowed_extensions
+            .iter()
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+    );
+
     // Handle different methods appropriately
     match request.method.as_str() {
         "GET" => {
             // GET requests are handled normally
+            trace!("Processing GET request");
         }
         "POST" => {
             // For now, POST requests are only accepted but not fully implemented
@@ -418,25 +483,44 @@ pub fn handle_file_request(
             debug!("POST request received, treating as GET for basic functionality");
         }
         _ => {
+            debug!("Method not allowed: {}", request.method);
             return Err(AppError::MethodNotAllowed);
         }
     }
 
     let requested_path = PathBuf::from(request.path.strip_prefix('/').unwrap_or(&request.path));
+    debug!("Requested path: {}", requested_path.display());
+
     let safe_path = normalize_path(&requested_path)?;
     let full_path = base_dir.join(safe_path);
 
+    debug!("Full resolved path: {}", full_path.display());
+    trace!(
+        "Path components - requested: '{}', full: '{}'",
+        requested_path.display(),
+        full_path.display()
+    );
+
     if !full_path.starts_with(base_dir) {
+        debug!("Path traversal attempt blocked: {}", full_path.display());
         return Err(AppError::Forbidden);
     }
 
     if !full_path.exists() {
+        debug!("Path does not exist: {}", full_path.display());
+        trace!("File system check failed for path");
         return Err(AppError::NotFound);
     }
 
+    trace!("Path exists, checking if directory or file");
+
     if full_path.is_dir() {
+        debug!("Serving directory listing for: {}", full_path.display());
+        trace!("Directory listing requested for path: {}", request.path);
+
         // Only serve directory listings for GET requests
         if request.method == "POST" {
+            debug!("POST method not allowed for directory listings");
             return Err(AppError::MethodNotAllowed);
         }
 
@@ -477,15 +561,27 @@ pub fn handle_file_request(
             body: ResponseBody::Text(html_content),
         })
     } else if full_path.is_file() {
+        debug!("Serving file: {}", full_path.display());
+
         if !allowed_extensions
             .iter()
             .any(|p| p.matches_path(&full_path))
         {
+            debug!("File extension not allowed for: {}", full_path.display());
+            trace!("Extension validation failed, returning Forbidden");
             return Err(AppError::Forbidden);
         }
 
+        trace!("File extension validation passed");
+
         let file_details = FileDetails::new(full_path.clone(), chunk_size)?;
         let mime_type = get_mime_type(&full_path);
+
+        debug!(
+            "File details - size: {} bytes, mime_type: {}",
+            file_details.size, mime_type
+        );
+        trace!("Chunk size for streaming: {}", chunk_size);
         Ok(Response {
             status_code: 200,
             status_text: "OK".to_string(),
@@ -554,7 +650,11 @@ pub fn handle_search_api_request(
     request: &Request,
     base_dir: &Arc<std::path::PathBuf>,
 ) -> Result<Response, AppError> {
+    debug!("Processing search API request for path: {}", request.path);
+    trace!("Search base directory: {:?}", base_dir);
     let start_time = Instant::now();
+    debug!("Handling search API request: {}", request.path);
+    trace!("Search base directory: {}", base_dir.display());
 
     // Parse query parameters manually
     let query_params: HashMap<String, String> =
@@ -573,13 +673,20 @@ pub fn handle_search_api_request(
             HashMap::new()
         };
 
-    let search_query = query_params.get("q").ok_or(AppError::BadRequest)?;
+    let search_query = query_params.get("q").ok_or_else(|| {
+        debug!("Search query parameter 'q' missing");
+        AppError::BadRequest
+    })?;
+
+    debug!("Search query: '{}'", search_query);
 
     // Validate query length for performance
     if search_query.len() < 2 {
+        debug!("Search query too short: {} characters", search_query.len());
         return Err(AppError::BadRequest);
     }
     if search_query.len() > 100 {
+        debug!("Search query too long: {} characters", search_query.len());
         return Err(AppError::BadRequest);
     }
 
@@ -594,6 +701,12 @@ pub fn handle_search_api_request(
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(0);
 
+    debug!(
+        "Search parameters - path: '{}', limit: {}, offset: {}",
+        search_path, limit, offset
+    );
+    trace!("Search query validation passed");
+
     let params = SearchParams {
         query: search_query.clone(),
         path: search_path.to_string(),
@@ -603,7 +716,9 @@ pub fn handle_search_api_request(
     };
 
     // Perform optimized search with caching and indexing
+    debug!("Performing search with parameters: {:?}", params);
     let mut results = perform_search(base_dir, &params)?;
+    debug!("Search returned {} results", results.len());
 
     // Sort by relevance score
     results.sort_by(|a, b| {
@@ -613,11 +728,18 @@ pub fn handle_search_api_request(
     });
 
     // Apply pagination
-    let _total_count = results.len();
+    let total_count = results.len();
     let paginated_results: Vec<SearchResult> =
         results.into_iter().skip(offset).take(limit).collect();
 
-    let _elapsed_ms = start_time.elapsed().as_millis();
+    let elapsed_ms = start_time.elapsed().as_millis();
+    debug!(
+        "Search completed in {}ms, returning {} of {} results",
+        elapsed_ms,
+        paginated_results.len(),
+        total_count
+    );
+    trace!("Pagination applied - offset: {}, limit: {}", offset, limit);
 
     // Create simple JSON manually to avoid serde dependency
     let json_items: Vec<String> = paginated_results

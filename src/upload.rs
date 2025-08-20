@@ -27,7 +27,7 @@ use crate::http::{Request, RequestBody};
 use crate::response::{get_mime_type, HttpResponse};
 use crate::templates::TemplateEngine;
 use glob::Pattern;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -218,6 +218,16 @@ impl DirectUploadHandler {
         request: &Request,
         stats: Option<&crate::server::ServerStats>,
     ) -> Result<HttpResponse, AppError> {
+        debug!(
+            "Starting upload handling to directory: {}",
+            self.target_dir.display()
+        );
+        trace!(
+            "Upload request method: {}, path: {}",
+            request.method,
+            request.path
+        );
+
         let result = self.handle_upload(request, stats);
 
         // If there was an error, record failure statistics
@@ -226,6 +236,9 @@ impl DirectUploadHandler {
                 stats.record_upload_request(false, 0, 0, 0, 0); // Record failure
                 stats.finish_upload();
             }
+            debug!("Upload error type: {:?}", result.as_ref().err());
+        } else {
+            trace!("Upload processing completed without errors");
         }
 
         result
@@ -237,9 +250,21 @@ impl DirectUploadHandler {
         request: &Request,
         stats: Option<&crate::server::ServerStats>,
     ) -> Result<HttpResponse, AppError> {
+        debug!(
+            "Starting upload processing for request: {} {}",
+            request.method, request.path
+        );
+        trace!(
+            "Upload handler config - max_size: {} bytes, enabled: {}",
+            self.max_upload_size,
+            self.upload_enabled
+        );
+
         if !self.upload_enabled {
+            warn!("Upload attempt rejected - uploads are disabled");
             return Err(AppError::upload_disabled());
         }
+        debug!("Upload enabled check passed");
 
         let start_time = std::time::Instant::now();
 
@@ -250,11 +275,36 @@ impl DirectUploadHandler {
 
         // Validate request method
         if request.method != "POST" && request.method != "PUT" {
+            debug!(
+                "Invalid method for upload: {}, expected POST or PUT",
+                request.method
+            );
             return Err(AppError::MethodNotAllowed);
         }
 
+        trace!("Request method validation passed");
+
         // Get request body
-        let body = request.body.as_ref().ok_or(AppError::BadRequest)?;
+        let body = request.body.as_ref().ok_or_else(|| {
+            debug!("Missing request body in upload request");
+            AppError::BadRequest
+        })?;
+
+        debug!(
+            "Request body found: {} bytes",
+            match body {
+                RequestBody::Memory(data) => data.len(),
+                RequestBody::File { size, .. } => *size as usize,
+            }
+        );
+        trace!(
+            "Body type: {}",
+            match body {
+                RequestBody::Memory(_) => "memory",
+                RequestBody::File { .. } => "file",
+            }
+        );
+        trace!("Request body validation passed");
 
         // Check total upload size
         let body_size = match body {
@@ -262,30 +312,66 @@ impl DirectUploadHandler {
             RequestBody::File { size, .. } => *size,
         };
 
+        debug!(
+            "Upload body size: {} bytes (limit: {} bytes)",
+            body_size, self.max_upload_size
+        );
+
         if body_size > self.max_upload_size {
+            warn!(
+                "Upload rejected - size {} exceeds limit of {} bytes",
+                body_size, self.max_upload_size
+            );
             return Err(AppError::payload_too_large(self.max_upload_size));
         }
+        debug!(
+            "Upload size check passed: {} bytes (limit: {})",
+            body_size, self.max_upload_size
+        );
+        trace!("Upload size validation passed");
 
         // Extract filename from URL path or Content-Disposition header
         let filename = self.extract_filename(request)?;
+        debug!("Extracted filename: '{}'", filename);
 
         // Validate filename
+        debug!("Validating filename: '{}'", filename);
         self.validate_filename(&filename)?;
+        trace!("Filename validation passed");
 
         // Validate file extension
         self.validate_file_extension(&filename)?;
+        debug!("Filename validation passed");
+        trace!("File extension validation passed");
 
         // Check available disk space
+        debug!("Checking disk space for {} bytes", body_size);
         self.check_disk_space(body_size)?;
+        debug!("Disk space check passed");
 
         // Process upload based on body type and size
         let uploaded_file = if body_size <= MEMORY_THRESHOLD {
+            debug!(
+                "Processing upload in memory (size: {} <= threshold: {})",
+                body_size, MEMORY_THRESHOLD
+            );
             self.handle_memory_upload(body, &filename)?
         } else {
+            debug!(
+                "Processing upload with streaming (size: {} > threshold: {})",
+                body_size, MEMORY_THRESHOLD
+            );
             self.handle_streaming_upload(body, &filename)?
         };
 
         let processing_time = start_time.elapsed().as_millis() as u64;
+
+        debug!(
+            "Upload result - renamed: {}, mime_type: {}, path: {}",
+            uploaded_file.renamed,
+            uploaded_file.mime_type,
+            uploaded_file.saved_path.display()
+        );
 
         let upload_result = UploadResult {
             uploaded_file,
@@ -377,7 +463,12 @@ impl DirectUploadHandler {
 
         // Generate unique filename to avoid conflicts
         let (final_filename, was_renamed) = self.generate_unique_filename(filename)?;
+        debug!(
+            "Generated filename: '{}' (renamed: {})",
+            final_filename, was_renamed
+        );
         let target_path = self.target_dir.join(&final_filename);
+        trace!("Target path: {}", target_path.display());
 
         // Create temporary file for atomic write
         let temp_filename = format!(
@@ -393,6 +484,11 @@ impl DirectUploadHandler {
         let temp_path = self.target_dir.join(&temp_filename);
 
         // Write data to temporary file
+        debug!(
+            "Writing {} bytes to temporary file: {}",
+            data.len(),
+            temp_path.display()
+        );
         {
             let mut temp_file = File::create(&temp_path).map_err(|e| {
                 error!("Failed to create temporary file {temp_path:?}: {e}");
@@ -413,14 +509,17 @@ impl DirectUploadHandler {
         }
 
         // Atomically rename temporary file to final location
+        debug!("Atomically moving temporary file to final location");
         fs::rename(&temp_path, &target_path).map_err(|e| {
             error!("Failed to rename {temp_path:?} to {target_path:?}: {e}");
             let _ = fs::remove_file(&temp_path); // Cleanup on error
             AppError::from(e)
         })?;
+        trace!("File successfully moved to: {}", target_path.display());
 
         // Determine MIME type
         let mime_type = get_mime_type(&target_path).to_string();
+        trace!("Detected MIME type: {}", mime_type);
 
         info!(
             "Successfully uploaded file: {} ({} bytes) to {}",
@@ -470,7 +569,12 @@ impl DirectUploadHandler {
 
         // Generate unique filename to avoid conflicts
         let (final_filename, was_renamed) = self.generate_unique_filename(filename)?;
+        debug!(
+            "Generated filename: '{}' (renamed: {})",
+            final_filename, was_renamed
+        );
         let target_path = self.target_dir.join(&final_filename);
+        trace!("Target path: {}", target_path.display());
 
         // Create temporary file for atomic operation
         let temp_filename = format!(
@@ -486,6 +590,11 @@ impl DirectUploadHandler {
         let temp_path = self.target_dir.join(&temp_filename);
 
         // Stream copy from source to temporary file
+        debug!(
+            "Starting streaming copy from {} to {}",
+            source_path.display(),
+            temp_path.display()
+        );
         let file_size = {
             let source_file = File::open(source_path).map_err(|e| {
                 error!("Failed to open source file {source_path:?}: {e}");
@@ -503,6 +612,7 @@ impl DirectUploadHandler {
 
             let mut buffer = vec![0u8; STREAM_BUFFER_SIZE];
             let mut total_bytes = 0u64;
+            trace!("Using buffer size: {} bytes", STREAM_BUFFER_SIZE);
 
             loop {
                 let bytes_read = reader.read(&mut buffer).map_err(|e| {
@@ -523,8 +633,17 @@ impl DirectUploadHandler {
 
                 total_bytes += bytes_read as u64;
 
+                // Log progress for large files
+                if total_bytes % (1024 * 1024) == 0 || total_bytes < 1024 * 1024 {
+                    trace!("Streamed {} bytes so far", total_bytes);
+                }
+
                 // Check size limit during streaming
                 if total_bytes > self.max_upload_size {
+                    warn!(
+                        "Streaming upload exceeded size limit: {} > {}",
+                        total_bytes, self.max_upload_size
+                    );
                     let _ = fs::remove_file(&temp_path); // Cleanup
                     return Err(AppError::payload_too_large(self.max_upload_size));
                 }
