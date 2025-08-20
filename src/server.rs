@@ -9,6 +9,7 @@ use glob::Pattern;
 use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, TcpListener};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -24,6 +25,8 @@ pub struct RateLimiter {
     connections: Arc<Mutex<HashMap<IpAddr, ConnectionInfo>>>,
     max_requests_per_minute: u32,
     max_concurrent_per_ip: u32,
+    cleanup_running: Arc<AtomicBool>,
+    max_connections_per_ip: u32,
 }
 
 #[derive(Debug)]
@@ -31,15 +34,23 @@ struct ConnectionInfo {
     request_count: u32,
     last_reset: Instant,
     active_connections: u32,
+    last_activity: Instant,
+    total_connections: u32,
 }
 
 impl RateLimiter {
     pub fn new(max_requests_per_minute: u32, max_concurrent_per_ip: u32) -> Self {
-        Self {
+        let rate_limiter = Self {
             connections: Arc::new(Mutex::new(HashMap::new())),
             max_requests_per_minute,
             max_concurrent_per_ip,
-        }
+            cleanup_running: Arc::new(AtomicBool::new(false)),
+            max_connections_per_ip: 1000, // Limit stored connections per IP
+        };
+
+        // Start automatic cleanup timer
+        rate_limiter.start_cleanup_timer();
+        rate_limiter
     }
 
     pub fn check_rate_limit(&self, ip: IpAddr) -> bool {
@@ -50,6 +61,8 @@ impl RateLimiter {
             request_count: 0,
             last_reset: now,
             active_connections: 0,
+            last_activity: now,
+            total_connections: 0,
         });
 
         // Reset counter if more than a minute has passed
@@ -72,6 +85,14 @@ impl RateLimiter {
 
         conn_info.request_count += 1;
         conn_info.active_connections += 1;
+        conn_info.last_activity = now;
+        conn_info.total_connections += 1;
+
+        // Check if this IP has too many stored connections
+        if conn_info.total_connections > self.max_connections_per_ip {
+            warn!("IP {ip} has exceeded max stored connections limit");
+        }
+
         true
     }
 
@@ -79,6 +100,7 @@ impl RateLimiter {
         if let Ok(mut connections) = self.connections.lock() {
             if let Some(conn_info) = connections.get_mut(&ip) {
                 conn_info.active_connections = conn_info.active_connections.saturating_sub(1);
+                conn_info.last_activity = Instant::now();
             }
         }
     }
@@ -86,10 +108,84 @@ impl RateLimiter {
     pub fn cleanup_old_entries(&self) {
         let mut connections = self.connections.lock().unwrap();
         let now = Instant::now();
+        let initial_count = connections.len();
 
+        // Reduced retention time from 5 minutes to 2 minutes
+        connections
+            .retain(|_, info| now.duration_since(info.last_activity) < Duration::from_secs(120));
+
+        let cleaned_count = initial_count - connections.len();
+        if cleaned_count > 0 {
+            debug!("Cleaned up {} old rate limiter entries", cleaned_count);
+        }
+    }
+
+    /// Start automatic cleanup timer that runs every 60 seconds
+    fn start_cleanup_timer(&self) {
+        if self
+            .cleanup_running
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            let connections = Arc::clone(&self.connections);
+            let cleanup_running = Arc::clone(&self.cleanup_running);
+
+            thread::spawn(move || {
+                while cleanup_running.load(Ordering::SeqCst) {
+                    thread::sleep(Duration::from_secs(60));
+
+                    if let Ok(mut connections) = connections.lock() {
+                        let now = Instant::now();
+                        let initial_count = connections.len();
+
+                        // Clean up entries older than 2 minutes
+                        connections.retain(|_, info| {
+                            now.duration_since(info.last_activity) < Duration::from_secs(120)
+                        });
+
+                        let cleaned_count = initial_count - connections.len();
+                        if cleaned_count > 0 {
+                            debug!(
+                                "Auto-cleanup removed {} rate limiter entries",
+                                cleaned_count
+                            );
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    /// Perform aggressive cleanup when memory pressure is detected
+    pub fn cleanup_on_memory_pressure(&self) {
+        let mut connections = self.connections.lock().unwrap();
+        let now = Instant::now();
+        let initial_count = connections.len();
+
+        // More aggressive cleanup - remove entries older than 30 seconds
         connections.retain(|_, info| {
-            now.duration_since(info.last_reset) < Duration::from_secs(300) // Keep for 5 minutes
+            info.active_connections > 0
+                || now.duration_since(info.last_activity) < Duration::from_secs(30)
         });
+
+        let cleaned_count = initial_count - connections.len();
+        if cleaned_count > 0 {
+            warn!(
+                "Memory pressure cleanup removed {} rate limiter entries",
+                cleaned_count
+            );
+        }
+    }
+
+    /// Get rate limiter memory statistics
+    pub fn get_memory_stats(&self) -> (usize, usize) {
+        if let Ok(connections) = self.connections.lock() {
+            let entry_count = connections.len();
+            let estimated_memory = entry_count * std::mem::size_of::<(IpAddr, ConnectionInfo)>();
+            (entry_count, estimated_memory)
+        } else {
+            (0, 0)
+        }
     }
 }
 
@@ -337,6 +433,33 @@ impl ServerStats {
                 0.0
             },
         }
+    }
+
+    /// Check if memory pressure is detected (memory usage > 15MB)
+    /// This triggers aggressive cleanup in rate limiter and other components
+    pub fn check_memory_pressure(&self, rate_limiter: Option<&RateLimiter>) -> bool {
+        let (current_memory, _, available) = self.get_memory_usage();
+
+        if available {
+            if let Some(memory) = current_memory {
+                // Trigger cleanup if memory exceeds 15MB (baseline is ~4MB)
+                let memory_mb = memory / (1024 * 1024);
+                if memory_mb > 15 {
+                    warn!("Memory pressure detected: {}MB usage", memory_mb);
+
+                    // Trigger rate limiter cleanup if provided
+                    if let Some(limiter) = rate_limiter {
+                        limiter.cleanup_on_memory_pressure();
+                    }
+
+                    // Clear search cache if available
+                    crate::search::clear_cache();
+
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Get current process memory usage in bytes
@@ -996,23 +1119,21 @@ pub fn run_server(
     );
     let shared_router = Arc::new(router);
 
-    // Start background cleanup task for rate limiter
-    let rate_limiter_cleanup = rate_limiter.clone();
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_secs(300)); // Cleanup every 5 minutes
-            rate_limiter_cleanup.cleanup_old_entries();
-        }
-    });
+    // Note: Rate limiter now has automatic cleanup timer (every 60 seconds)
+    // This replaces the old 5-minute cleanup task
 
-    // Start background stats reporting
+    // Start background stats reporting with memory pressure monitoring
     let stats_reporter = stats.clone();
+    let rate_limiter_monitor = rate_limiter.clone();
     thread::spawn(move || {
         loop {
             thread::sleep(Duration::from_secs(300)); // Report every 5 minutes
             let (total, successful, errors, bytes, uptime) = stats_reporter.get_stats();
             let upload_stats = stats_reporter.get_upload_stats();
             let (current_memory, peak_memory, memory_available) = stats_reporter.get_memory_usage();
+
+            // Check for memory pressure and trigger cleanup if needed
+            let memory_pressure = stats_reporter.check_memory_pressure(Some(&rate_limiter_monitor));
 
             info!(
                 "📊 Request Stats: {} total ({} successful, {} errors), {:.2} MB served, uptime: {}s",
@@ -1026,7 +1147,22 @@ pub fn run_server(
             if memory_available {
                 let current_mb = current_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
                 let peak_mb = peak_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
-                info!("🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak");
+                let pressure_indicator = if memory_pressure {
+                    " ⚠️ PRESSURE"
+                } else {
+                    ""
+                };
+                info!("🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak{pressure_indicator}");
+
+                // Report rate limiter memory usage
+                let (limiter_entries, limiter_memory) = rate_limiter_monitor.get_memory_stats();
+                if limiter_entries > 0 {
+                    info!(
+                        "🔒 Rate Limiter: {} IP entries, ~{:.2} KB memory",
+                        limiter_entries,
+                        limiter_memory as f64 / 1024.0
+                    );
+                }
             } else {
                 debug!("🧠 Memory Stats: unavailable");
             }
