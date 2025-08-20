@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Ultra-low memory search module optimized for 10M+ entries (<100MB total)
 //!
 //! Architecture:

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Test module to verify ultra-low memory usage and performance
 //!
 //! This module contains tests to validate that the ultra-low memory search

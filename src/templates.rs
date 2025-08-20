@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Template loading and rendering system for modular HTML
 
 use crate::error::AppError;

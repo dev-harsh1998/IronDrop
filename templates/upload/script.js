@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 /**
  * IronDrop Upload Interface JavaScript
  * Handles drag-and-drop, file uploads, and progress tracking

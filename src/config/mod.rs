@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Configuration management for IronDrop
 //! Supports INI files with CLI argument overrides
 

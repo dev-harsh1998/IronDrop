@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 use crate::error::AppError;
 use crate::templates::{get_error_description, TemplateEngine};
 use log::{debug, error, trace};

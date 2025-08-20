@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Centralized request handlers for internal (/_irondrop/...) routes.
 //! Keeps `http.rs` minimal and focused on parsing and fallback file serving.
 

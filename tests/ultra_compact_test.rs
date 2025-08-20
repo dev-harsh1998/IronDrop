@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #![allow(clippy::uninlined_format_args)]
 
 #[cfg(test)]

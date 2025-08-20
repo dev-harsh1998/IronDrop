@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Dark Mode Only Error Page Enhancements
 document.addEventListener('DOMContentLoaded', function() {
     // Keyboard shortcuts

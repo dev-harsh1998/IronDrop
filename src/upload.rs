@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Direct file upload handler for IronDrop
 //!
 //! This module provides a simplified, efficient direct upload system that:

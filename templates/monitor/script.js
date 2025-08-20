@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Monitor Page JavaScript - Real-time metrics with Chart.js support
 
 // Debug variables to track chart status

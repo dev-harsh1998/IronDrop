@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Allow some clippy lints for tests and debug code
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::useless_format)]

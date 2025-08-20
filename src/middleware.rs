@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Middleware system for request preprocessing (e.g. authentication).
 //!
 //! Provides a Basic Auth middleware that validates the `Authorization` header

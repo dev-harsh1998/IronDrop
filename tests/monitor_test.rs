@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 //! Tests for /_irondrop/monitor endpoint and bytes_served accounting.
 
 #![allow(clippy::needless_as_bytes)]

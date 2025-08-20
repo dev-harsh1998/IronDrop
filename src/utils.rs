@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 use crate::error::AppError;
 use log::{debug, trace};
 use std::collections::HashMap;

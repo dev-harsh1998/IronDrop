@@ -43,32 +43,34 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
 - **`main.rs`** (6 lines): Simple entry point that calls `irondrop::run()`
 - **`lib.rs`** (56 lines): Library initialization, logging setup, and server bootstrap
 - **`cli.rs`** (200+ lines): Command-line interface with comprehensive validation
+- **`config/mod.rs`**: Configuration system with hierarchical precedence (CLI > INI > defaults)
+- **`config/ini_parser.rs`**: Zero-dependency INI parser for configuration files
 
 ### 2. **HTTP Processing Layer**
-- **`server.rs`**: Custom thread pool implementation with rate limiting
-- **`http.rs`**: HTTP request parsing, routing, and static asset serving
-- **`response.rs`**: HTTP response building, file streaming, and error handling
+- **`server.rs`**: Custom thread pool implementation with rate limiting and connection management
+- **`http.rs`**: HTTP request parsing, routing, connection handling, and static asset serving
+- **`response.rs`**: HTTP response building, MIME type detection, and error page generation
+- **`router.rs`**: Simple HTTP router with exact and prefix path matching
+- **`handlers.rs`**: Internal route handlers for health checks, status, uploads, and monitoring
+- **`middleware.rs`**: Authentication middleware with Basic Auth support
 
 ### 3. **File Operations**
-- **`fs.rs`**: Directory operations and file system interactions
-- **`upload.rs`**: Secure file upload handling with atomic operations and HTTP streaming
-- **`multipart.rs`**: RFC 7578 compliant multipart/form-data parser with advanced streaming support
+- **`fs.rs`**: Directory listing generation, file details, and file system interactions
+- **`upload.rs`**: Direct upload handler with memory/disk streaming and atomic operations
 
 ### 4. **Search System**
-- **`search.rs`**: Ultra-low memory search engine with LRU caching and indexing
-- **`ultra_compact_search.rs`**: Memory-optimized search implementation for 10M+ entries
-- **`ultra_memory_test.rs`**: Search performance testing and benchmarking
+- **`search.rs`**: Ultra-compact search engine with hierarchical path storage and string pooling
 
 ### 5. **Template System**
-- **`templates.rs`**: Native template engine with variable interpolation
+- **`templates.rs`**: Native template engine with embedded assets and variable interpolation
 - **`templates/directory/`**: Directory listing templates (HTML, CSS, JS)
 - **`templates/upload/`**: File upload templates (HTML, CSS, JS)  
 - **`templates/error/`**: Error page templates (HTML, CSS, JS)
+- **`templates/monitor/`**: Monitoring dashboard templates
 
 ### 6. **Support Systems**
-- **`error.rs`**: Custom error types and error handling
-- **`utils.rs`**: Utility functions and helper methods
-- **Monitoring (integrated)**: `/monitor` endpoint (HTML + JSON) implemented inside `http.rs` using `ServerStats` from `server.rs`
+- **`error.rs`**: Comprehensive error types including upload-specific errors
+- **`utils.rs`**: Utility functions for path handling, URL parsing, and encoding
 
 ## Request Processing Flow
 
@@ -84,19 +86,21 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
                                 ▼
                      ┌─────────────────┐
                      │ Authentication  │───[Fail]───▶ 401 Unauthorized
-                     │     Check       │
+                     │  Middleware     │
                      └─────────────────┘
                                 │ [Pass]
                                 ▼
                      ┌─────────────────┐
-                     │   Route Type    │
-                     │   Detection     │
+                     │   HTTP Router   │
+                     │  (router.rs)    │
                      └─────────────────┘
                                 │
         ┌───────────┬───────────┼───────────┬───────────┬───────────┐
         │           │           │           │           │           │
         ▼           ▼           ▼           ▼           ▼           ▼
-  [Static Assets] [Health] [Upload Routes] [File Sys] [Search API] [Monitor]
+  [Static Assets] [Health]  [Upload API]  [File Sys]  [Search API] [Monitor]
+   /_irondrop/    /_health   /_irondrop/   Directory   /_irondrop/  /monitor
+    /static/*               /upload       Listing     /search
         │           │           │           │           │           │
         ▼           ▼           ▼           ▼           ▼           ▼
    Serve CSS/JS  JSON Status Process Upload Path Check Search Engine Dashboard
@@ -123,29 +127,39 @@ src/
 ├── main.rs              # Entry point (6 lines)
 ├── lib.rs               # Library initialization (56 lines)
 ├── cli.rs               # CLI interface with validation (200+ lines)
+├── config/              # Configuration system
+│   ├── mod.rs           # Config struct and loading logic
+│   └── ini_parser.rs    # Zero-dependency INI parser
 ├── server.rs            # Thread pool + rate limiting (400+ lines)
-├── http.rs              # HTTP parsing + routing (600+ lines)
-├── templates.rs         # Template engine (300+ lines)
+├── http.rs              # HTTP parsing + connection handling (600+ lines)
+├── router.rs            # HTTP routing system (100+ lines)
+├── handlers.rs          # Internal route handlers (200+ lines)
+├── middleware.rs        # Authentication middleware (100+ lines)
+├── templates.rs         # Template engine with embedded assets (300+ lines)
 ├── fs.rs                # File system operations (200+ lines)
-├── response.rs          # Response handling + streaming (400+ lines)
-├── upload.rs            # File upload system (500+ lines)
-├── multipart.rs         # Multipart parser (661 lines)
-├── search.rs            # Ultra-low memory search engine (400+ lines)
-├── ultra_compact_search.rs # Memory-optimized search (300+ lines)
-├── ultra_memory_test.rs # Search performance testing (200+ lines)
-├── error.rs             # Error types (100+ lines)
-└── utils.rs             # Utility functions
+├── response.rs          # Response building + MIME detection (400+ lines)
+├── upload.rs            # Direct upload handler with streaming (500+ lines)
+├── search.rs            # Ultra-compact search engine (400+ lines)
+├── error.rs             # Comprehensive error types (100+ lines)
+└── utils.rs             # Utility functions for paths and encoding
 
 templates/
 ├── directory/           # Directory listing UI
-│   ├── index.html       # HTML structure
-│   ├── styles.css       # Professional blackish-grey theme
-│   └── script.js        # Interactive file browsing
+│   ├── index.html       # HTML structure with search
+│   ├── styles.css       # Professional dark theme
+│   └── script.js        # Interactive browsing + search
 ├── upload/              # Upload interface
 │   ├── page.html        # Standalone upload page
 │   ├── form.html        # Reusable upload component
-│   ├── styles.css       # Upload styling
-│   └── script.js        # Drag-drop + progress tracking
+│   ├── styles.css       # Upload UI styling
+│   └── script.js        # Direct binary upload logic
+├── error/               # Error pages
+│   ├── page.html        # Error page template
+│   └── styles.css       # Error page styling
+└── monitor/             # Monitoring dashboard
+    ├── page.html        # Dashboard template
+    ├── styles.css       # Dashboard styling
+    └── script.js        # Real-time metrics updates
 └── error/               # Error pages
     ├── page.html        # Error page structure
     ├── styles.css       # Error styling

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Handles HTTP request parsing, routing, and response generation.
 
 use crate::error::AppError;

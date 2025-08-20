@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 use irondrop::templates::TemplateEngine;
 use std::collections::HashMap;
 

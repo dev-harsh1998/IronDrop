@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Simple router abstraction for registering and matching request handlers.
 //!
 //! This initial implementation supports:

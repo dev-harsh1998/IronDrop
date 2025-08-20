@@ -1093,7 +1093,7 @@ We welcome contributions! Here's how to get started:
 
 ## 📜 License
 
-IronDrop is distributed under the **GPL-3.0** license; see `LICENSE` for details.
+IronDrop is distributed under the **MIT** license; see `LICENSE` for details.
 
 ---
 

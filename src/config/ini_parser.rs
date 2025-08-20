@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Simple INI file parser with zero dependencies
 //! Supports sections, key-value pairs, comments, and basic data types
 

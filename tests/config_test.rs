@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 use irondrop::cli::Cli;
 use irondrop::config::{ini_parser::IniConfig, Config};
 use std::fs;

@@ -99,35 +99,132 @@ copy ".\target\release\irondrop.exe" "C:\ Program Files\IronDrop\"
 # Then add C:\ Program Files\IronDrop to your system's PATH
 ```
 
-## ⚙️ Usage
+## ⚙️ Getting Started
 
-### Basic Usage
+### 🚀 Quick Start (30 seconds to file sharing!)
+
+**Step 1:** Download or build IronDrop
 ```bash
-# Serve the current directory
-irondrop -d .
-
-# Enable uploads with authentication
-irondrop -d . --enable-upload --username admin --password your-secret-password
-
-# Serve on a different port and listen on all interfaces
-irondrop -d /path/to/your/files --port 3000 --listen 0.0.0.0
+# Build from source (requires Rust)
+git clone https://github.com/dev-harsh1998/IronDrop.git
+cd IronDrop
+cargo build --release
 ```
 
-### Advanced Configuration (v2.5.1+)
+**Step 2:** Start sharing files immediately
 ```bash
-# Use configuration file for reproducible deployments
-irondrop -d . --config-file production.ini
+# Share your current directory (safest - local access only)
+./target/release/irondrop -d .
 
-# Override specific settings from config file
-irondrop -d . --config-file prod.ini --threads 32 --verbose
+# Share with your network (accessible to other devices)
+./target/release/irondrop -d . --listen 0.0.0.0
 ```
 
-### Key Endpoints
-- **`/`** - Directory listing and file browsing
-- **`/monitor`** - Real-time monitoring dashboard
-- **`/search?q=term`** - File search API
+**Step 3:** Open your browser and visit `http://localhost:8080` 🎉
 
-For a full list of options, run `irondrop --help` or see the [API Reference](./doc/API_REFERENCE.md).
+### 📖 Common Use Cases
+
+#### 🏠 **Home File Sharing**
+```bash
+# Share your Downloads folder with family devices
+irondrop -d ~/Downloads --listen 0.0.0.0 --port 8080
+```
+
+#### 💼 **Work File Server**
+```bash
+# Secure file server with uploads and authentication
+irondrop -d ./shared-files \
+  --enable-upload \
+  --username admin \
+  --password your-secure-password \
+  --listen 0.0.0.0
+```
+
+#### 🎬 **Media Server**
+```bash
+# Serve your media collection (videos, music, photos)
+irondrop -d /path/to/media \
+  --allowed-extensions "*.mp4,*.mp3,*.jpg,*.png" \
+  --threads 16 \
+  --listen 0.0.0.0
+```
+
+#### ☁️ **Cloud Storage Alternative**
+```bash
+# Use a configuration file for consistent setup
+irondrop --config-file ./config/production.ini
+```
+
+### 🛠️ Configuration Options
+
+#### **Command Line Options**
+IronDrop offers extensive customization through command-line arguments:
+
+| Option | Description | Example |
+|--------|-------------|----------|
+| `-d, --directory` | **Required** - Directory to serve | `-d /home/user/files` |
+| `-l, --listen` | Listen address (default: 127.0.0.1) | `-l 0.0.0.0` |
+| `-p, --port` | Port number (default: 8080) | `-p 3000` |
+| `--enable-upload` | Enable file uploads | `--enable-upload true` |
+| `--username/--password` | Basic authentication | `--username admin --password secret` |
+| `-a, --allowed-extensions` | Restrict file types | `-a "*.pdf,*.doc,*.zip"` |
+| `-t, --threads` | Worker threads (default: 8) | `-t 16` |
+| `--config-file` | Use INI configuration file | `--config-file prod.ini` |
+| `-v, --verbose` | Debug logging | `-v true` |
+
+#### **📄 Configuration File (Recommended for Production)**
+
+For consistent deployments, use an INI configuration file:
+
+```bash
+# Create your config file
+cp config/irondrop.ini my-server.ini
+# Edit it with your settings
+# Then run:
+irondrop --config-file my-server.ini
+```
+
+The configuration file supports all command-line options and more! See the [detailed example](./config/irondrop.ini) with comments explaining every option.
+
+**Configuration Priority (highest to lowest):**
+1. Command line arguments
+2. Environment variables (`IRONDROP_*`)
+3. Configuration file
+4. Built-in defaults
+
+### 🌐 Key Endpoints
+
+Once IronDrop is running, these endpoints are available:
+
+| Endpoint | Purpose | Example |
+|----------|---------|----------|
+| **`/`** | 📁 Directory listing and file browsing | `http://localhost:8080/` |
+| **`/monitor`** | 📊 Real-time server monitoring dashboard | `http://localhost:8080/monitor` |
+| **`/search?q=term`** | 🔍 File search API | `http://localhost:8080/search?q=document` |
+| **`/_irondrop/upload`** | ⬆️ File upload endpoint (if enabled) | Used by the web interface |
+
+### 💡 Pro Tips
+
+- **🔒 Security First**: Always use authentication (`--username`/`--password`) when exposing to networks
+- **🚀 Performance**: Increase `--threads` for high-traffic scenarios (try 16-32 threads)
+- **💾 Large Files**: IronDrop handles unlimited file sizes with constant ~7MB memory usage
+- **🔍 Search**: The ultra-compact search engine can handle 10M+ files efficiently
+- **📱 Mobile Friendly**: The web interface works great on phones and tablets
+
+### ❓ Need Help?
+
+```bash
+# Get detailed help for all options
+irondrop --help
+
+# Check your version
+irondrop --version
+
+# Test with verbose logging
+irondrop -d . --verbose true
+```
+
+For comprehensive documentation, see our [Complete Documentation Index](./doc/README.md).
 
 ## 🆕 What's New in v2.5.1
 
@@ -203,7 +300,7 @@ For detailed testing information, see [Testing Documentation](./doc/TESTING_DOCU
 
 ## 📜 License
 
-IronDrop is licensed under the [GPL-3.0 License](./LICENSE).
+IronDrop is licensed under the [MIT License](./LICENSE).
 
 ---
 

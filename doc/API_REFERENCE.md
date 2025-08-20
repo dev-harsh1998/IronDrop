@@ -56,9 +56,12 @@ Retrieves directory contents or serves files.
 - `path`: Directory path relative to served directory (optional, defaults to root)
 
 **Query Parameters:**
-- `format`: Response format (`html` or `json`) - default: `html`
-- `sort`: Sort order (`name`, `size`, `modified`) - default: `name`
-- `order`: Sort direction (`asc`, `desc`) - default: `asc`
+- None (sorting and formatting handled by frontend JavaScript)
+
+**Security:**
+- Path traversal protection with canonical path validation
+- Hidden file filtering (files starting with '.')
+- System directory access prevention
 
 **Response Formats:**
 
@@ -173,7 +176,7 @@ Content-Range: bytes */1048576
 
 ### 3. File Upload System
 
-#### `GET /upload`
+#### `GET /_irondrop/upload`
 Displays the upload interface page.
 
 **Response:**
@@ -183,41 +186,33 @@ Content-Type: text/html; charset=utf-8
 
 <!DOCTYPE html>
 <html>
-<!-- Modern upload interface with drag-and-drop -->
+<!-- Modern upload interface with direct binary upload -->
 </html>
 ```
 
-#### `POST /upload` or `POST /?upload=true`
-Uploads one or more files to the server with automatic HTTP layer streaming for optimal performance.
+#### `POST /_irondrop/upload`
+Uploads files using direct binary streaming for optimal performance and unlimited file size support.
 
-**HTTP Streaming Features (v2.5):**
-- **Automatic Mode Selection**: Small uploads (≤1MB) processed in memory, large uploads (>1MB) streamed to disk
-- **Memory Efficiency**: Prevents memory exhaustion from large uploads while maintaining fast processing for small files
-- **Resource Protection**: Automatic temporary file cleanup and error recovery
-- **Scalability**: Consistent performance with constant memory usage regardless of upload size
+**Direct Upload Features (v2.5):**
+- **Direct Binary Streaming**: No multipart parsing overhead
+- **Automatic Mode Selection**: Small uploads (≤2MB) processed in memory, large uploads (>2MB) streamed to disk
+- **Constant Memory Usage**: ~7MB RAM usage regardless of file size
+- **Unlimited File Sizes**: No artificial size restrictions
+- **Atomic Operations**: Complete uploads or clean failure with automatic cleanup
 
 **Request:**
 ```http
-POST /upload HTTP/1.1
-Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+POST /_irondrop/upload HTTP/1.1
+Content-Type: application/octet-stream
 Content-Length: <content-length>
+X-Filename: document.pdf
 
-------WebKitFormBoundary7MA4YWxkTrZu0gW
-Content-Disposition: form-data; name="file"; filename="document.pdf"
-Content-Type: application/pdf
-
-<file-data>
-------WebKitFormBoundary7MA4YWxkTrZu0gW
-Content-Disposition: form-data; name="file"; filename="image.jpg"
-Content-Type: image/jpeg
-
-<file-data>
-------WebKitFormBoundary7MA4YWxkTrZu0gW--
+<raw-binary-file-data>
 ```
 
 **Processing Modes:**
-- **Memory Mode** (≤1MB): Direct processing in memory for minimal latency
-- **Streaming Mode** (>1MB): Automatic streaming to temporary files with ~64KB memory footprint
+- **Memory Mode** (≤2MB): Direct processing in memory for minimal latency
+- **Streaming Mode** (>2MB): Direct streaming to disk with constant ~7MB memory usage
 
 **Success Response (JSON):**
 ```json
@@ -381,10 +376,12 @@ GET /api/search?q=readme&path=/docs
 ```
 
 **Performance Notes:**
-- First search may be slower due to indexing
-- Results are cached for 5 minutes
-- Large directories (>100K files) use memory-optimized search
-- Search supports fuzzy matching and token-based search
+- **Dual-Mode Search Engine**: Automatically selects Standard mode (≤100K files) or Ultra-Compact mode (>100K files)
+- **Standard Mode**: Fast in-memory search with full feature set
+- **Ultra-Compact Mode**: Memory-optimized for 10M+ files with constant ~7MB RAM usage
+- **Real-time Indexing**: No pre-indexing required, searches current filesystem state
+- **Search Types**: Substring matching, fuzzy matching, and token-based search
+- **Result Highlighting**: Matched portions highlighted in results
 
 ### 5. Static Assets
 
@@ -461,7 +458,7 @@ Detailed server status and statistics.
 }
 ```
 
-#### `GET /monitor`
+#### `GET /_irondrop/monitor`
 HTML monitoring dashboard (human-friendly) that auto-refreshes via JavaScript to show live server statistics. Provides request counts, bytes served (downloads), and upload metrics (counts, bytes, success rate, concurrency, average processing time).
 
 **Response (HTML):**
@@ -471,11 +468,11 @@ Content-Type: text/html; charset=utf-8
 
 <!DOCTYPE html>
 <html>
-  <!-- Embedded dashboard template -->
+  <!-- Embedded dashboard template with real-time updates -->
 </html>
 ```
 
-#### `GET /monitor?json=1`
+#### `GET /_irondrop/monitor?json=1`
 Machine-readable JSON stats for integration with external monitoring / scripting.
 
 **Response (JSON):**
@@ -739,12 +736,12 @@ curl -O http://localhost:8080/path/to/file.pdf
 
 **Upload file:**
 ```bash
-curl -X POST -F "file=@document.pdf" http://localhost:8080/upload
+curl -X POST -H "Content-Type: application/octet-stream" -H "X-Filename: document.pdf" --data-binary @document.pdf http://localhost:8080/_irondrop/upload
 ```
 
 **Get directory listing as JSON:**
 ```bash
-curl "http://localhost:8080/directory?format=json" | jq .
+curl "http://localhost:8080/directory" -H "Accept: application/json" | jq .
 ```
 
 **Search files:**
@@ -768,7 +765,8 @@ curl -u username:password http://localhost:8080/
 ```python
 import requests
 
-response = requests.get('http://localhost:8080/path?format=json')
+response = requests.get('http://localhost:8080/path', 
+                       headers={'Accept': 'application/json'})
 data = response.json()
 
 for entry in data['entries']:
@@ -779,8 +777,13 @@ for entry in data['entries']:
 ```python
 import requests
 
-files = {'file': open('document.pdf', 'rb')}
-response = requests.post('http://localhost:8080/upload', files=files)
+with open('document.pdf', 'rb') as f:
+    headers = {
+        'Content-Type': 'application/octet-stream',
+        'X-Filename': 'document.pdf'
+    }
+    response = requests.post('http://localhost:8080/_irondrop/upload', 
+                           data=f, headers=headers)
 
 if response.status_code == 200:
     result = response.json()

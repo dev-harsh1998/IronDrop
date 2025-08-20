@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 //! Ultra-compact search implementation targeting <100MB for 10M entries
 //! Proof of concept showing memory optimization techniques
 

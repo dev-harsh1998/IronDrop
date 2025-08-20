@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 //! Test for enhanced rate limiter memory leak fixes
 
 use irondrop::server::{RateLimiter, ServerStats};

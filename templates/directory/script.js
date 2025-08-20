@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 // Dark Mode Only Directory Listing Enhancements with Fast Search
 document.addEventListener('DOMContentLoaded', function() {
     // Apply loading animation with staggered effect
