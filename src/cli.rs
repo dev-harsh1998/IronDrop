@@ -65,6 +65,10 @@ pub struct Cli {
     /// Configuration file path - Specify a custom configuration file (INI format). If not provided, looks for irondrop.ini in current directory or ~/.config/irondrop/config.ini 🛠️
     #[arg(long, value_parser = validate_config_file)]
     pub config_file: Option<String>,
+
+    /// Log file path - Redirect all logging output to a file instead of stdout. If not provided, logs go to stdout 📝
+    #[arg(long, value_parser = validate_log_file)]
+    pub log_file: Option<String>,
 }
 
 /// Validate upload size (minimum 1 MB, no upper limit for direct streaming)
@@ -104,6 +108,54 @@ fn validate_config_file(s: &str) -> Result<String, String> {
         Ok(_) => Ok(s.to_string()),
         Err(e) => Err(format!("Cannot read config file {s}: {e}")),
     }
+}
+
+/// Validate log file path and ensure parent directory exists
+fn validate_log_file(s: &str) -> Result<String, String> {
+    if s.is_empty() {
+        return Err("Log file path cannot be empty".to_string());
+    }
+
+    let path = PathBuf::from(s);
+
+    // Check if parent directory exists
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            return Err(format!(
+                "Log file parent directory does not exist: {}",
+                parent.display()
+            ));
+        }
+        if !parent.is_dir() {
+            return Err(format!(
+                "Log file parent path is not a directory: {}",
+                parent.display()
+            ));
+        }
+    }
+
+    // If file exists, check if it's writable
+    if path.exists() {
+        if path.is_dir() {
+            return Err(format!("Log file path is a directory: {s}"));
+        }
+        // Try to open for append to check write permissions
+        match std::fs::OpenOptions::new().append(true).open(&path) {
+            Ok(_) => {}
+            Err(e) => return Err(format!("Cannot write to log file {s}: {e}")),
+        }
+    } else {
+        // Try to create the file to check write permissions
+        match std::fs::File::create(&path) {
+            Ok(_) => {
+                // Remove the test file
+                let _ = std::fs::remove_file(&path);
+            }
+            Err(e) => return Err(format!("Cannot create log file {s}: {e}")),
+        }
+    }
+
+    Ok(s.to_string())
 }
 
 impl Cli {
@@ -189,6 +241,7 @@ mod tests {
             enable_upload: Some(false),
             max_upload_size: Some(100),
             config_file: None,
+            log_file: None,
         };
 
         // Test conversion
@@ -223,6 +276,7 @@ mod tests {
             enable_upload: Some(true),
             max_upload_size: Some(100),
             config_file: None,
+            log_file: None,
         };
 
         assert!(cli.validate().is_ok());

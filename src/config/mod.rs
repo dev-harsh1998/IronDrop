@@ -28,6 +28,7 @@ pub struct Config {
     // Logging settings
     pub verbose: bool,
     pub detailed_logging: bool,
+    pub log_file: Option<String>,
 }
 
 impl Config {
@@ -71,6 +72,7 @@ impl Config {
 
             verbose: Self::get_verbose(&ini, cli),
             detailed_logging: Self::get_detailed_logging(&ini, cli),
+            log_file: Self::get_log_file(&ini, cli),
         };
 
         log::debug!("Configuration loading completed successfully");
@@ -295,6 +297,16 @@ impl Config {
         ini.get_bool_or("logging", "detailed", false)
     }
 
+    fn get_log_file(ini: &IniConfig, cli: &Cli) -> Option<String> {
+        // CLI argument takes precedence if explicitly provided
+        if let Some(ref log_file) = cli.log_file {
+            return Some(log_file.clone());
+        }
+
+        // INI file
+        ini.get_string("logging", "log_file")
+    }
+
     /// Print configuration summary
     pub fn print_summary(&self) {
         log::info!("Configuration Summary:");
@@ -344,6 +356,7 @@ mod tests {
             enable_upload: None,
             max_upload_size: None,
             config_file: None,
+            log_file: None,
         }
     }
 

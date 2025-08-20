@@ -38,6 +38,7 @@ use crate::cli::Cli;
 use crate::config::Config;
 use clap::Parser;
 use log::error;
+use std::fs::OpenOptions;
 
 /// Initializes the logger, parses command-line arguments, and starts the server.
 ///
@@ -67,7 +68,16 @@ pub fn run() {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", log_level);
     }
-    env_logger::init();
+
+    // Initialize logging with optional file output
+    if let Some(ref log_file_path) = config.log_file {
+        init_file_logger(log_file_path).unwrap_or_else(|e| {
+            eprintln!("Failed to initialize file logger: {e}");
+            std::process::exit(1);
+        });
+    } else {
+        env_logger::init();
+    }
 
     log::debug!("Log level set to: {log_level}");
 
@@ -86,4 +96,20 @@ pub fn run() {
         error!("Server error: {e}");
         std::process::exit(1);
     }
+}
+
+/// Initialize file-based logging
+fn init_file_logger(log_file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use env_logger::Builder;
+
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file_path)?;
+
+    Builder::from_default_env()
+        .target(env_logger::Target::Pipe(Box::new(log_file)))
+        .init();
+
+    Ok(())
 }
