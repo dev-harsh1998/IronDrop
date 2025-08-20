@@ -11,7 +11,7 @@ A lightweight, high-performance file server written in Rust featuring **bidirect
 
 This documentation suite provides complete coverage of IronDrop's architecture, API, deployment, and specialized features. Each document is designed to serve specific audiences and use cases.
 
-**🎉 NEW in v2.5.1**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
+**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
 
 ## 📖 Core Documentation
 
@@ -100,7 +100,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - **Streaming Tests**: HTTP layer streaming validation and large file bash integration tests
 - **Test Infrastructure**: Helper functions, data management, execution procedures
 
-**Implementation Status**: ✅ **Production Ready** (v2.5.1)
+**Implementation Status**: ✅ **Production Ready** (v2.6)
 - **English-Only Testing**: All test messages and output standardized to English
 - **Comprehensive Coverage**: Edge cases, security scenarios, performance validation, and streaming functionality
 - **Memory Optimization Tests**: Ultra-compact search engine validation for 10M+ files
@@ -223,7 +223,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Accessibility-compliant UI with keyboard navigation support
 - Performance testing and benchmarking infrastructure
 
-**🎉 NEW in v2.5.1**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture.
+**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture.
 
 ---
 

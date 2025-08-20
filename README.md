@@ -12,7 +12,7 @@
   [![Rust CI](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml/badge.svg)](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml)
 </div>
 
-**🎉 NEW in v2.5.1**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
+**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
 
 IronDrop is not just another file server. It's a production-ready toolkit designed for performance, security, and ease of use. Whether you're sharing files on your local network, setting up a lightweight digital archive, or need a robust upload endpoint, IronDrop provides a complete solution with zero external dependencies.
 
@@ -248,7 +248,7 @@ irondrop -d . --verbose true
 
 For comprehensive documentation, see our [Complete Documentation Index](./doc/README.md).
 
-## 🆕 What's New in v2.5.1
+## 🆕 What's New in v2.6
 
 ### 🎯 **Major Features**
 - **Direct Streaming Upload System**: Revolutionary architecture with unlimited file size support

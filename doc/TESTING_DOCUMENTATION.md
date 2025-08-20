@@ -1,6 +1,6 @@
 # IronDrop Testing Documentation
 
-*Version 2.5.1 - Comprehensive Test Suite Overview*
+*Version 2.6 - Comprehensive Test Suite Overview*
 
 ## Overview
 
@@ -392,6 +392,6 @@ fn test_new_feature() {
 
 ---
 
-*This document is part of the IronDrop v2.5.1 documentation suite. The test suite is continuously evolving to ensure comprehensive coverage and reliability.*
+*This document is part of the IronDrop v2.6 documentation suite. The test suite is continuously evolving to ensure comprehensive coverage and reliability.*
 
 Return to documentation index: [./README.md](./README.md)

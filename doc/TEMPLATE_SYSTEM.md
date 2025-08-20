@@ -1,6 +1,6 @@
-# IronDrop Template & UI System Documentation (v2.5.1)
+# IronDrop Template & UI System Documentation (v2.6)
 
-**Status**: ✅ Production Ready (v2.5.1) - Updated with Light Button System & Card Unification
+**Status**: ✅ Production Ready (v2.6) - Updated with Light Button System & Card Unification
 
 **Audience**: Backend & Frontend Developers, UI/UX Engineers, Integrators
 
@@ -340,6 +340,6 @@ let err_html = engine.render_error_page(404, "Not Found", get_error_description(
 
 ---
 
-*This document is part of the IronDrop v2.5.1 documentation suite and will evolve with future template system enhancements.*
+*This document is part of the IronDrop v2.6 documentation suite and will evolve with future template system enhancements.*
 
 Return to documentation index: [./README.md](./README.md)

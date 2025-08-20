@@ -31,7 +31,7 @@ User-Agent: <client-identifier>
 #### Response Headers
 ```http
 # Standard headers
-Server: IronDrop/2.5.1
+Server: IronDrop/2.6
 Content-Type: <mime-type>
 Content-Length: <content-length>
 Connection: keep-alive
@@ -420,7 +420,7 @@ Basic health check endpoint.
 ```json
 {
   "status": "healthy",
-  "version": "2.5.1",
+  "version": "2.6",
   "uptime_seconds": 3600,
   "timestamp": "2024-01-01T12:00:00Z"
 }
@@ -827,4 +827,4 @@ All inputs are validated:
 - File names for path traversal attempts
 - HTTP headers for malformed content
 
-This API reference covers all functionality available in IronDrop v2.5.1 and provides comprehensive examples for client integration.
+This API reference covers all functionality available in IronDrop v2.6 and provides comprehensive examples for client integration.

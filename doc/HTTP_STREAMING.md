@@ -311,7 +311,7 @@ The streaming system integrates with IronDrop's monitoring:
 
 ## Version History
 
-- **v2.5.1**: Direct streaming implementation with unlimited file size support
+- **v2.6**: Direct streaming implementation with unlimited file size support
   - Automatic memory/disk switching based on content size
   - `RequestBody` enum with `Memory` and `File` variants
   - Comprehensive test coverage with dedicated streaming tests
