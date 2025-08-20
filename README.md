@@ -43,7 +43,7 @@ IronDrop was built to address the limitations of other open-source file servers.
     *   Comprehensive OWASP compliance and security validation.
 *   **🖥️ Professional UI:** A modern, responsive, dark-themed interface that's a pleasure to use.
 *   **📦 Zero Dependencies, Single Binary:** The entire application, including all assets, is compiled into a single, portable executable. No runtimes, no interpreters, no hassle.
-*   **🧪 Battle-Tested:** 59 tests across 13 test files covering edge cases, security scenarios, and performance stress testing.
+*   **🧪 Battle-Tested:** 84 tests across 7 test files covering edge cases, security scenarios, and performance stress testing.
 
 ## ⚡ Performance
 
@@ -87,16 +87,38 @@ cargo build --release
 # The executable will be in ./target/release/irondrop
 ```
 
-### System-Wide Installation
+### System-Wide Installation (Recommended)
+
+To use IronDrop from anywhere on your system, install it to a directory in your PATH:
 
 ```bash
-# For Linux/macOS
+# Linux/macOS - Install to /usr/local/bin (requires sudo)
 sudo cp ./target/release/irondrop /usr/local/bin/
 
-# For Windows (in PowerShell)
-mkdir "C:\ Program Files\IronDrop"
-copy ".\target\release\irondrop.exe" "C:\ Program Files\IronDrop\"
-# Then add C:\ Program Files\IronDrop to your system's PATH
+# Alternative: Install to ~/.local/bin (no sudo required)
+mkdir -p ~/.local/bin
+cp ./target/release/irondrop ~/.local/bin/
+# Add ~/.local/bin to PATH if not already:
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
+source ~/.bashrc  # or restart terminal
+
+# Windows (PowerShell as Administrator)
+# Create program directory
+New-Item -ItemType Directory -Force -Path "C:\Program Files\IronDrop"
+# Copy executable
+Copy-Item ".\target\release\irondrop.exe" "C:\Program Files\IronDrop\"
+# Add to system PATH (requires restart or new terminal)
+$env:PATH += ";C:\Program Files\IronDrop"
+[Environment]::SetEnvironmentVariable("PATH", $env:PATH, [EnvironmentVariableTarget]::Machine)
+```
+
+**Verify Installation:**
+```bash
+# Test that irondrop is available globally
+irondrop --version
+
+# Now you can run from any directory:
+irondrop -d ~/Documents --listen 0.0.0.0
 ```
 
 ## ⚙️ Getting Started
@@ -239,7 +261,7 @@ For comprehensive documentation, see our [Complete Documentation Index](./doc/RE
 - **Memory Optimization**: Radix-based indexing for massive directory support
 - **Template Engine**: Embedded templates with zero filesystem dependencies
 - **Monitoring Dashboard**: Real-time metrics and JSON API
-- **Comprehensive Testing**: 59 tests across 13 files ensuring reliability
+- **Comprehensive Testing**: 84 tests across 7 files ensuring reliability
 
 ### 📊 **Performance Enhancements**
 - **Dual-Mode Search**: Automatic switching between standard and ultra-compact engines
@@ -272,15 +294,16 @@ IronDrop has extensive documentation covering its architecture, API, and feature
 
 ## 🧪 Testing
 
-IronDrop is rigorously tested with **59 comprehensive tests across 13 test files** covering all aspects of functionality.
+IronDrop is rigorously tested with **84 comprehensive tests across 7 test files** covering all aspects of functionality.
 
 ### Test Categories
-- **Core Server Tests** (19 tests): HTTP handling, directory listing, authentication
-- **Upload System Tests** (29 tests): File uploads, validation, concurrent handling  
-- **Edge Case Tests** (10 tests): Boundary conditions and error scenarios
-- **Direct Upload Tests** (7 tests): Memory efficiency and streaming validation
-- **Performance & Memory Tests** (15 tests): Stress testing and optimization
-- **Search Engine Tests** (7 tests): Ultra-compact search and template integration
+- **Integration Tests** (6 tests): End-to-end functionality and HTTP handling
+- **Monitor Tests** (2 tests): Real-time monitoring dashboard and metrics
+- **Rate Limiter Tests** (5 tests): Memory-based rate limiting and DoS protection
+- **Template Tests** (5 tests): Embedded template system and rendering
+- **Ultra-Compact Search Tests** (5 tests): Advanced search engine functionality
+- **Configuration Tests** (20 tests): INI parsing and configuration validation
+- **Core Server & Unit Tests** (41 tests): Library functions, utilities, and core logic
 
 ```bash
 # Run all tests
@@ -307,7 +330,7 @@ IronDrop is licensed under the [MIT License](./LICENSE).
 <div align="center">
   <p>
     <strong>Made with ❤️ and 🦀 in Rust</strong><br>
-    <em>Zero dependencies • Production ready • Battle tested with 59 comprehensive tests</em>
+    <em>Zero dependencies • Production ready • Battle tested with 84 comprehensive tests</em>
   </p>
   <p>
     <a href="https://github.com/dev-harsh1998/IronDrop">⭐ Star us on GitHub</a>
