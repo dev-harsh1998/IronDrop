@@ -283,8 +283,6 @@ function updateMetrics(data) {
     document.getElementById('up_total').textContent = u.total_uploads;
     document.getElementById('up_success').textContent = u.successful_uploads;
     document.getElementById('up_failed').textContent = u.failed_uploads;
-    document.getElementById('files_uploaded').textContent = u.files_uploaded;
-    document.getElementById('up_bytes').textContent = u.upload_bytes.toLocaleString();
     document.getElementById('up_mb').textContent = (u.upload_bytes / 1024 / 1024).toFixed(2);
     document.getElementById('avg_file_size').textContent = humanBytes(u.average_upload_size);
     document.getElementById('largest_upload').textContent = humanBytes(u.largest_upload);
@@ -312,8 +310,7 @@ function clearMetrics() {
     const metricElements = [
         'req_total', 'req_success', 'req_errors', 'req_success_rate',
         'bytes_served', 'mb_served',
-        'up_total', 'up_success', 'up_failed', 'files_uploaded',
-        'up_bytes', 'up_mb', 'avg_file_size', 'largest_upload',
+        'up_total', 'up_success', 'up_failed', 'up_mb', 'avg_file_size', 'largest_upload',
         'concurrent_uploads', 'avg_processing', 'upload_success_rate',
         'uptime_secs', 'uptime_pretty'
     ];
@@ -616,8 +613,8 @@ function init() {
     // Initial load
     loadMetrics();
 
-    // Auto-refresh every 2 seconds
-    setInterval(loadMetrics, 2000);
+    // Auto-refresh every 4 seconds
+    setInterval(loadMetrics, 4000);
 
     // Add manual refresh capability (optional)
     document.addEventListener('keydown', (e) => {
