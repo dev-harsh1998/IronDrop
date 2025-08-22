@@ -26,7 +26,7 @@
 use crate::cli::Cli;
 use crate::error::AppError;
 use crate::http::{Request, RequestBody};
-use crate::response::{get_mime_type, HttpResponse};
+use crate::response::{HttpResponse, get_mime_type};
 use crate::templates::TemplateEngine;
 use glob::Pattern;
 use log::{debug, error, info, trace, warn};
@@ -179,7 +179,9 @@ impl DirectUploadHandler {
 
         // If the standard download directory doesn't exist, fallback to current working directory
         if !download_dir.exists() {
-            warn!("Standard download directory {download_dir:?} does not exist, falling back to current directory");
+            warn!(
+                "Standard download directory {download_dir:?} does not exist, falling back to current directory"
+            );
             env::current_dir().map_err(AppError::from)
         } else {
             Ok(download_dir)
@@ -226,8 +228,7 @@ impl DirectUploadHandler {
         );
         trace!(
             "Upload request method: {}, path: {}",
-            request.method,
-            request.path
+            request.method, request.path
         );
 
         let result = self.handle_upload(request, stats);
@@ -258,8 +259,7 @@ impl DirectUploadHandler {
         );
         trace!(
             "Upload handler config - max_size: {} bytes, enabled: {}",
-            self.max_upload_size,
-            self.upload_enabled
+            self.max_upload_size, self.upload_enabled
         );
 
         if !self.upload_enabled {
@@ -1015,17 +1015,21 @@ mod tests {
 
         // Valid filenames
         assert!(handler.validate_filename("document.txt").is_ok());
-        assert!(handler
-            .validate_filename("file_with_underscores.pdf")
-            .is_ok());
+        assert!(
+            handler
+                .validate_filename("file_with_underscores.pdf")
+                .is_ok()
+        );
         assert!(handler.validate_filename("file-with-dashes.txt").is_ok());
 
         // Invalid filenames
         assert!(handler.validate_filename("../etc/passwd").is_err());
         assert!(handler.validate_filename("file/with/slashes.txt").is_err());
-        assert!(handler
-            .validate_filename("file\\with\\backslashes.txt")
-            .is_err());
+        assert!(
+            handler
+                .validate_filename("file\\with\\backslashes.txt")
+                .is_err()
+        );
         assert!(handler.validate_filename("file<with>brackets.txt").is_err());
         assert!(handler.validate_filename("").is_err());
     }

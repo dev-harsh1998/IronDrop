@@ -12,7 +12,7 @@ use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, TcpListener};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -70,10 +70,7 @@ impl RateLimiter {
 
         trace!(
             "IP {} current state: requests={}, active_conns={}, total_conns={}",
-            ip,
-            conn_info.request_count,
-            conn_info.active_connections,
-            conn_info.total_connections
+            ip, conn_info.request_count, conn_info.active_connections, conn_info.total_connections
         );
 
         // Reset counter if more than a minute has passed
@@ -102,9 +99,7 @@ impl RateLimiter {
 
         trace!(
             "Rate limit check passed for IP {}: new counts - requests={}, active_conns={}",
-            ip,
-            conn_info.request_count,
-            conn_info.active_connections
+            ip, conn_info.request_count, conn_info.active_connections
         );
 
         // Check if this IP has too many stored connections
@@ -124,9 +119,7 @@ impl RateLimiter {
                 conn_info.last_activity = Instant::now();
                 trace!(
                     "IP {} active connections: {} -> {}",
-                    ip,
-                    old_count,
-                    conn_info.active_connections
+                    ip, old_count, conn_info.active_connections
                 );
             } else {
                 trace!("No connection info found for IP {} during release", ip);
@@ -233,8 +226,7 @@ impl RateLimiter {
             let estimated_memory = entry_count * std::mem::size_of::<(IpAddr, ConnectionInfo)>();
             trace!(
                 "Rate limiter stats: {} entries, ~{} bytes",
-                entry_count,
-                estimated_memory
+                entry_count, estimated_memory
             );
             (entry_count, estimated_memory)
         } else {
@@ -378,11 +370,7 @@ impl ServerStats {
     ) {
         trace!(
             "Recording upload: success={}, files={}, bytes={}, time={}ms, largest={}",
-            success,
-            files_count,
-            upload_bytes,
-            processing_time_ms,
-            largest_file
+            success, files_count, upload_bytes, processing_time_ms, largest_file
         );
 
         // Increment total uploads
@@ -761,7 +749,7 @@ fn get_process_memory_bytes() -> Option<u64> {
             max_address: u64,
         }
 
-        extern "C" {
+        unsafe extern "C" {
             fn mach_task_self() -> u32;
             fn task_info(
                 target_task: u32,
@@ -773,7 +761,7 @@ fn get_process_memory_bytes() -> Option<u64> {
 
         const MACH_TASK_BASIC_INFO: u32 = 20; // flavor constant
         const TASK_VM_INFO: u32 = 22; // fallback flavor
-                                      // natural_t == u32; express counts in u32 units
+        // natural_t == u32; express counts in u32 units
         const MACH_TASK_BASIC_INFO_COUNT: u32 =
             (std::mem::size_of::<mach_task_basic_info>() / std::mem::size_of::<u32>()) as u32;
         const TASK_VM_INFO_COUNT: u32 =
@@ -1095,15 +1083,17 @@ struct Worker {
 
 impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let thread = thread::spawn(move || loop {
-            let message = receiver.lock().unwrap().recv();
+        let thread = thread::spawn(move || {
+            loop {
+                let message = receiver.lock().unwrap().recv();
 
-            match message {
-                Ok(job) => {
-                    job();
-                }
-                Err(_) => {
-                    break;
+                match message {
+                    Ok(job) => {
+                        job();
+                    }
+                    Err(_) => {
+                        break;
+                    }
                 }
             }
         });
@@ -1267,7 +1257,9 @@ pub fn run_server(
                 } else {
                     ""
                 };
-                info!("🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak{pressure_indicator}");
+                info!(
+                    "🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak{pressure_indicator}"
+                );
 
                 // Report rate limiter memory usage
                 let (limiter_entries, limiter_memory) = rate_limiter_monitor.get_memory_stats();
@@ -1370,8 +1362,7 @@ pub fn run_server(
                     let processing_time = start_time.elapsed();
                     trace!(
                         "Client {} processing completed in {:?}",
-                        client_ip,
-                        processing_time
+                        client_ip, processing_time
                     );
 
                     // Release rate limit connection
@@ -1471,9 +1462,7 @@ fn handle_client_with_stats(
 
     trace!(
         "Client {} processing result: success={}, time={:?}",
-        client_ip,
-        success,
-        processing_time
+        client_ip, success, processing_time
     );
 
     // On panic, record failure (normal success/failure & bytes recorded in handle_client)

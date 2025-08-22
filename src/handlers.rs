@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::error::AppError;
 use crate::http::{Request, Response, ResponseBody};
-use crate::search::{perform_search, SearchParams, SearchResult};
+use crate::search::{SearchParams, SearchResult, perform_search};
 use crate::upload::DirectUploadHandler;
 use crate::utils::parse_query_params;
 use log::{debug, error, info, trace};
@@ -461,7 +461,7 @@ pub fn handle_file_request(
         request.method, request.path
     );
     trace!("Base directory: {:?}, chunk size: {}", base_dir, chunk_size);
-    use crate::fs::{generate_directory_listing, FileDetails};
+    use crate::fs::{FileDetails, generate_directory_listing};
     use crate::response::get_mime_type;
     use log::debug;
     use std::path::PathBuf;

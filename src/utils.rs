@@ -47,7 +47,7 @@ pub fn get_request_path(request_line: &str) -> &str {
             } else {
                 // If there's no second space (unusual HTTP request but handle it).
                 let path = path_with_http_version; // Take the rest as path.
-                                                   // Handle paths starting with "/".
+                // Handle paths starting with "/".
                 if let Some(relative_path) = path.strip_prefix("/") {
                     // Remove leading "/".
                     if relative_path.is_empty() {

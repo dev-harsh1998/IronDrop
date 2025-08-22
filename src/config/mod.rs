@@ -473,9 +473,11 @@ threads = 16
 
         let result = Config::load(&cli);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .contains("Config file specified but not found"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Config file specified but not found")
+        );
     }
 
     #[test]

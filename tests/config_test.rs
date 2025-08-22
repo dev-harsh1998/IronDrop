@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 use irondrop::cli::Cli;
-use irondrop::config::{ini_parser::IniConfig, Config};
+use irondrop::config::{Config, ini_parser::IniConfig};
 use std::fs;
 use tempfile::TempDir;
 
@@ -296,9 +296,11 @@ fn test_config_file_load_error() {
 
     let result = Config::load(&cli);
     assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .contains("Config file specified but not found"));
+    assert!(
+        result
+            .unwrap_err()
+            .contains("Config file specified but not found")
+    );
 }
 
 #[test]

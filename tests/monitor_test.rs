@@ -5,14 +5,14 @@
 
 use irondrop::cli::Cli;
 use irondrop::server::run_server;
-use reqwest::blocking::Client;
 use reqwest::StatusCode;
+use reqwest::blocking::Client;
 use std::fs::File;
 use std::io::Write;
 use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 
 struct TestServer {
     addr: SocketAddr,

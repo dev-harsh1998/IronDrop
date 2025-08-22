@@ -317,11 +317,7 @@ impl UltraCompactEntry {
         let id = (self.parent_id[0] as u32)
             | ((self.parent_id[1] as u32) << 8)
             | ((self.parent_id[2] as u32) << 16);
-        if id == PARENT_NULL {
-            u32::MAX
-        } else {
-            id
-        }
+        if id == PARENT_NULL { u32::MAX } else { id }
     }
 
     /// Decompress size from log2 encoding
@@ -1301,8 +1297,7 @@ impl ConcurrentUltraLowMemoryIndex {
             );
             trace!(
                 "Index contains {} entries, using {} bytes",
-                index_stats.0,
-                index_stats.1
+                index_stats.0, index_stats.1
             );
             let start_time = std::time::Instant::now();
             let search_results = index_guard.search(query, limit);
@@ -1487,8 +1482,7 @@ pub fn perform_search(
     );
     trace!(
         "Search parameters - path: '{}', case_sensitive: {}",
-        params.path,
-        params.case_sensitive
+        params.path, params.case_sensitive
     );
 
     // Get ultra-low memory concurrent index
@@ -1500,9 +1494,7 @@ pub fn perform_search(
                 let stats = index.get_stats().unwrap_or((0, 0, false));
                 trace!(
                     "Index stats - entries: {}, memory: {} bytes, updating: {}",
-                    stats.0,
-                    stats.1,
-                    stats.2
+                    stats.0, stats.1, stats.2
                 );
                 index.clone()
             }

@@ -541,8 +541,7 @@ pub fn handle_client(
                 Ok(body_bytes) => {
                     trace!(
                         "{} Response sent successfully, {} bytes",
-                        log_prefix,
-                        body_bytes
+                        log_prefix, body_bytes
                     );
                     if let Some(stats) = stats {
                         stats.record_request(true, body_bytes);
@@ -691,9 +690,7 @@ fn send_response(
         ResponseBody::Stream(mut file_details) => {
             trace!(
                 "{} Streaming file: {} bytes, chunk size: {}",
-                log_prefix,
-                file_details.size,
-                file_details.chunk_size
+                log_prefix, file_details.size, file_details.chunk_size
             );
             let mut buffer = vec![0; file_details.chunk_size];
             let mut chunks_sent = 0;
@@ -708,9 +705,7 @@ fn send_response(
                 if chunks_sent % 100 == 0 {
                     trace!(
                         "{} Streamed {} chunks ({} bytes so far)",
-                        log_prefix,
-                        chunks_sent,
-                        body_sent
+                        log_prefix, chunks_sent, body_sent
                     );
                 }
             }

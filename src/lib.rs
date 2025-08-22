@@ -72,7 +72,11 @@ pub fn run() {
     };
 
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", log_level);
+        // SAFETY: Setting RUST_LOG environment variable at program startup
+        // before any threads are spawned is safe
+        unsafe {
+            std::env::set_var("RUST_LOG", log_level);
+        }
     }
 
     // Initialize logging with optional file output

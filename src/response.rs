@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 use crate::error::AppError;
-use crate::templates::{get_error_description, TemplateEngine};
+use crate::templates::{TemplateEngine, get_error_description};
 use log::{debug, error, trace};
 use std::io::prelude::*;
 use std::net::TcpStream;

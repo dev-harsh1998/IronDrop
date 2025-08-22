@@ -7,7 +7,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::search::{get_ultra_memory_stats, initialize_search, perform_search, SearchParams};
+    use crate::search::{SearchParams, get_ultra_memory_stats, initialize_search, perform_search};
 
     #[test]
     fn test_memory_efficiency_estimate() {
