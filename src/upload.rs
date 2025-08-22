@@ -400,26 +400,27 @@ impl DirectUploadHandler {
     /// Extract filename from URL path or headers
     fn extract_filename(&self, request: &Request) -> Result<String, AppError> {
         // First, try to get filename from Content-Disposition header
-        if let Some(content_disposition) = request.headers.get("content-disposition") {
-            if let Some(filename) = Self::parse_filename_from_disposition(content_disposition) {
-                return Ok(filename);
-            }
+        if let Some(content_disposition) = request.headers.get("content-disposition")
+            && let Some(filename) = Self::parse_filename_from_disposition(content_disposition)
+        {
+            return Ok(filename);
         }
 
         // Next, try to get filename from custom X-Filename header
-        if let Some(filename) = request.headers.get("x-filename") {
-            if !filename.trim().is_empty() {
-                return Ok(filename.trim().to_string());
-            }
+        if let Some(filename) = request.headers.get("x-filename")
+            && !filename.trim().is_empty()
+        {
+            return Ok(filename.trim().to_string());
         }
 
         // Finally, extract from URL path (last segment after /, excluding query params)
         let path_without_query = request.path.split('?').next().unwrap_or(&request.path);
         let path_segments: Vec<&str> = path_without_query.split('/').collect();
-        if let Some(last_segment) = path_segments.last() {
-            if !last_segment.is_empty() && last_segment.contains('.') {
-                return Ok(last_segment.to_string());
-            }
+        if let Some(last_segment) = path_segments.last()
+            && !last_segment.is_empty()
+            && last_segment.contains('.')
+        {
+            return Ok(last_segment.to_string());
         }
 
         // If no filename found anywhere, generate a default one

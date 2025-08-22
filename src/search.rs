@@ -856,12 +856,11 @@ impl UltraLowMemoryIndex {
         }
 
         for &child_id in &self.directory_children[parent_id as usize] {
-            if let Some(entry) = self.entries.get(child_id as usize) {
-                if let Some(entry_name) = self.get_string(entry.get_name_offset()) {
-                    if entry_name == name {
-                        return Some(child_id);
-                    }
-                }
+            if let Some(entry) = self.entries.get(child_id as usize)
+                && let Some(entry_name) = self.get_string(entry.get_name_offset())
+                && entry_name == name
+            {
+                return Some(child_id);
             }
         }
 
@@ -986,12 +985,12 @@ impl UltraLowMemoryIndex {
                     break;
                 }
 
-                if let Some(entry) = self.entries.get(entry_id as usize) {
-                    if let Some(name) = self.get_string(entry.get_name_offset()) {
-                        let name_lower = name.to_lowercase();
-                        if name_lower.contains(&query_lower) {
-                            candidate_ids.push(entry_id);
-                        }
+                if let Some(entry) = self.entries.get(entry_id as usize)
+                    && let Some(name) = self.get_string(entry.get_name_offset())
+                {
+                    let name_lower = name.to_lowercase();
+                    if name_lower.contains(&query_lower) {
+                        candidate_ids.push(entry_id);
                     }
                 }
             }
@@ -1009,12 +1008,12 @@ impl UltraLowMemoryIndex {
                         break;
                     }
 
-                    if let Some(entry) = self.entries.get(entry_id as usize) {
-                        if let Some(name) = self.get_string(entry.get_name_offset()) {
-                            let name_lower = name.to_lowercase();
-                            if name_lower.contains(&query_lower) {
-                                candidate_ids.push(entry_id);
-                            }
+                    if let Some(entry) = self.entries.get(entry_id as usize)
+                        && let Some(name) = self.get_string(entry.get_name_offset())
+                    {
+                        let name_lower = name.to_lowercase();
+                        if name_lower.contains(&query_lower) {
+                            candidate_ids.push(entry_id);
                         }
                     }
                 }
@@ -1373,11 +1372,11 @@ impl ConcurrentUltraLowMemoryIndex {
         self.update_in_progress.store(false, Ordering::Release);
 
         // Clear cache after update and force shrink if needed
-        if result.is_ok() {
-            if let Ok(mut cache) = self.search_cache.try_lock() {
-                cache.shrink_if_needed(false);
-                cache.clear();
-            }
+        if result.is_ok()
+            && let Ok(mut cache) = self.search_cache.try_lock()
+        {
+            cache.shrink_if_needed(false);
+            cache.clear();
         }
 
         result
@@ -1647,48 +1646,48 @@ fn search_directory_recursive(
             let file_name = entry.file_name().to_string_lossy().to_string();
             let file_name_lower = file_name.to_lowercase();
 
-            if file_name_lower.contains(&query_lower) {
-                if let Ok(metadata) = entry.metadata() {
-                    let relative_path = entry
-                        .path()
-                        .strip_prefix(base_dir)
-                        .unwrap_or(&entry.path())
-                        .to_string_lossy()
-                        .to_string()
-                        .replace('\\', "/"); // Normalize path separators for web URLs
+            if file_name_lower.contains(&query_lower)
+                && let Ok(metadata) = entry.metadata()
+            {
+                let relative_path = entry
+                    .path()
+                    .strip_prefix(base_dir)
+                    .unwrap_or(&entry.path())
+                    .to_string_lossy()
+                    .to_string()
+                    .replace('\\', "/"); // Normalize path separators for web URLs
 
-                    // Ensure path starts with / and doesn't have double slashes
-                    let clean_path = if relative_path.is_empty() {
-                        "/".to_string()
-                    } else if relative_path.starts_with('/') {
-                        relative_path
+                // Ensure path starts with / and doesn't have double slashes
+                let clean_path = if relative_path.is_empty() {
+                    "/".to_string()
+                } else if relative_path.starts_with('/') {
+                    relative_path
+                } else {
+                    format!("/{}", relative_path)
+                };
+
+                let result = SearchResult {
+                    name: file_name.clone(),
+                    path: clean_path,
+                    size: if metadata.is_dir() {
+                        "-".to_string()
                     } else {
-                        format!("/{}", relative_path)
-                    };
+                        format_file_size(metadata.len())
+                    },
+                    file_type: if metadata.is_dir() {
+                        "directory".to_string()
+                    } else {
+                        "file".to_string()
+                    },
+                    score: calculate_relevance_score(&file_name, query),
+                    last_modified: metadata
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs()),
+                };
 
-                    let result = SearchResult {
-                        name: file_name.clone(),
-                        path: clean_path,
-                        size: if metadata.is_dir() {
-                            "-".to_string()
-                        } else {
-                            format_file_size(metadata.len())
-                        },
-                        file_type: if metadata.is_dir() {
-                            "directory".to_string()
-                        } else {
-                            "file".to_string()
-                        },
-                        score: calculate_relevance_score(&file_name, query),
-                        last_modified: metadata
-                            .modified()
-                            .ok()
-                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs()),
-                    };
-
-                    let _ = tx.send(result);
-                }
+                let _ = tx.send(result);
             }
 
             // Recursively search subdirectories
@@ -1810,12 +1809,11 @@ pub fn format_file_size(size: u64) -> String {
 
 /// Clear the search cache (useful for testing or manual cache invalidation)
 pub fn clear_cache() {
-    if let Ok(index_guard) = ULTRA_LOW_MEMORY_INDEX.read() {
-        if let Some(ref concurrent_index) = *index_guard {
-            if let Ok(mut cache) = concurrent_index.search_cache.try_lock() {
-                cache.clear();
-            }
-        }
+    if let Ok(index_guard) = ULTRA_LOW_MEMORY_INDEX.read()
+        && let Some(ref concurrent_index) = *index_guard
+        && let Ok(mut cache) = concurrent_index.search_cache.try_lock()
+    {
+        cache.clear();
     }
 }
 

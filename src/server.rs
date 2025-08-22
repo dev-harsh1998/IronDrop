@@ -401,10 +401,10 @@ impl ServerStats {
             }
 
             // Update largest upload if this is bigger
-            if let Ok(mut largest) = self.largest_upload.lock() {
-                if largest_file > *largest {
-                    *largest = largest_file;
-                }
+            if let Ok(mut largest) = self.largest_upload.lock()
+                && largest_file > *largest
+            {
+                *largest = largest_file;
             }
 
             // Record processing time (keep last 100 entries for average calculation)
@@ -666,12 +666,11 @@ fn get_process_memory_bytes() -> Option<u64> {
         match fs::read_to_string("/proc/self/status") {
             Ok(status) => {
                 for line in status.lines() {
-                    if line.starts_with("VmRSS:") {
-                        if let Some(kb_str) = line.split_whitespace().nth(1) {
-                            if let Ok(kb) = kb_str.parse::<u64>() {
-                                return Some(kb * 1024); // Convert KB to bytes
-                            }
-                        }
+                    if line.starts_with("VmRSS:")
+                        && let Some(kb_str) = line.split_whitespace().nth(1)
+                        && let Ok(kb) = kb_str.parse::<u64>()
+                    {
+                        return Some(kb * 1024); // Convert KB to bytes
                     }
                 }
                 // Parsing succeeded but VmRSS not found - unusual but possible
@@ -816,7 +815,7 @@ fn get_process_memory_bytes() -> Option<u64> {
             PeakPagefileUsage: usize,
         }
 
-        extern "system" {
+        unsafe extern "system" {
             fn GetCurrentProcess() -> *mut c_void;
             fn GetProcessMemoryInfo(
                 hProcess: *mut c_void,
@@ -1054,10 +1053,10 @@ impl ThreadPool {
     {
         let job = Box::new(f);
 
-        if let Some(ref sender) = self.sender {
-            if sender.send(job).is_err() {
-                warn!("Failed to send job to thread pool");
-            }
+        if let Some(ref sender) = self.sender
+            && sender.send(job).is_err()
+        {
+            warn!("Failed to send job to thread pool");
         }
     }
 }
@@ -1067,10 +1066,10 @@ impl Drop for ThreadPool {
         drop(self.sender.take());
 
         for worker in &mut self.workers {
-            if let Some(thread) = worker.thread.take() {
-                if thread.join().is_err() {
-                    warn!("Worker thread {} panicked", worker.id);
-                }
+            if let Some(thread) = worker.thread.take()
+                && thread.join().is_err()
+            {
+                warn!("Worker thread {} panicked", worker.id);
             }
         }
     }
@@ -1179,12 +1178,12 @@ pub fn run_server(
     debug!("Initializing server statistics");
     let stats = Arc::new(ServerStats::new());
 
-    if let Some(tx) = addr_tx {
-        if tx.send(local_addr).is_err() {
-            return Err(AppError::InternalServerError(
-                "Failed to send server address to test thread".to_string(),
-            ));
-        }
+    if let Some(tx) = addr_tx
+        && tx.send(local_addr).is_err()
+    {
+        return Err(AppError::InternalServerError(
+            "Failed to send server address to test thread".to_string(),
+        ));
     }
 
     info!(
@@ -1291,11 +1290,11 @@ pub fn run_server(
 
     debug!("Entering main server loop");
     'server_loop: loop {
-        if let Some(ref rx) = shutdown_rx {
-            if rx.try_recv().is_ok() {
-                info!("🛑 Shutdown signal received. Shutting down gracefully.");
-                break 'server_loop;
-            }
+        if let Some(ref rx) = shutdown_rx
+            && rx.try_recv().is_ok()
+        {
+            info!("🛑 Shutdown signal received. Shutting down gracefully.");
+            break 'server_loop;
         }
 
         match listener.accept() {

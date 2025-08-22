@@ -254,11 +254,11 @@ impl Request {
             },
             None => {
                 // Check for Transfer-Encoding: chunked (not fully implemented but detected)
-                if let Some(encoding) = headers.get("transfer-encoding") {
-                    if encoding.to_lowercase().contains("chunked") {
-                        warn!("Chunked transfer encoding not yet supported");
-                        return Err(AppError::BadRequest);
-                    }
+                if let Some(encoding) = headers.get("transfer-encoding")
+                    && encoding.to_lowercase().contains("chunked")
+                {
+                    warn!("Chunked transfer encoding not yet supported");
+                    return Err(AppError::BadRequest);
                 }
                 // No body expected
                 return Ok(None);
