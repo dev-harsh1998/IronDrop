@@ -315,6 +315,7 @@ impl TemplateEngine {
         };
         variables.insert("REQUEST_ID".to_string(), request_id);
         variables.insert("TIMESTAMP".to_string(), timestamp);
+        variables.insert("VERSION".to_string(), crate::VERSION.to_string());
 
         let page_title = format!("{error_code} {error_message}");
         let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/error/styles.css">"#;

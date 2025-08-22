@@ -267,40 +267,50 @@ async function loadMetrics() {
 function updateMetrics(data) {
     const { requests: r, uploads: u, downloads: d, memory: m } = data;
 
+    // Helper function to safely update element text content
+    function safeSetText(elementId, value) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = value;
+        } else {
+            console.warn(`Element with ID '${elementId}' not found in DOM`);
+        }
+    }
+
     // Request metrics
-    document.getElementById('req_total').textContent = r.total;
-    document.getElementById('req_success').textContent = r.successful;
-    document.getElementById('req_errors').textContent = r.errors;
+    safeSetText('req_total', r.total);
+    safeSetText('req_success', r.successful);
+    safeSetText('req_errors', r.errors);
 
     const successRate = r.total ? ((r.successful / r.total) * 100).toFixed(2) + '%' : '0%';
-    document.getElementById('req_success_rate').textContent = successRate;
+    safeSetText('req_success_rate', successRate);
 
     // Download metrics
-    document.getElementById('bytes_served').textContent = d.bytes_served.toLocaleString();
-    document.getElementById('mb_served').textContent = (d.bytes_served / 1024 / 1024).toFixed(2);
+    safeSetText('bytes_served', d.bytes_served.toLocaleString());
+    safeSetText('mb_served', (d.bytes_served / 1024 / 1024).toFixed(2));
 
     // Upload metrics
-    document.getElementById('up_total').textContent = u.total_uploads;
-    document.getElementById('up_success').textContent = u.successful_uploads;
-    document.getElementById('up_failed').textContent = u.failed_uploads;
-    document.getElementById('up_mb').textContent = (u.upload_bytes / 1024 / 1024).toFixed(2);
-    document.getElementById('avg_file_size').textContent = humanBytes(u.average_upload_size);
-    document.getElementById('largest_upload').textContent = humanBytes(u.largest_upload);
-    document.getElementById('concurrent_uploads').textContent = u.concurrent_uploads;
+    safeSetText('up_total', u.total_uploads);
+    safeSetText('up_success', u.successful_uploads);
+    safeSetText('up_failed', u.failed_uploads);
+    safeSetText('up_mb', (u.upload_bytes / 1024 / 1024).toFixed(2));
+    safeSetText('avg_file_size', humanBytes(u.average_upload_size));
+    safeSetText('largest_upload', humanBytes(u.largest_upload));
+    safeSetText('concurrent_uploads', u.concurrent_uploads);
 
     // Handle potential undefined or non-numeric values
     const avgProcessing = u.average_processing_ms;
-    document.getElementById('avg_processing').textContent =
-        (avgProcessing && avgProcessing.toFixed) ? avgProcessing.toFixed(1) : avgProcessing;
+    const avgProcessingText = (avgProcessing && avgProcessing.toFixed) ? avgProcessing.toFixed(1) : avgProcessing;
+    safeSetText('avg_processing', avgProcessingText);
 
     const successRateUpload = u.success_rate;
-    document.getElementById('upload_success_rate').textContent =
-        (successRateUpload && successRateUpload.toFixed) ?
-            successRateUpload.toFixed(2) + '%' : successRateUpload + '%';
+    const successRateUploadText = (successRateUpload && successRateUpload.toFixed) ?
+        successRateUpload.toFixed(2) + '%' : successRateUpload + '%';
+    safeSetText('upload_success_rate', successRateUploadText);
 
     // Uptime metrics
-    document.getElementById('uptime_secs').textContent = data.uptime_secs;
-    document.getElementById('uptime_pretty').textContent = prettyUptime(data.uptime_secs);
+    safeSetText('uptime_secs', data.uptime_secs);
+    safeSetText('uptime_pretty', prettyUptime(data.uptime_secs));
 
     // Memory metrics - now only handled by charts, no separate card needed
 }
@@ -317,14 +327,23 @@ function clearMetrics() {
 
     metricElements.forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.textContent = '-';
+        if (el) {
+            el.textContent = '-';
+        } else {
+            console.warn(`Element with ID '${id}' not found during clearMetrics`);
+        }
     });
 }
 
 function updateTimestamp() {
     const now = new Date();
     const timeString = now.toLocaleTimeString();
-    document.getElementById('last_updated').textContent = timeString;
+    const timestampEl = document.getElementById('last_updated');
+    if (timestampEl) {
+        timestampEl.textContent = timeString;
+    } else {
+        console.warn("Element with ID 'last_updated' not found");
+    }
 }
 
 // Initialize charts
@@ -632,7 +651,10 @@ async function performMemoryCleanup() {
     const button = document.getElementById('cleanup_memory_btn');
     const status = document.getElementById('cleanup_status');
     
-    if (!button || !status) return;
+    if (!button || !status) {
+        console.warn('Memory cleanup button or status element not found');
+        return;
+    }
     
     // Disable button and show loading state
     button.disabled = true;
