@@ -304,28 +304,7 @@ function updateMetrics(data) {
     document.getElementById('uptime_secs').textContent = data.uptime_secs;
     document.getElementById('uptime_pretty').textContent = prettyUptime(data.uptime_secs);
 
-    // Memory metrics
-    if (m && m.available) {
-        // Show memory data
-        document.getElementById('memory_current').textContent = m.current_mb.toFixed(2) + ' MB';
-        document.getElementById('memory_peak').textContent = m.peak_mb.toFixed(2) + ' MB';
-        document.getElementById('memory_unavailable').style.display = 'none';
-        
-        // Show the individual metric lines
-        const memoryInfo = document.querySelector('#memory_card .metric-info');
-        const memoryDivs = memoryInfo.querySelectorAll('div:not(.memory-unavailable)');
-        memoryDivs.forEach(div => div.style.display = 'block');
-    } else {
-        // Hide memory data and show unavailable message
-        document.getElementById('memory_current').textContent = '-';
-        document.getElementById('memory_peak').textContent = '-';
-        document.getElementById('memory_unavailable').style.display = 'block';
-        
-        // Hide the individual metric lines
-        const memoryInfo = document.querySelector('#memory_card .metric-info');
-        const memoryDivs = memoryInfo.querySelectorAll('div:not(.memory-unavailable)');
-        memoryDivs.forEach(div => div.style.display = 'none');
-    }
+    // Memory metrics - now only handled by charts, no separate card needed
 }
 
 function clearMetrics() {
@@ -336,21 +315,13 @@ function clearMetrics() {
         'up_total', 'up_success', 'up_failed', 'files_uploaded',
         'up_bytes', 'up_mb', 'avg_file_size', 'largest_upload',
         'concurrent_uploads', 'avg_processing', 'upload_success_rate',
-        'uptime_secs', 'uptime_pretty',
-        'memory_current', 'memory_peak'
+        'uptime_secs', 'uptime_pretty'
     ];
 
     metricElements.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.textContent = '-';
     });
-    
-    // Hide memory unavailable message on error
-    document.getElementById('memory_unavailable').style.display = 'none';
-    // Show the individual metric lines
-    const memoryInfo = document.querySelector('#memory_card .metric-info');
-    const memoryDivs = memoryInfo.querySelectorAll('div:not(.memory-unavailable)');
-    memoryDivs.forEach(div => div.style.display = 'block');
 }
 
 function updateTimestamp() {
@@ -659,9 +630,81 @@ function init() {
     console.log("Monitor initialization complete");
 }
 
+// Memory cleanup functionality
+async function performMemoryCleanup() {
+    const button = document.getElementById('cleanup_memory_btn');
+    const status = document.getElementById('cleanup_status');
+    
+    if (!button || !status) return;
+    
+    // Disable button and show loading state
+    button.disabled = true;
+    button.textContent = '🔄 Cleaning...';
+    status.textContent = 'Performing memory cleanup...';
+    status.className = 'cleanup-status loading';
+    
+    try {
+        console.log('Initiating memory cleanup...');
+        const response = await fetch('/_irondrop/cleanup-memory', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log('Memory cleanup result:', result);
+        
+        if (result.status === 'success') {
+            status.textContent = `✅ ${result.message} (${result.cleanup_time_ms}ms)`;
+            status.className = 'cleanup-status success';
+            
+            // Force a metrics reload to show updated memory usage
+            setTimeout(() => {
+                loadMetrics();
+            }, 500);
+        } else {
+            status.textContent = `❌ ${result.message}`;
+            status.className = 'cleanup-status error';
+        }
+        
+    } catch (error) {
+        console.error('Memory cleanup failed:', error);
+        status.textContent = `❌ Cleanup failed: ${error.message}`;
+        status.className = 'cleanup-status error';
+    } finally {
+        // Re-enable button after a delay
+        setTimeout(() => {
+            button.disabled = false;
+            button.textContent = '🧹 Cleanup Memory';
+            
+            // Clear status message after 10 seconds
+            setTimeout(() => {
+                status.textContent = '';
+                status.className = 'cleanup-status';
+            }, 10000);
+        }, 1000);
+    }
+}
+
 // Start when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
 }
+
+// Add event listener for memory cleanup button when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    const cleanupButton = document.getElementById('cleanup_memory_btn');
+    if (cleanupButton) {
+        cleanupButton.addEventListener('click', performMemoryCleanup);
+        console.log('Memory cleanup button event listener attached');
+    } else {
+        console.warn('Memory cleanup button not found');
+    }
+});

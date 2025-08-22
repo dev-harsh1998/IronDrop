@@ -25,11 +25,17 @@
     </div>
   </div>
   <div class="chart-card">
-    <h2>Memory Usage</h2>
+    <div class="chart-header">
+      <h2>Memory Usage</h2>
+      <button id="cleanup_memory_btn" class="cleanup-btn" title="Force memory cleanup for long-running processes">
+        🧹 Cleanup Memory
+      </button>
+    </div>
     <div class="chart-wrapper">
       <canvas id="memoryChart"></canvas>
       <div class="chart-fallback">Loading chart data...</div>
     </div>
+    <div id="cleanup_status" class="cleanup-status"></div>
   </div>
   <div class="chart-card full-width">
     <h2>Upload Stats</h2>
@@ -104,16 +110,6 @@
         </div>
     </div>
 
-    <!-- Memory Usage Card -->
-    <div class="card metric-card" id="memory_card">
-        <div class="metric-title">Memory Usage</div>
-        <div class="metric-info">
-            <div>Current: <span id="memory_current">-</span></div>
-            <div>Peak: <span id="memory_peak">-</span></div>
-            <div class="memory-unavailable" id="memory_unavailable" style="display: none;">
-                Memory tracking unavailable
-            </div>
-        </div>
-    </div>
+
 
 </div>

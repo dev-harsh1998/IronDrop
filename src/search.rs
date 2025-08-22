@@ -74,6 +74,34 @@ impl SearchCache {
         }
     }
 
+    /// Force shrink cache when memory usage exceeds threshold
+    pub fn shrink_if_needed(&mut self, force: bool) {
+        let memory_threshold = self.max_size / 2; // Shrink when over 50% capacity
+
+        if force || self.cache.len() > memory_threshold {
+            // More aggressive eviction during memory pressure
+            let target_size = if force {
+                self.max_size / 4
+            } else {
+                memory_threshold
+            };
+
+            while self.cache.len() > target_size {
+                if let Some(lru_key) = self.order.pop_back() {
+                    self.cache.remove(&lru_key);
+                    self.stats.evictions += 1;
+                }
+            }
+
+            // Shrink underlying HashMap capacity if needed
+            if force && self.cache.capacity() > self.max_size * 2 {
+                self.cache.shrink_to_fit();
+                self.order.shrink_to_fit();
+                debug!("Cache capacity shrunk to fit current usage");
+            }
+        }
+    }
+
     pub fn get(&mut self, key: &str) -> Option<Vec<SearchResult>> {
         if let Some(cached) = self.cache.get_mut(key) {
             // Check if cache is still valid (10 seconds TTL for better performance)
@@ -128,7 +156,10 @@ impl SearchCache {
     pub fn clear(&mut self) {
         self.cache.clear();
         self.order.clear();
-        info!("Search cache cleared");
+        // Shrink capacity to prevent memory bloat during long runs
+        self.cache.shrink_to_fit();
+        self.order.shrink_to_fit();
+        info!("Search cache cleared and capacity shrunk");
     }
 
     pub fn get_stats(&self) -> String {
@@ -378,6 +409,44 @@ impl UnifiedStringPool {
             + self.index.capacity() * std::mem::size_of::<StringPoolEntry>()
             + std::mem::size_of::<Self>()) as u64
     }
+
+    /// Shrink string pool capacity to reduce memory usage
+    /// Call this periodically during long runs to prevent memory bloat
+    fn shrink_to_fit(&mut self) {
+        let old_buffer_capacity = self.buffer.capacity();
+        let old_index_capacity = self.index.capacity();
+
+        self.buffer.shrink_to_fit();
+        self.index.shrink_to_fit();
+
+        let new_buffer_capacity = self.buffer.capacity();
+        let new_index_capacity = self.index.capacity();
+
+        debug!(
+            "StringPool shrink: buffer {}->{}KB, index {}->{}KB",
+            old_buffer_capacity / 1024,
+            new_buffer_capacity / 1024,
+            old_index_capacity * std::mem::size_of::<StringPoolEntry>() / 1024,
+            new_index_capacity * std::mem::size_of::<StringPoolEntry>() / 1024
+        );
+    }
+
+    /// Clear all strings and shrink capacity for memory efficiency
+    fn clear_and_shrink(&mut self) {
+        self.buffer.clear();
+        self.index.clear();
+        self.write_pos = 0;
+
+        // Shrink capacity to prevent memory bloat
+        self.buffer.shrink_to_fit();
+        self.index.shrink_to_fit();
+
+        // Re-reserve small initial capacity
+        self.buffer.reserve(1024 * 1024); // 1MB initial
+        self.index.reserve(1000); // 1K entries initial
+
+        debug!("StringPool cleared and capacity shrunk for long-run memory efficiency");
+    }
 }
 
 /// Fast murmur3-style hash for string pool
@@ -533,6 +602,55 @@ impl UltraLowMemoryIndex {
         self.is_updating.load(Ordering::Relaxed)
     }
 
+    /// Perform periodic memory cleanup to prevent memory bloat during long runs
+    /// This should be called periodically (e.g., every few hours) during long-running operations
+    pub fn perform_memory_cleanup(&mut self) {
+        let initial_memory = self.get_memory_usage();
+        debug!(
+            "Starting periodic memory cleanup, current usage: {}MB",
+            initial_memory / 1_048_576
+        );
+
+        // Shrink string pool capacity
+        self.string_pool.shrink_to_fit();
+
+        // Shrink vectors if they have excessive capacity
+        let entries_capacity_ratio =
+            self.entries.capacity() as f64 / self.entries.len().max(1) as f64;
+        let dir_capacity_ratio =
+            self.directory_children.capacity() as f64 / self.directory_children.len().max(1) as f64;
+
+        if entries_capacity_ratio > 2.0 {
+            self.entries.shrink_to_fit();
+            debug!(
+                "Shrunk entries vector capacity (ratio was {:.1}x)",
+                entries_capacity_ratio
+            );
+        }
+
+        if dir_capacity_ratio > 2.0 {
+            self.directory_children.shrink_to_fit();
+            debug!(
+                "Shrunk directory_children vector capacity (ratio was {:.1}x)",
+                dir_capacity_ratio
+            );
+        }
+
+        let final_memory = self.get_memory_usage();
+        let saved = initial_memory.saturating_sub(final_memory);
+
+        if saved > 0 {
+            info!(
+                "Memory cleanup completed: {}MB -> {}MB (saved {}MB)",
+                initial_memory / 1_048_576,
+                final_memory / 1_048_576,
+                saved / 1_048_576
+            );
+        } else {
+            debug!("Memory cleanup completed, no significant savings");
+        }
+    }
+
     /// Build or update the index if it's stale with incremental updates
     pub fn update_if_needed(&mut self, force: bool) -> Result<(), AppError> {
         // Update index every 30 seconds or if forced
@@ -583,15 +701,26 @@ impl UltraLowMemoryIndex {
         }
     }
 
-    /// Clear all index data and reset to initial state
+    /// Clear all index data and reset to initial state with memory shrinking
     fn clear_index(&mut self) {
-        self.string_pool = UnifiedStringPool::with_capacity(10_000_000 * 15);
+        // Use new shrinking method instead of creating new instances
+        self.string_pool.clear_and_shrink();
         self.radix_index = std::array::from_fn(|_| RadixBucket::default());
+
+        // Clear and shrink vectors to prevent memory accumulation
         self.entries.clear();
+        self.entries.shrink_to_fit();
+        self.entries.reserve(100_000); // Reserve reasonable initial capacity
+
         self.directory_children.clear();
+        self.directory_children.shrink_to_fit();
+        self.directory_children.reserve(10_000); // Reserve reasonable initial capacity
+
         self.entry_count.store(0, Ordering::Relaxed);
         self.memory_usage.store(0, Ordering::Relaxed);
         self.root_entry_id = u32::MAX;
+
+        info!("Index cleared with memory shrinking for long-run efficiency");
     }
 
     /// Ultra-efficient directory walking with hierarchical parent tracking
@@ -1199,7 +1328,7 @@ impl ConcurrentUltraLowMemoryIndex {
         Ok(results)
     }
 
-    /// Update index with optimistic locking
+    /// Update index with optimistic locking and memory pressure detection
     pub fn update_if_needed(&self, force: bool) -> Result<(), AppError> {
         // Quick check without locking
         if !force {
@@ -1226,14 +1355,32 @@ impl ConcurrentUltraLowMemoryIndex {
                 .index
                 .write()
                 .map_err(|_| AppError::InternalServerError("Index lock poisoned".to_string()))?;
+
+            // Check memory usage before update
+            let memory_usage = index_guard.get_memory_usage();
+            let memory_mb = memory_usage / 1_048_576;
+
+            // Perform memory cleanup if memory usage is high or if it's been a while
+            let should_cleanup = memory_mb > 200 || // Over 200MB
+                index_guard.last_update.elapsed().as_secs() > 3600; // Over 1 hour since last update
+
+            if should_cleanup {
+                info!(
+                    "Performing memory cleanup due to high usage ({}MB) or time threshold",
+                    memory_mb
+                );
+                index_guard.perform_memory_cleanup();
+            }
+
             index_guard.update_if_needed(force)
         };
 
         self.update_in_progress.store(false, Ordering::Release);
 
-        // Clear cache after update
+        // Clear cache after update and force shrink if needed
         if result.is_ok() {
             if let Ok(mut cache) = self.search_cache.try_lock() {
+                cache.shrink_if_needed(false);
                 cache.clear();
             }
         }
@@ -1286,13 +1433,33 @@ pub fn initialize_search(base_dir: PathBuf) {
         }
     });
 
-    // Spawn background thread to periodically update the index
+    // Spawn background thread to periodically update the index with memory management
     thread::spawn(move || {
+        let mut cleanup_counter = 0;
         loop {
             thread::sleep(Duration::from_secs(60)); // Update every minute
 
             if let Err(e) = concurrent_index.update_if_needed(false) {
                 warn!("Failed to update ultra-low memory index: {e:?}");
+            }
+
+            // Perform more aggressive memory cleanup every hour during long runs
+            cleanup_counter += 1;
+            if cleanup_counter >= 60 {
+                // 60 minutes = 1 hour
+                cleanup_counter = 0;
+
+                // Force memory cleanup
+                if let Ok(mut index_guard) = concurrent_index.index.write() {
+                    index_guard.perform_memory_cleanup();
+                }
+
+                // Force cache shrinking
+                if let Ok(mut cache) = concurrent_index.search_cache.try_lock() {
+                    cache.shrink_if_needed(true); // Force aggressive shrinking
+                }
+
+                debug!("Completed hourly memory cleanup cycle");
             }
         }
     });
@@ -1742,5 +1909,34 @@ pub fn get_ultra_memory_stats() -> String {
         }
     } else {
         "Ultra-low memory search system temporarily unavailable".to_string()
+    }
+}
+
+/// Force memory cleanup for long-running processes
+/// Call this manually if you notice memory usage growing during long runs
+pub fn force_memory_cleanup() -> Result<(), AppError> {
+    if let Ok(index_guard) = ULTRA_LOW_MEMORY_INDEX.read() {
+        if let Some(ref concurrent_index) = *index_guard {
+            // Force cleanup of the main index
+            if let Ok(mut index) = concurrent_index.index.write() {
+                index.perform_memory_cleanup();
+            }
+
+            // Force cache shrinking
+            if let Ok(mut cache) = concurrent_index.search_cache.try_lock() {
+                cache.shrink_if_needed(true);
+            }
+
+            info!("Manual memory cleanup completed successfully");
+            Ok(())
+        } else {
+            Err(AppError::InternalServerError(
+                "Ultra-low memory search index not initialized".to_string(),
+            ))
+        }
+    } else {
+        Err(AppError::InternalServerError(
+            "Ultra-low memory search index temporarily unavailable".to_string(),
+        ))
     }
 }

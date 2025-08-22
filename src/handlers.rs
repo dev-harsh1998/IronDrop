@@ -11,7 +11,7 @@ use crate::http::{Request, Response, ResponseBody};
 use crate::search::{perform_search, SearchParams, SearchResult};
 use crate::upload::DirectUploadHandler;
 use crate::utils::parse_query_params;
-use log::{debug, error, trace};
+use log::{debug, error, info, trace};
 use std::time::Instant;
 
 /// Register all internal routes under /_irondrop/.
@@ -118,6 +118,13 @@ pub fn register_internal_routes(
             Box::new(move |req: &Request| handle_search_api_request(req, &base_arc)),
         );
     }
+
+    // Memory cleanup endpoint for long-running processes
+    router.register_exact(
+        "POST",
+        "/_irondrop/cleanup-memory",
+        Box::new(|_| handle_memory_cleanup_request()),
+    );
 }
 
 pub fn create_health_check_response() -> Response {
@@ -772,4 +779,62 @@ pub fn handle_search_api_request(
         },
         body: ResponseBody::Text(json_response),
     })
+}
+
+/// Handle memory cleanup requests for long-running processes
+pub fn handle_memory_cleanup_request() -> Result<Response, AppError> {
+    debug!("Processing memory cleanup request");
+    let start_time = Instant::now();
+
+    // Get memory usage before cleanup
+    let before_stats = crate::search::get_search_stats();
+    debug!("Memory stats before cleanup: {}", before_stats);
+
+    // Perform memory cleanup
+    match crate::search::force_memory_cleanup() {
+        Ok(()) => {
+            let cleanup_time = start_time.elapsed();
+            let after_stats = crate::search::get_search_stats();
+
+            info!(
+                "Memory cleanup completed successfully in {:?}",
+                cleanup_time
+            );
+            debug!("Memory stats after cleanup: {}", after_stats);
+
+            let json_response = format!(
+                r#"{{"status":"success","message":"Memory cleanup completed","cleanup_time_ms":{}}}"#,
+                cleanup_time.as_millis()
+            );
+
+            Ok(Response {
+                status_code: 200,
+                status_text: "OK".to_string(),
+                headers: {
+                    let mut map = HashMap::new();
+                    map.insert("Content-Type".to_string(), "application/json".to_string());
+                    map
+                },
+                body: ResponseBody::Text(json_response),
+            })
+        }
+        Err(e) => {
+            error!("Memory cleanup failed: {}", e);
+            let json_response = format!(
+                r#"{{"status":"error","message":"Memory cleanup failed: {}"}}"#,
+                e.to_string().replace('"', r#"\""#)
+            );
+
+            Ok(Response {
+                status_code: 500,
+                status_text: "Internal Server Error".to_string(),
+                headers: {
+                    let mut map = HashMap::new();
+                    map.insert("Content-Type".to_string(), "application/json".to_string());
+                    map
+                },
+                body: ResponseBody::Text(json_response),
+            })
+        }
+    }
 }
