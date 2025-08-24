@@ -142,6 +142,10 @@ impl RateLimiter {
         let cleaned_count = initial_count - connections.len();
         if cleaned_count > 0 {
             debug!("Cleaned up {} old rate limiter entries", cleaned_count);
+            // Reduce underlying capacity if we removed many entries
+            if connections.capacity() > connections.len() * 2 {
+                connections.shrink_to_fit();
+            }
         } else {
             trace!("No old entries to clean up");
         }
@@ -214,6 +218,9 @@ impl RateLimiter {
                 "Memory pressure cleanup removed {} rate limiter entries",
                 cleaned_count
             );
+            if connections.capacity() > connections.len() * 2 {
+                connections.shrink_to_fit();
+            }
         } else {
             trace!("Memory pressure cleanup: no entries removed");
         }

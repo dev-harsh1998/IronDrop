@@ -358,7 +358,7 @@ impl TemplateEngine {
         )
     }
 
-    /// Render a template with variables, supporting conditionals
+    /// Render a template with variables, supporting conditionals (optimized single-scan passes)
     pub fn render(
         &self,
         template_name: &str,
@@ -368,58 +368,88 @@ impl TemplateEngine {
             AppError::InternalServerError(format!("Template '{template_name}' not found"))
         })?;
 
-        let mut rendered = (*template).to_string();
+        // First pass: process simple {{#if VAR}}...{{/if}} blocks (no nesting)
+        let conditional_processed = self.process_conditionals_optimized(template, variables);
 
-        // Handle conditional blocks {{#if VARIABLE}}...{{/if}}
-        rendered = self.process_conditionals(&rendered, variables);
-
-        // Replace variables in the format {{VARIABLE_NAME}}
-        for (key, value) in variables {
-            let placeholder = format!("{{{{{key}}}}}");
-            rendered = rendered.replace(&placeholder, value);
-        }
+        // Second pass: substitute variables {{VAR}} in a single scan
+        let rendered = Self::substitute_variables_single_pass(&conditional_processed, variables);
 
         Ok(rendered)
     }
 
-    /// Process conditional blocks in templates
-    fn process_conditionals(&self, template: &str, variables: &HashMap<String, String>) -> String {
-        let mut result = template.to_string();
+    /// Optimized conditional processing with pre-reserved buffer (no nested ifs)
+    fn process_conditionals_optimized(
+        &self,
+        template: &str,
+        variables: &HashMap<String, String>,
+    ) -> String {
+        let mut out: Vec<u8> = Vec::with_capacity(template.len());
+        let bytes = template.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            // Look for b"{{#if "
+            if i + 6 <= bytes.len() && bytes[i..].starts_with(b"{{#if ") {
+                let var_start = i + 6;
+                // Find closing b"}}" for variable name
+                if let Some(close_pos_rel) = bytes[var_start..].windows(2).position(|w| w == b"}}") {
+                    let var_end = var_start + close_pos_rel;
+                    // SAFETY: variable names are ASCII in our templates; validate UTF-8
+                    let var_name = std::str::from_utf8(&bytes[var_start..var_end]).unwrap_or("");
 
-        // Find and process {{#if VARIABLE}}...{{/if}} blocks
-        while let Some(start) = result.find("{{#if ") {
-            if let Some(var_end) = result[start..].find("}}") {
-                let var_start = start + 6; // "{{#if ".len()
-                let variable = &result[var_start..start + var_end];
-
-                if let Some(block_end) = result.find("{{/if}}") {
-                    let block_start = start + var_end + 2; // "}}"
-                    let block_content = &result[block_start..block_end];
-
-                    // Check if variable is true
-                    let should_include = variables
-                        .get(variable)
-                        .map(|v| v == "true")
-                        .unwrap_or(false);
-
-                    let replacement = if should_include {
-                        block_content.to_string()
-                    } else {
-                        String::new()
-                    };
-
-                    // Replace entire conditional block
-                    let full_block = &result[start..block_end + 7]; // "{{/if}}".len()
-                    result = result.replace(full_block, &replacement);
-                } else {
-                    break; // Malformed template
+                    // Find matching b"{{/if}}" from after }}
+                    let block_search_start = var_end + 2;
+                    if let Some(end_rel) = bytes[block_search_start..]
+                        .windows(7)
+                        .position(|w| w == b"{{/if}}")
+                    {
+                        let block_end = block_search_start + end_rel;
+                        let include = variables
+                            .get(var_name)
+                            .map(|v| v == "true")
+                            .unwrap_or(false);
+                        if include {
+                            out.extend_from_slice(&bytes[block_search_start..block_end]);
+                        }
+                        i = block_end + 7; // skip entire if-block
+                        continue;
+                    }
                 }
-            } else {
-                break; // Malformed template
             }
+            // Default: copy one byte
+            out.push(bytes[i]);
+            i += 1;
         }
+        String::from_utf8(out).unwrap_or_else(|_| template.to_string())
+    }
 
-        result
+    /// Single-pass variable substitution for placeholders {{VAR}}
+    fn substitute_variables_single_pass(
+        input: &str,
+        variables: &HashMap<String, String>,
+    ) -> String {
+        // Heuristic capacity: base + total value sizes capped
+        let extra: usize = variables.values().map(|v| v.len()).sum::<usize>().min(64 * 1024);
+        let mut out: Vec<u8> = Vec::with_capacity(input.len() + extra);
+        let bytes = input.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if i + 2 <= bytes.len() && bytes[i..].starts_with(b"{{") {
+                // Find closing }}
+                if let Some(close_rel) = bytes[i + 2..].windows(2).position(|w| w == b"}}") {
+                    let name_bytes = &bytes[i + 2..i + 2 + close_rel];
+                    if let Ok(name) = std::str::from_utf8(name_bytes)
+                        && let Some(val) = variables.get(name)
+                    {
+                        out.extend_from_slice(val.as_bytes());
+                    }
+                    i = i + 2 + close_rel + 2;
+                    continue;
+                }
+            }
+            out.push(bytes[i]);
+            i += 1;
+        }
+        String::from_utf8(out).unwrap_or_else(|_| input.to_string())
     }
 
     /// Generate directory listing HTML using base template system

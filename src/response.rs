@@ -35,7 +35,7 @@ pub fn get_mime_type(path: &Path) -> &'static str {
 
 /// Generate error pages using embedded templates - dark mode only
 fn generate_error_page(status_code: u16, status_text: &str) -> String {
-    let engine = TemplateEngine::new();
+    let engine = TemplateEngine::global();
     let description = get_error_description(status_code);
 
     engine.render_error_page(status_code, status_text, description)

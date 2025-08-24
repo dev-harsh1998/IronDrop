@@ -186,7 +186,7 @@ pub fn handle_static_asset(path: &str) -> Result<Response, AppError> {
             );
             map
         },
-        body: ResponseBody::Text(content.to_string()),
+        body: ResponseBody::StaticText(content),
     })
 }
 
@@ -208,13 +208,13 @@ pub fn handle_favicon_request(path: &str) -> Result<Response, AppError> {
             map.insert("Content-Length".to_string(), content.len().to_string());
             map
         },
-        body: ResponseBody::Binary(content.to_vec()),
+        body: ResponseBody::StaticBinary(content),
     })
 }
 
 fn handle_logo_request() -> Result<Response, AppError> {
     use crate::templates::TemplateEngine;
-    let engine = TemplateEngine::new();
+    let engine = TemplateEngine::global();
     let (content, content_type) = engine
         .get_favicon("irondrop-logo.png")
         .ok_or(AppError::NotFound)?;
@@ -231,7 +231,7 @@ fn handle_logo_request() -> Result<Response, AppError> {
             map.insert("Content-Length".to_string(), content.len().to_string());
             map
         },
-        body: ResponseBody::Binary(content.to_vec()),
+        body: ResponseBody::StaticBinary(content),
     })
 }
 

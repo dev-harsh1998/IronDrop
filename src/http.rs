@@ -69,7 +69,9 @@ pub struct Response {
 
 pub enum ResponseBody {
     Text(String),
+    StaticText(&'static str),
     Binary(Vec<u8>),
+    StaticBinary(&'static [u8]),
     Stream(FileDetails),
 }
 
@@ -654,7 +656,14 @@ fn send_response(
             let bytes = text.as_bytes();
             response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
         }
+        ResponseBody::StaticText(text) => {
+            let bytes = text.as_bytes();
+            response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
+        }
         ResponseBody::Binary(bytes) => {
+            response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
+        }
+        ResponseBody::StaticBinary(bytes) => {
             response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
         }
         ResponseBody::Stream(file_details) => {
@@ -681,6 +690,16 @@ fn send_response(
             stream.write_all(bytes)?;
             body_sent += bytes.len() as u64;
         }
+        ResponseBody::StaticText(text) => {
+            let bytes = text.as_bytes();
+            trace!(
+                "{} Sending {} bytes of static text",
+                log_prefix,
+                bytes.len()
+            );
+            stream.write_all(bytes)?;
+            body_sent += bytes.len() as u64;
+        }
         ResponseBody::Binary(bytes) => {
             trace!(
                 "{} Sending {} bytes of binary data",
@@ -688,6 +707,15 @@ fn send_response(
                 bytes.len()
             );
             stream.write_all(&bytes)?;
+            body_sent += bytes.len() as u64;
+        }
+        ResponseBody::StaticBinary(bytes) => {
+            trace!(
+                "{} Sending {} bytes of static binary data",
+                log_prefix,
+                bytes.len()
+            );
+            stream.write_all(bytes)?;
             body_sent += bytes.len() as u64;
         }
         ResponseBody::Stream(mut file_details) => {
