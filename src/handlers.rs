@@ -170,7 +170,7 @@ pub fn create_health_check_response() -> Response {
 pub fn handle_static_asset(path: &str) -> Result<Response, AppError> {
     use crate::templates::TemplateEngine;
     let asset_path = path.strip_prefix("/_irondrop/static/").unwrap_or("");
-    let engine = TemplateEngine::new();
+    let engine = TemplateEngine::global();
     let (content, content_type) = engine
         .get_static_asset(asset_path)
         .ok_or(AppError::NotFound)?;
@@ -193,7 +193,7 @@ pub fn handle_static_asset(path: &str) -> Result<Response, AppError> {
 pub fn handle_favicon_request(path: &str) -> Result<Response, AppError> {
     use crate::templates::TemplateEngine;
     let favicon_path = path.strip_prefix('/').unwrap_or(path);
-    let engine = TemplateEngine::new();
+    let engine = TemplateEngine::global();
     let (content, content_type) = engine.get_favicon(favicon_path).ok_or(AppError::NotFound)?;
     Ok(Response {
         status_code: 200,
@@ -254,7 +254,7 @@ pub fn handle_upload_form_request(
     let query_params = parse_query_params(&request.path);
     let upload_to = query_params.get("upload_to").map(String::as_str);
 
-    let engine = crate::templates::TemplateEngine::new();
+    let engine = crate::templates::TemplateEngine::global();
     let path = upload_to.unwrap_or("/");
 
     let html = engine.render_upload_page(path)?;
@@ -367,7 +367,7 @@ pub fn handle_monitor_request(
     }
 
     // Return HTML response
-    let engine = crate::templates::TemplateEngine::new();
+    let engine = crate::templates::TemplateEngine::global();
     match engine.render_monitor_page() {
         Ok(html) => Ok(Response {
             status_code: 200,

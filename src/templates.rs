@@ -5,6 +5,7 @@
 use crate::error::AppError;
 use log::{debug, trace};
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 // Embed templates at compile time
 // Base template
@@ -50,8 +51,10 @@ const VIDEO_ICON_SVG: &str = include_str!("../templates/directory/video_icon.svg
 
 /// Template loader and renderer for modular HTML templates
 pub struct TemplateEngine {
-    templates: HashMap<String, String>,
+    templates: HashMap<&'static str, &'static str>,
 }
+
+static TEMPLATE_ENGINE: OnceLock<TemplateEngine> = OnceLock::new();
 
 impl Default for TemplateEngine {
     fn default() -> Self {
@@ -62,32 +65,25 @@ impl Default for TemplateEngine {
 impl TemplateEngine {
     /// Create a new template engine with embedded templates
     pub fn new() -> Self {
-        let mut templates = HashMap::new();
+        let mut templates: HashMap<&'static str, &'static str> = HashMap::new();
 
         // Load base template
-        templates.insert("base".to_string(), BASE_HTML.to_string());
+        templates.insert("base", BASE_HTML);
 
         // Load content templates
-        templates.insert(
-            "directory_content".to_string(),
-            DIRECTORY_CONTENT_HTML.to_string(),
-        );
-        templates.insert("error_content".to_string(), ERROR_CONTENT_HTML.to_string());
-        templates.insert(
-            "upload_content".to_string(),
-            UPLOAD_CONTENT_HTML.to_string(),
-        );
-        templates.insert(
-            "upload_success".to_string(),
-            UPLOAD_SUCCESS_HTML.to_string(),
-        );
-        templates.insert("upload_form".to_string(), UPLOAD_FORM_HTML.to_string());
-        templates.insert(
-            "monitor_content".to_string(),
-            MONITOR_CONTENT_HTML.to_string(),
-        );
+        templates.insert("directory_content", DIRECTORY_CONTENT_HTML);
+        templates.insert("error_content", ERROR_CONTENT_HTML);
+        templates.insert("upload_content", UPLOAD_CONTENT_HTML);
+        templates.insert("upload_success", UPLOAD_SUCCESS_HTML);
+        templates.insert("upload_form", UPLOAD_FORM_HTML);
+        templates.insert("monitor_content", MONITOR_CONTENT_HTML);
 
         Self { templates }
+    }
+
+    /// Global singleton instance to avoid per-request allocations
+    pub fn global() -> &'static Self {
+        TEMPLATE_ENGINE.get_or_init(Self::new)
     }
 
     /// Get appropriate icon SVG based on file extension
@@ -372,7 +368,7 @@ impl TemplateEngine {
             AppError::InternalServerError(format!("Template '{template_name}' not found"))
         })?;
 
-        let mut rendered = template.clone();
+        let mut rendered = (*template).to_string();
 
         // Handle conditional blocks {{#if VARIABLE}}...{{/if}}
         rendered = self.process_conditionals(&rendered, variables);

@@ -91,7 +91,7 @@ pub fn generate_directory_listing(
 
     debug!("Creating template engine and rendering directory listing");
     // Create template engine with embedded templates
-    let engine = TemplateEngine::new();
+    let engine = TemplateEngine::global();
 
     // Render using template with conditional upload button
     trace!(

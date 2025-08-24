@@ -648,22 +648,19 @@ fn send_response(
         response_str.push_str(&format!("{key}: {value}\r\n"));
     }
 
-    // Calculate and add content length for text and binary responses
-    let body_bytes = match &response.body {
+    // Calculate and add content length for text and binary responses without copying
+    match &response.body {
         ResponseBody::Text(text) => {
             let bytes = text.as_bytes();
             response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
-            bytes.to_vec()
         }
         ResponseBody::Binary(bytes) => {
             response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
-            bytes.clone()
         }
         ResponseBody::Stream(file_details) => {
             response_str.push_str(&format!("Content-Length: {}\r\n", file_details.size));
-            Vec::new() // Will be handled separately
         }
-    };
+    }
 
     response_str.push_str("\r\n");
 
@@ -678,14 +675,20 @@ fn send_response(
     let mut body_sent: u64 = 0;
     debug!("{} Starting body transmission", log_prefix);
     match response.body {
-        ResponseBody::Text(_) | ResponseBody::Binary(_) => {
+        ResponseBody::Text(text) => {
+            let bytes = text.as_bytes();
+            trace!("{} Sending {} bytes of text data", log_prefix, bytes.len());
+            stream.write_all(bytes)?;
+            body_sent += bytes.len() as u64;
+        }
+        ResponseBody::Binary(bytes) => {
             trace!(
-                "{} Sending {} bytes of text/binary data",
+                "{} Sending {} bytes of binary data",
                 log_prefix,
-                body_bytes.len()
+                bytes.len()
             );
-            stream.write_all(&body_bytes)?;
-            body_sent += body_bytes.len() as u64;
+            stream.write_all(&bytes)?;
+            body_sent += bytes.len() as u64;
         }
         ResponseBody::Stream(mut file_details) => {
             trace!(

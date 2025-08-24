@@ -897,7 +897,7 @@ impl DirectUploadHandler {
         );
 
         // Use the template engine
-        let template_engine = TemplateEngine::new();
+        let template_engine = TemplateEngine::global();
         let response_body = template_engine.render_upload_success(
             1, // one file uploaded
             &format_bytes(file.size),
