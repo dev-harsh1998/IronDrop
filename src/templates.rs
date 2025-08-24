@@ -391,7 +391,8 @@ impl TemplateEngine {
             if i + 6 <= bytes.len() && bytes[i..].starts_with(b"{{#if ") {
                 let var_start = i + 6;
                 // Find closing b"}}" for variable name
-                if let Some(close_pos_rel) = bytes[var_start..].windows(2).position(|w| w == b"}}") {
+                if let Some(close_pos_rel) = bytes[var_start..].windows(2).position(|w| w == b"}}")
+                {
                     let var_end = var_start + close_pos_rel;
                     // SAFETY: variable names are ASCII in our templates; validate UTF-8
                     let var_name = std::str::from_utf8(&bytes[var_start..var_end]).unwrap_or("");
@@ -428,7 +429,11 @@ impl TemplateEngine {
         variables: &HashMap<String, String>,
     ) -> String {
         // Heuristic capacity: base + total value sizes capped
-        let extra: usize = variables.values().map(|v| v.len()).sum::<usize>().min(64 * 1024);
+        let extra: usize = variables
+            .values()
+            .map(|v| v.len())
+            .sum::<usize>()
+            .min(64 * 1024);
         let mut out: Vec<u8> = Vec::with_capacity(input.len() + extra);
         let bytes = input.as_bytes();
         let mut i = 0;
