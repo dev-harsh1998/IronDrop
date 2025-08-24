@@ -2,7 +2,7 @@
 
 ## Overview
 
-IronDrop is a lightweight, high-performance file server written in Rust featuring bidirectional file sharing, modular template architecture, and professional UI design. This document provides a comprehensive overview of the system architecture, component interactions, and implementation details.
+IronDrop is a file server written in Rust. It uses only the standard library for networking and file I/O (no external HTTP framework). This document provides an overview of the system architecture, component interactions, and implementation details.
 
 ## System Architecture
 
@@ -27,7 +27,7 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
                                 ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Downloads     │    │     Uploads     │    │   Search Engine │
-│ Range Requests  │    │ 10GB + Concurrent│    │Ultra-Low Memory │
+│ Range Requests  │    │ Direct Streaming │    │Ultra-compact    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                         │
                                                         ▼
@@ -59,7 +59,7 @@ IronDrop is a lightweight, high-performance file server written in Rust featurin
 - **`upload.rs`**: Direct upload handler with memory/disk streaming and atomic operations
 
 ### 4. **Search System**
-- **`search.rs`**: Ultra-compact search engine with hierarchical path storage and string pooling
+- **`search.rs`**: Search system; ultra-compact mode with hierarchical path storage and string pooling
 
 ### 5. **Template System**
 - **`templates.rs`**: Native template engine with embedded assets and variable interpolation

@@ -1,17 +1,16 @@
-<div align="center">
-  <img src="irondrop-logo.png" alt="IronDrop Logo" width="200"/>
-  
-  # IronDrop
-  [![Rust CI](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml/badge.svg)](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml)
-</div>
+# IronDrop documentation index
 
-A lightweight, high-performance file server written in Rust featuring **bidirectional file sharing**, **modular template architecture**, and **professional UI design**. Offers secure upload/download capabilities with advanced monitoring, comprehensive security features, and a modern web interface. Every component has been designed for clarity, reliability, and developer friendliness with **zero external dependencies**.
+IronDrop is a lightweight file server written in Rust. It focuses on:
+- stdlib-only networking and file I/O (no external HTTP framework or async runtime)
+- a single self-contained binary with embedded templates
+- optional uploads with direct-to-disk streaming
+- a search engine with an ultra-compact mode suitable for large trees (tested around 10M entries)
 
 ## 📚 Documentation Overview
 
 This documentation suite provides complete coverage of IronDrop's architecture, API, deployment, and specialized features. Each document is designed to serve specific audiences and use cases.
 
-**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
+Recent updates include direct streaming uploads and the ultra-compact search mode.
 
 ## 📖 Core Documentation
 
@@ -27,7 +26,7 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 - Security architecture and defense-in-depth implementation
 - Performance characteristics and scalability considerations
 - Template system design and asset pipeline
-- Testing architecture with 62 comprehensive tests across 15 test files
+- Testing architecture with 106 comprehensive tests across 15 test files
 
 **Key Sections:**
 - Core module breakdown with line counts and responsibilities
@@ -92,7 +91,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 **Purpose**: Comprehensive testing suite documentation and validation procedures
 
 **Contents:**
-- **Complete Test Coverage**: 62 tests across 15 test files covering all functionality
+- **Complete Test Coverage**: 106 tests across 15 test files covering all functionality
 - **Test Categories**: Core server, integration, edge cases, memory optimization, performance, stress testing, streaming
 - **Security Testing**: Path traversal prevention, input validation, authentication mechanisms
 - **Performance Benchmarks**: Memory efficiency targets, upload speed thresholds, stress test metrics
@@ -340,7 +339,7 @@ IronDrop v2.5 introduces a **production-ready file upload system** with enterpri
 - **⚡ Performance**: Handles unlimited file sizes with constant memory usage and concurrent processing
 - **🎨 Professional UI**: Integrated upload interface accessible at `/upload` with real-time feedback
 - **🛡️ Robust Validation**: Multi-layer security including extension filtering, size limits, and malformed data rejection
-- **🧪 Battle-Tested**: 59 tests across 13 test files covering edge cases, security scenarios, and performance stress testing
+- **🧪 Battle-Tested**: 106 tests across 15 test files covering edge cases, security scenarios, and performance stress testing
 
 ### 🔍 **Advanced Search System** (New in v2.5)
 IronDrop v2.5 introduces a **dual-mode search engine** optimized for directories of any size:
@@ -626,7 +625,7 @@ Every module is documented and formatted with `cargo fmt` and `clippy -- -D warn
 
 ### Comprehensive Test Suite
 
-The project includes **59 comprehensive tests across 13 test files** covering all aspects of functionality, with complete upload system validation:
+The project includes **106 comprehensive tests across 15 test files** covering all aspects of functionality, with complete upload system validation:
 
 ```bash
 # Run all tests (covers upload, download, security, concurrency)

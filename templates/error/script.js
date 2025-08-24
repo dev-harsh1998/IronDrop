@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-redirect after timeout (optional)
+    // Auto-redirect after timeout
     const urlParams = new URLSearchParams(window.location.search);
     const autoRedirect = urlParams.get('redirect');
     
@@ -51,16 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
     }
     
-    // Enhanced error reporting (optional)
-    const errorCode = document.querySelector('.error-code').textContent;
-    const errorData = {
-        code: errorCode,
-        path: window.location.pathname,
-        timestamp: new Date().toISOString(),
-        userAgent: navigator.userAgent
-    };
-    
-    console.log('Error Details:', errorData);
+    // Minimal error reporting (no console logging)
     
     // Add ripple effect to back button
     const backLink = document.querySelector('.back-link');

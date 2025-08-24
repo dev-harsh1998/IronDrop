@@ -246,6 +246,47 @@
     border: 1px solid rgba(248, 113, 113, 0.2);
 }
 
+/* Memory dropdown styles */
+.memory-dropdown {
+    margin-top: var(--space-md);
+}
+
+.dropdown-toggle {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: #b8dafc;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.dropdown-toggle[aria-expanded="true"] {
+    border-color: #9cc8ff;
+}
+
+.dropdown-content {
+    margin-top: 8px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.9rem;
+}
+
+/* Generic metric dropdown container */
+.metric-dropdown {
+    margin-top: var(--space-md);
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
     .monitor-grid {

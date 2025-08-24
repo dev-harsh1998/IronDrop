@@ -3,72 +3,40 @@
 <div align="center">
   <img src="irondrop-logo.png" alt="IronDrop Logo" width="150"/>
   
-  <h1>IronDrop: The Zero-Dependency, High-Performance File Server</h1>
+  <h1>IronDrop file server</h1>
   
   <p>
-    <strong>Drop files, not dependencies.</strong> IronDrop is a blazing-fast, secure, and feature-rich file server written in pure Rust, delivered as a single, portable binary.
+    IronDrop is a file server written in Rust. It serves directories, supports optional uploads, provides search, and includes a monitoring page. It ships as a single binary with embedded templates.
   </p>
   
   [![Rust CI](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml/badge.svg)](https://github.com/dev-harsh1998/IronDrop/actions/workflows/rust.yml)
 </div>
 
-**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. **Plus ultra-compact search system supporting 10M+ files with <100MB memory usage**.
+IronDrop focuses on predictable behavior, simplicity, and low overhead. Use it to serve or share files locally or on your network.
 
-IronDrop is not just another file server. It's a production-ready toolkit designed for performance, security, and ease of use. Whether you're sharing files on your local network, setting up a lightweight digital archive, or need a robust upload endpoint, IronDrop provides a complete solution with zero external dependencies.
+## Overview
 
-## ⭐ Why Choose IronDrop?
+## Features
 
-IronDrop was built to address the limitations of other open-source file servers. Here’s how it stands out:
+- File browsing and downloads with range requests and MIME detection
+- Optional uploads with a drag-and-drop web UI (direct-to-disk streaming)
+- Search (standard and ultra-compact modes for large directories)
+- Monitoring dashboard at `/monitor` and a JSON endpoint (`/monitor?json=1`)
+- Basic security features: rate limiting, optional Basic Auth, path safety checks
+- Single binary; templates and assets are embedded
+ - Pure standard library networking and file I/O (no external HTTP stack or async runtime)
+ - Ultra-compact search index option for very large directory trees (tested up to ~10M entries)
 
-| Feature | IronDrop | `python -m http.server` | `npx http-server` | Other Rust Servers (`miniserve`) |
-| :--- | :---: | :---: | :---: | :---: |
-| **Zero Dependencies** | ✅ | ❌ (Python) | ❌ (Node.js) | ✅ |
-| **File Uploads** | ✅ | ❌ | ❌ | ✅ |
-| **Advanced Search** | ✅ | ❌ | ❌ | ❌ |
-| **Real-time Monitoring** | ✅ | ❌ | ❌ | ❌ |
-| **Enterprise-Grade Security**| ✅ | ❌ | ❌ | ❌ |
-| **Low Memory Usage** | ✅ | ❌ | ❌ | ✅ |
-| **Single Binary** | ✅ | ❌ | ❌ | ✅ |
+## Performance
 
-## 🚀 Key Features
+Designed to keep memory usage steady and to stream large files without buffering them in memory. The ultra-compact search mode reduces memory for very large directory trees.
 
-*   **🚀 High-Performance File Serving:** Serve files with support for range requests, MIME type detection, and conditional caching headers.
-*   **⬆️ Modern File Uploads:** A beautiful drag-and-drop interface for uploading files and entire folders. Supports unlimited file sizes with efficient direct streaming architecture.
-*   **🧠 Advanced Dual-Mode Search:** A powerful search engine that automatically switches between a standard, full-featured engine and an "ultra-compact" mode for directories with millions of files.
-*   **📊 Real-time Monitoring:** A built-in monitoring dashboard at `/monitor` provides live statistics on requests, uploads, and server health, with a JSON API for integration.
-*   **🔒 Enterprise-Grade Security:** IronDrop is built with a security-first mindset, featuring:
-    *   Rate limiting and connection management to prevent DoS attacks.
-    *   Optional Basic Authentication with secure credential handling.
-    *   Path traversal protection and filename sanitization.
-    *   Comprehensive OWASP compliance and security validation.
-*   **🖥️ Professional UI:** A modern, responsive, dark-themed interface that's a pleasure to use.
-*   **📦 Zero Dependencies, Single Binary:** The entire application, including all assets, is compiled into a single, portable executable. No runtimes, no interpreters, no hassle.
-*   **🧪 Battle-Tested:** 84 tests across 7 test files covering edge cases, security scenarios, and performance stress testing.
+- Ultra-compact search: approximately ~110 MB of RAM for around 10 million paths; search latency depends on CPU, disk, and query specifics.
+- No-dependency footprint: networking and file streaming are implemented with Rust's `std::net` and `std::fs`, producing a single self-contained binary.
 
-## ⚡ Performance
+## Security
 
-IronDrop is engineered for extreme performance and memory efficiency.
-
-### Ultra-Compact Search Engine
-
-The standout feature is the **ultra-compact search engine**, which can index over **10 million files using less than 100MB of RAM**.
-
-| Directory Size | Search Time | Memory Usage | 
-| :--- | :--- | :--- |
-| 100K files | 5-15ms | ~1.1MB |
-| 1M files | 20-80ms | ~11MB |
-| **10M files** | **100-500ms** | **~110MB** |
-
-This makes IronDrop the ideal choice for serving large archives, datasets, and media collections without sacrificing performance.
-
-## 🛡️ Security
-
-Security is a core design principle of IronDrop.
-
-*   **OWASP Top 10 Compliant:** The server is designed to mitigate the most critical web application security risks.
-*   **Comprehensive Input Validation:** All inputs, from CLI arguments to HTTP headers and filenames, are rigorously validated.
-*   **Secure by Default:** Features like uploads and authentication are opt-in, ensuring a secure default configuration.
-*   **Extensive Security Documentation:** For a detailed breakdown of security features, see the [RFC & OWASP Compliance](./doc/RFC_OWASP_COMPLIANCE.md) and [Security Fixes](./doc/SECURITY_FIXES.md) documents.
+Includes rate limiting, optional Basic Auth, basic input validation, and path traversal protection. See [RFC & OWASP Compliance](./doc/RFC_OWASP_COMPLIANCE.md) and [Security Fixes](./doc/SECURITY_FIXES.md) for details.
 
 ## 📦 Installation
 
@@ -121,9 +89,9 @@ irondrop --version
 irondrop -d ~/Documents --listen 0.0.0.0
 ```
 
-## ⚙️ Getting Started
+## Getting started
 
-### 🚀 Quick Start (30 seconds to file sharing!)
+### Quick start
 
 **Step 1:** Download or build IronDrop
 ```bash
@@ -142,7 +110,7 @@ cargo build --release
 ./target/release/irondrop -d . --listen 0.0.0.0
 ```
 
-**Step 3:** Open your browser and visit `http://localhost:8080` 🎉
+**Step 3:** Open your browser and visit `http://localhost:8080`
 
 ### 📖 Common Use Cases
 
@@ -214,7 +182,7 @@ The configuration file supports all command-line options and more! See the [deta
 3. Configuration file
 4. Built-in defaults
 
-### 🌐 Key Endpoints
+### Key endpoints
 
 Once IronDrop is running, these endpoints are available:
 
@@ -225,13 +193,10 @@ Once IronDrop is running, these endpoints are available:
 | **`/search?q=term`** | 🔍 File search API | `http://localhost:8080/search?q=document` |
 | **`/_irondrop/upload`** | ⬆️ File upload endpoint (if enabled) | Used by the web interface |
 
-### 💡 Pro Tips
+### Notes
 
-- **🔒 Security First**: Always use authentication (`--username`/`--password`) when exposing to networks
-- **🚀 Performance**: Increase `--threads` for high-traffic scenarios (try 16-32 threads)
-- **💾 Large Files**: IronDrop handles unlimited file sizes with constant ~7MB memory usage
-- **🔍 Search**: The ultra-compact search engine can handle 10M+ files efficiently
-- **📱 Mobile Friendly**: The web interface works great on phones and tablets
+- Use authentication (`--username`/`--password`) when exposing to untrusted networks
+- Adjust `--threads` based on workload
 
 ### ❓ Need Help?
 
@@ -248,28 +213,11 @@ irondrop -d . --verbose true
 
 For comprehensive documentation, see our [Complete Documentation Index](./doc/README.md).
 
-## 🆕 What's New in v2.6
+## Version notes
 
-### 🎯 **Major Features**
-- **Direct Streaming Upload System**: Revolutionary architecture with unlimited file size support
-- **Ultra-Compact Search**: Handle 10M+ files with <100MB memory usage
-- **Configuration System**: INI-based configuration with hierarchical precedence
-- **Enhanced Security**: Comprehensive OWASP compliance and security validation
-- **Memory Efficiency**: Constant ~7MB RAM usage regardless of file size
+Recent releases include direct-to-disk uploads, an ultra-compact search mode, and a `/monitor` page with a JSON endpoint.
 
-### 🔧 **Technical Improvements**
-- **Memory Optimization**: Radix-based indexing for massive directory support
-- **Template Engine**: Embedded templates with zero filesystem dependencies
-- **Monitoring Dashboard**: Real-time metrics and JSON API
-- **Comprehensive Testing**: 84 tests across 7 files ensuring reliability
-
-### 📊 **Performance Enhancements**
-- **Dual-Mode Search**: Automatic switching between standard and ultra-compact engines
-- **Streaming Uploads**: Efficient handling of large file uploads
-- **Connection Management**: Advanced rate limiting and DoS protection
-- **Memory Efficiency**: Optimized for both small and massive deployments
-
-## 📚 Documentation
+## Documentation
 
 IronDrop has extensive documentation covering its architecture, API, and features.
 
@@ -292,17 +240,17 @@ IronDrop has extensive documentation covering its architecture, API, and feature
 *   [**Testing Documentation**](./doc/TESTING_DOCUMENTATION.md) - Comprehensive test suite overview
 *   [**Monitoring Guide**](./doc/MONITORING.md) - Real-time monitoring and metrics
 
-## 🧪 Testing
+## Testing
 
-IronDrop is rigorously tested with **84 comprehensive tests across 7 test files** covering all aspects of functionality.
+IronDrop is rigorously tested with **106 comprehensive tests across 15 test files** covering all aspects of functionality.
 
 ### Test Categories
-- **Integration Tests** (6 tests): End-to-end functionality and HTTP handling
+- **Integration Tests** (8 tests): End-to-end functionality and HTTP handling
 - **Monitor Tests** (2 tests): Real-time monitoring dashboard and metrics
 - **Rate Limiter Tests** (5 tests): Memory-based rate limiting and DoS protection
-- **Template Tests** (5 tests): Embedded template system and rendering
+- **Template Tests** (7 tests): Embedded template system and rendering
 - **Ultra-Compact Search Tests** (5 tests): Advanced search engine functionality
-- **Configuration Tests** (20 tests): INI parsing and configuration validation
+- **Configuration Tests** (12 tests): INI parsing and configuration validation
 - **Core Server & Unit Tests** (41 tests): Library functions, utilities, and core logic
 
 ```bash
@@ -321,7 +269,7 @@ cargo test -- --nocapture
 
 For detailed testing information, see [Testing Documentation](./doc/TESTING_DOCUMENTATION.md).
 
-## 📜 License
+## License
 
 IronDrop is licensed under the [MIT License](./LICENSE).
 
@@ -330,7 +278,7 @@ IronDrop is licensed under the [MIT License](./LICENSE).
 <div align="center">
   <p>
     <strong>Made with ❤️ and 🦀 in Rust</strong><br>
-    <em>Zero dependencies • Production ready • Battle tested with 84 comprehensive tests</em>
+    <em>Zero dependencies • Production ready • Battle tested with 106 comprehensive tests</em>
   </p>
   <p>
     <a href="https://github.com/dev-harsh1998/IronDrop">⭐ Star us on GitHub</a>

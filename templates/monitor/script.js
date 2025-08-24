@@ -1,21 +1,13 @@
 // SPDX-License-Identifier: MIT
 // Monitor Page JavaScript - Real-time metrics with Chart.js support
 
-// Debug variables to track chart status
 let chartJsLoaded = false;
 let chartsInitialized = false;
-let dataPointsCollected = 0;
 
 // Check if Chart.js loaded correctly
 window.addEventListener('load', function() {
-  if (typeof Chart === 'undefined') {
-    console.error("Chart.js failed to load");
-    updateStatus('error', 'Error: Chart.js failed to load');
-    chartJsLoaded = false;
-  } else {
-    console.log("Chart.js loaded successfully");
-    chartJsLoaded = true;
-  }
+  chartJsLoaded = typeof Chart !== 'undefined';
+  if (!chartJsLoaded) updateStatus('error', 'Error: Chart.js failed to load');
 });
 
 // Historical data storage - will be populated over time
@@ -35,6 +27,10 @@ const historyData = {
     successful: [],
     failed: [],
     bytes: []
+  },
+  transfer: {
+    uploadedMB: [],
+    downloadedMB: []
   }
 };
 
@@ -42,7 +38,7 @@ const historyData = {
 const MAX_HISTORY_POINTS = 20;
 
 // Chart instances
-let requestsChart, memoryChart, uploadsChart;
+let requestsChart, memoryChart, dataChart;
 
 // Utility functions
 function humanBytes(bytes) {
@@ -109,25 +105,14 @@ function setLoadingState(isLoading) {
 
 // Update charts with new data
 function updateCharts() {
-    console.log("Updating charts with history length:", historyData.timestamps.length);
-    dataPointsCollected = historyData.timestamps.length;
-    
     if (!historyData.timestamps.length) {
-        console.log("No history data yet, skipping chart update");
         return;
     }
     
-    if (!requestsChart || !memoryChart || !uploadsChart) {
-        console.error("Charts not initialized");
-        return;
-    }
+    if (!requestsChart || !memoryChart || !dataChart) { return; }
     
     // Hide all fallback texts once charts are working
-    document.querySelectorAll('.chart-fallback').forEach(el => {
-        el.style.display = 'none';
-    });
-    
-    console.log("Chart fallback messages hidden");
+    document.querySelectorAll('.chart-fallback').forEach(el => { el.style.display = 'none'; });
     
     // Format time labels for display
     const timeLabels = historyData.timestamps.map(time => {
@@ -150,13 +135,11 @@ function updateCharts() {
         memoryChart.update();
     }
     
-    // Update Uploads Chart
-    uploadsChart.data.labels = timeLabels;
-    uploadsChart.data.datasets[0].data = historyData.uploads.total;
-    uploadsChart.data.datasets[1].data = historyData.uploads.successful;
-    uploadsChart.data.datasets[2].data = historyData.uploads.failed;
-    uploadsChart.data.datasets[3].data = historyData.uploads.bytes.map(b => b / 1024 / 1024);
-    uploadsChart.update();
+    // Update Data Transferred Chart
+    dataChart.data.labels = timeLabels;
+    dataChart.data.datasets[0].data = historyData.transfer.downloadedMB;
+    dataChart.data.datasets[1].data = historyData.transfer.uploadedMB;
+    dataChart.update();
 }
 
 // Add new data points to history
@@ -183,6 +166,9 @@ function addToHistory(data) {
     historyData.uploads.successful.push(data.uploads.successful_uploads);
     historyData.uploads.failed.push(data.uploads.failed_uploads);
     historyData.uploads.bytes.push(data.uploads.upload_bytes);
+    // Add transfer series (MB)
+    historyData.transfer.uploadedMB.push((data.uploads.upload_bytes || 0) / 1024 / 1024);
+    historyData.transfer.downloadedMB.push((data.downloads.bytes_served || 0) / 1024 / 1024);
     
     // Trim history if needed
     if (historyData.timestamps.length > MAX_HISTORY_POINTS) {
@@ -196,6 +182,8 @@ function addToHistory(data) {
         historyData.uploads.successful.shift();
         historyData.uploads.failed.shift();
         historyData.uploads.bytes.shift();
+        historyData.transfer.uploadedMB.shift();
+        historyData.transfer.downloadedMB.shift();
     }
 }
 
@@ -204,58 +192,41 @@ async function loadMetrics() {
     setLoadingState(true);
 
     try {
-        // Log the current fetch URL for debugging
-        console.log("Fetching metrics from: /monitor?json=1");
         const response = await fetch('/monitor?json=1');
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        // Debug the raw response
         const rawText = await response.text();
-        console.log("Raw response:", rawText);
         
-        // Parse the JSON (separate step for better debugging)
+        // Parse the JSON
         let data;
         try {
             data = JSON.parse(rawText);
-            console.log("Data parsed successfully:", data);
         } catch (parseErr) {
-            console.error("JSON parse error:", parseErr);
             throw new Error("Failed to parse server response: " + parseErr.message);
         }
         
-        // Update metrics tables
         updateMetrics(data);
         
-        // Update charts if Chart.js is loaded
         if (chartJsLoaded) {
             try {
                 // Ensure charts are initialized
                 if (!chartsInitialized && typeof initCharts === 'function') {
                     chartsInitialized = initCharts();
-                    if (chartsInitialized) {
-                        console.log("Charts initialized on first data load");
-                    }
                 }
                 
                 // Add data to history and update charts
                 addToHistory(data);
                 updateCharts();
-                console.log(`Charts updated with data points: ${dataPointsCollected}`);
-            } catch (chartErr) {
-                console.error("Error updating charts:", chartErr);
-            }
-        } else {
-            console.warn("Chart.js not loaded, skipping chart updates");
-        }
+            } catch (chartErr) {}
+        } else {}
         
         // Update status
         updateStatus('ok', 'Connected');
 
     } catch (error) {
-        console.error('Failed to load metrics:', error);
         updateStatus('error', `Error: ${error.message}`);
         clearMetrics();
     } finally {
@@ -272,18 +243,17 @@ function updateMetrics(data) {
         const element = document.getElementById(elementId);
         if (element) {
             element.textContent = value;
-        } else {
-            console.warn(`Element with ID '${elementId}' not found in DOM`);
         }
     }
 
-    // Request metrics
-    safeSetText('req_total', r.total);
-    safeSetText('req_success', r.successful);
-    safeSetText('req_errors', r.errors);
-
+    // Request metrics (dropdown-only now)
     const successRate = r.total ? ((r.successful / r.total) * 100).toFixed(2) + '%' : '0%';
-    safeSetText('req_success_rate', successRate);
+
+    // Request dropdown metrics
+    safeSetText('req_total_dd', r.total);
+    safeSetText('req_success_dd', r.successful);
+    safeSetText('req_errors_dd', r.errors);
+    safeSetText('req_success_rate_dd', successRate);
 
     // Download metrics
     safeSetText('bytes_served', d.bytes_served.toLocaleString());
@@ -296,23 +266,29 @@ function updateMetrics(data) {
     safeSetText('up_mb', (u.upload_bytes / 1024 / 1024).toFixed(2));
     safeSetText('avg_file_size', humanBytes(u.average_upload_size));
     safeSetText('largest_upload', humanBytes(u.largest_upload));
-    safeSetText('concurrent_uploads', u.concurrent_uploads);
-
-    // Handle potential undefined or non-numeric values
-    const avgProcessing = u.average_processing_ms;
-    const avgProcessingText = (avgProcessing && avgProcessing.toFixed) ? avgProcessing.toFixed(1) : avgProcessing;
-    safeSetText('avg_processing', avgProcessingText);
+    
 
     const successRateUpload = u.success_rate;
     const successRateUploadText = (successRateUpload && successRateUpload.toFixed) ?
         successRateUpload.toFixed(2) + '%' : successRateUpload + '%';
     safeSetText('upload_success_rate', successRateUploadText);
 
-    // Uptime metrics
-    safeSetText('uptime_secs', data.uptime_secs);
+    // Uptime metrics (pretty only)
     safeSetText('uptime_pretty', prettyUptime(data.uptime_secs));
 
-    // Memory metrics - now only handled by charts, no separate card needed
+    // Memory dropdown metrics
+    if (m) {
+        safeSetText('mem_available', m.available ? 'Yes' : 'No');
+        if (m.available) {
+            const curMb = typeof m.current_mb === 'number' ? m.current_mb : (m.current_bytes ? (m.current_bytes / 1024 / 1024) : 0);
+            const peakMb = typeof m.peak_mb === 'number' ? m.peak_mb : (m.peak_bytes ? (m.peak_bytes / 1024 / 1024) : 0);
+            safeSetText('mem_current_mb', curMb.toFixed ? curMb.toFixed(2) : curMb);
+            safeSetText('mem_peak_mb', peakMb.toFixed ? peakMb.toFixed(2) : peakMb);
+        } else {
+            safeSetText('mem_current_mb', '-');
+            safeSetText('mem_peak_mb', '-');
+        }
+    }
 }
 
 function clearMetrics() {
@@ -321,8 +297,8 @@ function clearMetrics() {
         'req_total', 'req_success', 'req_errors', 'req_success_rate',
         'bytes_served', 'mb_served',
         'up_total', 'up_success', 'up_failed', 'up_mb', 'avg_file_size', 'largest_upload',
-        'concurrent_uploads', 'avg_processing', 'upload_success_rate',
-        'uptime_secs', 'uptime_pretty'
+        'upload_success_rate',
+        'uptime_pretty'
     ];
 
     metricElements.forEach(id => {
@@ -364,13 +340,13 @@ function initCharts() {
         // Check if chart elements exist
         const requestsElement = document.getElementById('requestsChart');
         const memoryElement = document.getElementById('memoryChart');
-        const uploadsElement = document.getElementById('uploadsChart');
+        const dataElement = document.getElementById('dataChart');
         
-        if (!requestsElement || !memoryElement || !uploadsElement) {
+        if (!requestsElement || !memoryElement || !dataElement) {
             console.error("Chart elements not found in DOM:", { 
                 requests: !!requestsElement, 
                 memory: !!memoryElement, 
-                uploads: !!uploadsElement 
+                data: !!dataElement 
             });
             return false;
         }
@@ -511,64 +487,30 @@ function initCharts() {
             options: commonOptions
         });
         
-        // Uploads Chart
-        const uploadsCtx = uploadsElement.getContext('2d');
-        uploadsChart = new Chart(uploadsCtx, {
+        // Data Transferred Chart
+        const dataCtx = dataElement.getContext('2d');
+        dataChart = new Chart(dataCtx, {
             type: 'line',
             data: {
                 labels: [],
                 datasets: [
                     {
-                        label: 'Total Uploads',
+                        label: 'Downloaded (MB)',
                         data: [],
-                        borderColor: '#9CC8FF',
-                        backgroundColor: 'rgba(156, 200, 255, 0.1)',
-                        fill: false
+                        borderColor: '#60A5FA',
+                        backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                        fill: true
                     },
                     {
-                        label: 'Successful',
-                        data: [],
-                        borderColor: '#4ADE80',
-                        backgroundColor: 'rgba(74, 222, 128, 0.1)',
-                        fill: false
-                    },
-                    {
-                        label: 'Failed',
-                        data: [],
-                        borderColor: '#F87171',
-                        backgroundColor: 'rgba(248, 113, 113, 0.1)',
-                        fill: false
-                    },
-                    {
-                        label: 'Upload Size (MB)',
+                        label: 'Uploaded (MB)',
                         data: [],
                         borderColor: '#A78BFA',
                         backgroundColor: 'rgba(167, 139, 250, 0.1)',
-                        fill: false,
-                        yAxisID: 'y1'
+                        fill: true
                     }
                 ]
             },
-            options: {
-                ...commonOptions,
-                scales: {
-                    ...commonOptions.scales,
-                    y1: {
-                        position: 'right',
-                        beginAtZero: true,
-                        grid: {
-                            drawOnChartArea: false
-                        },
-                        ticks: {
-                            color: '#A78BFA',
-                            font: {
-                                family: "'Inter', sans-serif",
-                                size: 10
-                            }
-                        }
-                    }
-                }
-            }
+            options: commonOptions
         });
         
         console.log("Charts initialized successfully");
@@ -594,30 +536,7 @@ function init() {
     
     // Check if chart container exists
     const chartsContainer = document.getElementById('chartsContainer');
-    if (!chartsContainer) {
-        console.error("Charts container not found!");
-        // Try to find chart elements directly
-        const requestsChart = document.getElementById('requestsChart');
-        const memoryChart = document.getElementById('memoryChart');
-        const uploadsChart = document.getElementById('uploadsChart');
-        console.log("Direct chart element checks:", {
-            requestsChart: !!requestsChart,
-            memoryChart: !!memoryChart,
-            uploadsChart: !!uploadsChart
-        });
-    } else {
-        console.log("Charts container found with children:", chartsContainer.children.length);
-        // Log all chart canvas elements
-        const canvases = chartsContainer.querySelectorAll('canvas');
-        console.log("Canvas elements found:", canvases.length);
-        canvases.forEach((canvas, i) => {
-            console.log(`Canvas #${i} id:`, canvas.id);
-        });
-        
-        // Check fallback elements
-        const fallbacks = chartsContainer.querySelectorAll('.chart-fallback');
-        console.log("Fallback elements found:", fallbacks.length);
-    }
+    // chartsContainer presence not critical for init logging
     
     // Try to initialize charts if Chart.js is available
     if (typeof Chart !== 'undefined') {
@@ -722,8 +641,59 @@ document.addEventListener('DOMContentLoaded', function() {
     const cleanupButton = document.getElementById('cleanup_memory_btn');
     if (cleanupButton) {
         cleanupButton.addEventListener('click', performMemoryCleanup);
-        console.log('Memory cleanup button event listener attached');
+        
     } else {
-        console.warn('Memory cleanup button not found');
+        
+    }
+
+    // Memory dropdown toggle
+    const toggle = document.getElementById('memory_dropdown_toggle');
+    const content = document.getElementById('memory_dropdown_content');
+    if (toggle && content) {
+        toggle.addEventListener('click', () => {
+            const expanded = toggle.getAttribute('aria-expanded') === 'true';
+            toggle.setAttribute('aria-expanded', String(!expanded));
+            if (expanded) {
+                content.setAttribute('hidden', '');
+                toggle.textContent = 'Memory Details ▾';
+            } else {
+                content.removeAttribute('hidden');
+                toggle.textContent = 'Memory Details ▴';
+            }
+        });
+    }
+
+    // Requests dropdown toggle
+    const rToggle = document.getElementById('requests_dropdown_toggle');
+    const rContent = document.getElementById('requests_dropdown_content');
+    if (rToggle && rContent) {
+        rToggle.addEventListener('click', () => {
+            const expanded = rToggle.getAttribute('aria-expanded') === 'true';
+            rToggle.setAttribute('aria-expanded', String(!expanded));
+            if (expanded) {
+                rContent.setAttribute('hidden', '');
+                rToggle.textContent = 'Request Details ▾';
+            } else {
+                rContent.removeAttribute('hidden');
+                rToggle.textContent = 'Request Details ▴';
+            }
+        });
+    }
+
+    // Transfer dropdown toggle
+    const tToggle = document.getElementById('transfer_dropdown_toggle');
+    const tContent = document.getElementById('transfer_dropdown_content');
+    if (tToggle && tContent) {
+        tToggle.addEventListener('click', () => {
+            const expanded = tToggle.getAttribute('aria-expanded') === 'true';
+            tToggle.setAttribute('aria-expanded', String(!expanded));
+            if (expanded) {
+                tContent.setAttribute('hidden', '');
+                tToggle.textContent = 'Transfer Details ▾';
+            } else {
+                tContent.removeAttribute('hidden');
+                tToggle.textContent = 'Transfer Details ▴';
+            }
+        });
     }
 });

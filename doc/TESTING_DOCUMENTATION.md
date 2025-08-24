@@ -1,10 +1,10 @@
 # IronDrop Testing Documentation
 
-*Version 2.6 - Comprehensive Test Suite Overview*
+Version 2.6 - Test Suite Overview
 
 ## Overview
 
-IronDrop includes a comprehensive testing infrastructure with **84 tests across 7 test files** covering all aspects of functionality, security, performance, and edge cases. The test suite ensures reliability, security, and performance across all components.
+IronDrop includes a test suite covering functionality, security scenarios, and performance-related paths.
 
 ## Test Architecture
 
@@ -24,11 +24,15 @@ IronDrop includes a comprehensive testing infrastructure with **84 tests across 
 | **Core Server & Unit Tests** | `lib.rs` (unit tests) | 41 | Core functionality, HTTP handling, utilities |
 | **Configuration System** | `config_test.rs` | 12 | INI parsing, precedence, validation |
 | **Direct Upload System** | `direct_upload_test.rs` | 8 | File uploads, streaming, validation |
-| **Integration Testing** | `integration_test.rs` | 6 | Authentication, security, HTTP compliance |
+| **Integration Testing** | `integration_test.rs` | 8 | Authentication, security, HTTP compliance |
 | **Monitoring & Stats** | `monitor_test.rs` | 2 | Health endpoints, metrics tracking |
 | **Rate Limiting** | `rate_limiter_memory_test.rs` | 5 | Memory management, cleanup, limits |
-| **Template System** | `template_embedding_test.rs` | 5 | Embedded templates, static assets |
+| **Template System** | `template_embedding_test.rs`, `templates_escape_test.rs` | 7 | Embedded templates, escaping, assets |
 | **Ultra-Compact Search** | `ultra_compact_test.rs` | 5 | Memory efficiency, search performance |
+| **Middleware** | `middleware_test.rs` | 5 | Basic auth middleware |
+| **HTTP Parser** | `http_parser_test.rs` | 3 | Version, separators, chunked handling |
+| **Request Body** | `http_requestbody_test.rs` | 1 | Size and emptiness |
+| **Utilities** | `utils_test.rs`, `utils_parse_path_test.rs` | 4 | Encoding, parsing, path utilities |
 
 ## Detailed Test Coverage
 
@@ -173,7 +177,7 @@ fn test_demonstrate_memory_savings() // Compares memory usage vs alternatives
 
 ## Running Tests
 
-### Basic Test Execution
+### Basic Test Execution (current totals: 106 tests across 15 files)
 
 ```bash
 # Run all tests

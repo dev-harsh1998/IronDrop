@@ -63,6 +63,34 @@ fn test_embedded_templates_functionality() {
     );
 }
 
+#[test]
+fn test_template_engine_global_and_conditionals_unicode() {
+    use irondrop::templates::TemplateEngine;
+    let engine = TemplateEngine::global();
+
+    // Prepare a tiny ad-hoc template in the registry by rendering via base
+    // Instead, validate the public render() with an existing template that uses conditionals.
+    let mut vars = std::collections::HashMap::new();
+    vars.insert("UPLOAD_ENABLED".to_string(), "true".to_string());
+    // Include some unicode to ensure single-pass substitution is UTF-8 safe
+    vars.insert("PAGE_TITLE".to_string(), "测试 – Upload".to_string());
+    // Render a small page that includes the conditional block
+    let html = engine
+        .render_page(
+            "directory_content",
+            "测试 – Upload",
+            r#"<link rel=\"stylesheet\" href=\"/_irondrop/static/directory/styles.css\">"#,
+            r#"<script src=\"/_irondrop/static/directory/script.js\"></script>"#,
+            "",
+            &vars,
+        )
+        .expect("render ok");
+
+    assert!(html.contains("测试 – Upload"));
+    // Header actions include a link only when UPLOAD_ENABLED=true (in base header)
+    assert!(html.contains("class=\"header-actions\""));
+}
+
 /// Test static asset retrieval
 #[test]
 fn test_embedded_static_assets() {

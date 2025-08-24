@@ -4,7 +4,7 @@ This document describes the simplified direct upload system that replaced the mu
 
 ## Overview
 
-IronDrop v2.5 has **removed multipart parsing** in favor of a direct binary upload system that provides superior performance, reliability, and memory efficiency. The system handles raw binary uploads with constant memory usage.
+IronDrop v2.5 removed multipart parsing in favor of a direct binary upload system focused on predictable memory use and simpler processing. The system handles raw binary uploads with bounded memory.
 
 **Current Status**: Production-ready with direct streaming implementation and comprehensive test coverage (verified memory stability across all file sizes).
 
@@ -13,8 +13,8 @@ IronDrop v2.5 has **removed multipart parsing** in favor of a direct binary uplo
 ### Direct Upload Benefits
 
 1. **Simplified Architecture** - No complex multipart parsing required
-2. **Constant Memory Usage** - RAM stays at ~7MB regardless of file size  
-3. **Unlimited File Sizes** - Removed artificial 10GB restrictions
+2. **Bounded Memory** - RAM stays roughly constant regardless of file size  
+3. **Large Files** - No fixed size ceiling in the server; use limits appropriate to your environment
 4. **Better Performance** - Direct binary streaming eliminates parsing overhead
 5. **Higher Reliability** - Fewer failure modes without complex multipart logic
 
@@ -83,10 +83,9 @@ let cli = Cli {
 
 ### Performance Characteristics
 
-- **Memory Variance**: 0MB across all file sizes
-- **Upload Speeds**: Up to 200MB/s for large files
-- **Scalability**: Linear performance with file size
-- **Reliability**: 100% data integrity with MD5 verification
+- Memory usage is effectively bounded by streaming
+- Throughput depends on disk and network characteristics
+- Integrity should be validated according to your workflow
 
 ## Migration from Multipart
 

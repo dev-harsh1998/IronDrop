@@ -1,6 +1,6 @@
 # IronDrop Template & UI System Documentation (v2.6)
 
-**Status**: ✅ Production Ready (v2.6) - Updated with Light Button System & Card Unification
+**Status**: Production ready (v2.6)
 
 **Audience**: Backend & Frontend Developers, UI/UX Engineers, Integrators
 
@@ -10,10 +10,10 @@
 
 ## 1. Overview
 
-IronDrop ships with a **bespoke, zero‑dependency template engine** designed for:
+IronDrop ships with a zero‑dependency template engine designed for:
 
 - Consistent professional UI across directory listings, upload interface, and error pages
-- Fast (sub‑millisecond) variable interpolation with optional conditional blocks
+- Fast variable interpolation with optional conditional blocks
 - Embedded assets (HTML/CSS/JS + favicons) compiled directly into the binary for portable deployment
 - Secure rendering with HTML escaping & controlled static asset routing
 

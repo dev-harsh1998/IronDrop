@@ -377,8 +377,8 @@ GET /api/search?q=readme&path=/docs
 
 **Performance Notes:**
 - **Dual-Mode Search Engine**: Automatically selects Standard mode (≤100K files) or Ultra-Compact mode (>100K files)
-- **Standard Mode**: Fast in-memory search with full feature set
-- **Ultra-Compact Mode**: Memory-optimized for 10M+ files with constant ~7MB RAM usage
+- **Standard Mode**: In-memory search with full feature set
+- **Ultra-Compact Mode**: Memory-optimized for very large trees (around ~110MB RAM for ~10M entries)
 - **Real-time Indexing**: No pre-indexing required, searches current filesystem state
 - **Search Types**: Substring matching, fuzzy matching, and token-based search
 - **Result Highlighting**: Matched portions highlighted in results

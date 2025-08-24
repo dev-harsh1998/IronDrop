@@ -1,11 +1,9 @@
 <!-- SPDX-License-Identifier: MIT -->
-<!-- Monitor Header -->
 <div class="page-header">
     <h1 class="page-title">Server Monitor</h1>
     <p class="page-subtitle">Real-time server metrics and statistics</p>
 </div>
 
-<!-- Status Display -->
 <div class="card monitor-status">
     <div id="status" class="status-indicator">
         <span class="status-text">Loading...</span>
@@ -13,15 +11,28 @@
     <div class="last-updated">
         Last updated: <span id="last_updated">-</span> • Refreshes every 4s
     </div>
+    <div class="status-uptime">
+        Uptime: <span id="uptime_pretty">-</span>
+    </div>
 </div>
 
-<!-- Chart Section -->
 <div class="charts-container" id="chartsContainer">
   <div class="chart-card">
     <h2>Server Activity</h2>
     <div class="chart-wrapper">
       <canvas id="requestsChart"></canvas>
       <div class="chart-fallback">Loading chart data...</div>
+    </div>
+    <div class="metric-dropdown">
+      <button id="requests_dropdown_toggle" class="dropdown-toggle" aria-expanded="false">
+        Request Details ▾
+      </button>
+      <div id="requests_dropdown_content" class="dropdown-content" hidden>
+        <div class="metric-row">Total: <span id="req_total_dd">-</span></div>
+        <div class="metric-row">Successful: <span id="req_success_dd">-</span></div>
+        <div class="metric-row">Errors: <span id="req_errors_dd">-</span></div>
+        <div class="metric-row">Success Rate: <span id="req_success_rate_dd">-</span></div>
+      </div>
     </div>
   </div>
   <div class="chart-card">
@@ -36,71 +47,41 @@
       <div class="chart-fallback">Loading chart data...</div>
     </div>
     <div id="cleanup_status" class="cleanup-status"></div>
+    <div class="memory-dropdown">
+      <button id="memory_dropdown_toggle" class="dropdown-toggle" aria-expanded="false">
+        Memory Details ▾
+      </button>
+      <div id="memory_dropdown_content" class="dropdown-content" hidden>
+        <div class="metric-row">Tracking Available: <span id="mem_available">-</span></div>
+        <div class="metric-row"><span>Current:</span> <span><span id="mem_current_mb">-</span> MB</span></div>
+        <div class="metric-row"><span>Peak:</span> <span><span id="mem_peak_mb">-</span> MB</span></div>
+      </div>
+    </div>
   </div>
   <div class="chart-card full-width">
-    <h2>Upload Stats</h2>
+    <h2>Data Transferred</h2>
     <div class="chart-wrapper">
-      <canvas id="uploadsChart"></canvas>
+      <canvas id="dataChart"></canvas>
       <div class="chart-fallback">Loading chart data...</div>
+    </div>
+    <div class="metric-dropdown">
+      <button id="transfer_dropdown_toggle" class="dropdown-toggle" aria-expanded="false">
+        Transfer Details ▾
+      </button>
+      <div id="transfer_dropdown_content" class="dropdown-content" hidden>
+        <div class="metric-title" style="color:#b8dafc; margin: 4px 0;">Download Statistics</div>
+        <div class="metric-row">Bytes Served: <span id="bytes_served">-</span></div>
+        <div class="metric-row">MB Served: <span id="mb_served">-</span></div>
+        <div class="metric-title" style="color:#b8dafc; margin: 8px 0 4px;">Upload Statistics</div>
+        <div class="metric-row">Total Uploads: <span id="up_total">-</span></div>
+        <div class="metric-row">Successful: <span id="up_success">-</span></div>
+        <div class="metric-row">Failed: <span id="up_failed">-</span></div>
+        <div class="metric-row">Success Rate: <span id="upload_success_rate">-</span></div>
+        <div class="metric-row"><span>Data Uploaded:</span> <span><span id="up_mb">-</span> MB</span></div>
+        <div class="metric-row">Average File Size: <span id="avg_file_size">-</span></div>
+        <div class="metric-row">Largest Upload: <span id="largest_upload">-</span></div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Metrics Cards Grid -->
-<div class="metrics-grid">
-
-    <!-- Server Status Card -->
-    <div class="card metric-card">
-        <div class="metric-title">Server Status</div>
-        <div class="metric-info">
-            <div>Uptime: <span id="uptime_pretty">-</span></div>
-            <div>Total Seconds: <span id="uptime_secs">-</span></div>
-        </div>
-    </div>
-
-    <!-- Request Statistics Card -->
-    <div class="card metric-card">
-        <div class="metric-title">Request Statistics</div>
-        <div class="metric-info">
-            <div>Total: <span id="req_total">-</span></div>
-            <div>Successful: <span id="req_success">-</span></div>
-            <div>Errors: <span id="req_errors">-</span></div>
-            <div>Success Rate: <span id="req_success_rate">-</span></div>
-        </div>
-    </div>
-
-    <!-- Download Statistics Card -->
-    <div class="card metric-card">
-        <div class="metric-title">Download Statistics</div>
-        <div class="metric-info">
-            <div>Bytes Served: <span id="bytes_served">-</span></div>
-            <div>MB Served: <span id="mb_served">-</span></div>
-        </div>
-    </div>
-
-    <!-- Upload Statistics Card -->
-    <div class="card metric-card">
-        <div class="metric-title">Upload Statistics</div>
-        <div class="metric-info">
-            <div>Total Uploads: <span id="up_total">-</span></div>
-            <div>Successful: <span id="up_success">-</span></div>
-            <div>Failed: <span id="up_failed">-</span></div>
-            <div>Success Rate: <span id="upload_success_rate">-</span></div>
-            <div>Data Uploaded: <span id="up_mb">-</span> MB</div>
-            <div>Average File Size: <span id="avg_file_size">-</span></div>
-        </div>
-    </div>
-
-    <!-- Performance Metrics Card -->
-    <div class="card metric-card">
-        <div class="metric-title">Performance Metrics</div>
-        <div class="metric-info">
-            <div>Largest Upload: <span id="largest_upload">-</span></div>
-            <div>Concurrent Uploads: <span id="concurrent_uploads">-</span></div>
-            <div>Avg Processing: <span id="avg_processing">-</span></div>
-        </div>
-    </div>
-
-
-
-</div>

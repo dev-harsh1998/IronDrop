@@ -26,8 +26,8 @@ The search system consists of four main components:
   - **SearchEngine**: Thread-safe operations with `Arc<Mutex<>>`, background updates
 
 **2. Ultra-Compact Search Engine (`ultra_compact_search.rs`)**
-- **Target**: Directories with 10M+ files
-- **Memory Usage**: <100MB for 10M files (11 bytes per entry)
+- **Target**: Very large directories (around 10M files)
+- **Memory Usage**: Approximately ~110MB for ~10M entries (about 11 bytes per entry)
 - **Core Components**:
   - **UltraCompactEntry**: Bit-packed 11-byte entries with parent references
   - **String Pool**: Unified storage with binary search for deduplication
@@ -51,11 +51,11 @@ The search system consists of four main components:
 
 #### Ultra-Compact Search Engine Performance
 
-| Directory Size | Search Time | Memory Usage | Entry Size | Optimization |
-|----------------|-------------|--------------|------------|--------------|
-| 100K files    | 5-15ms      | 1.1MB        | 11 bytes   | Bit-packed data |
-| 1M files      | 20-80ms     | 11MB         | 11 bytes   | Hierarchical paths |
-| 10M files     | 100-500ms   | 110MB        | 11 bytes   | String pool + radix |
+| Directory Size | Search Time | Memory Usage | Entry Size | Notes |
+|----------------|-------------|--------------|------------|-------|
+| 100K files    | 5-15ms      | ~1.1MB       | 11 bytes   | Bit-packed data |
+| 1M files      | 20-80ms     | ~11MB        | 11 bytes   | Hierarchical paths |
+| 10M files     | 100-500ms   | ~110MB       | 11 bytes   | String pool + radix |
 
 #### Memory Optimization Comparison
 

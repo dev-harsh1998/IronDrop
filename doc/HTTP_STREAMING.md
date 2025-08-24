@@ -1,32 +1,31 @@
-# IronDrop Direct Upload Streaming Documentation v2.5
+# IronDrop Direct Upload Streaming (v2.6)
 
 ## Overview
 
-IronDrop v2.5 features a revolutionary direct streaming upload system that eliminates multipart parsing complexity and provides constant memory usage for files of any size. The system streams raw binary data directly to disk, ensuring optimal performance and unlimited file size support.
+IronDrop implements direct streaming uploads. Large request bodies are streamed to disk, avoiding unbounded memory growth. Small bodies are processed in memory.
 
-**Implementation Status**: ✅ **Production Ready** (v2.5)
-- Complete direct streaming implementation with constant memory usage
-- Memory-efficient handling of uploads from 1KB to unlimited size
-- Comprehensive test coverage with verified memory stability
-- Zero multipart parsing overhead with pure binary streaming
-- Simple, reliable upload mechanism
+**Status**: Production-ready (v2.5)
+- Direct streaming implementation with bounded memory usage
+- Handling from small to very large files
+- Tests cover stability and cleanup
+- Simple binary streaming path and straightforward API
 
 ## Key Features
 
-### 🚀 **Direct Streaming Logic**
+### Direct streaming logic
 - **Small uploads** (≤2MB): Processed in memory for optimal performance
 - **Large uploads** (>2MB): Directly streamed to disk with constant memory usage
 - **No size limits**: Removed artificial 10GB restrictions
 - **Constant memory**: RAM usage stays at ~7MB regardless of file size
 
-### 💾 **Direct Binary Architecture**
+### Direct binary path
 - **Raw binary uploads**: No multipart parsing complexity
 - **Direct disk streaming**: Files written directly to storage
 - **Automatic cleanup**: Temporary files managed transparently
 - **Unified interface**: Upload handlers work seamlessly with both variants
 - **Type safety**: Rust's type system ensures correct handling
 
-### 🔒 **Security & Resource Management**
+### Security and resource management
 - **Automatic cleanup**: Temporary files are automatically removed after request completion
 - **Size limits**: Configurable limits prevent resource exhaustion
 - **Path safety**: Secure temporary file creation with unique naming

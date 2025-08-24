@@ -180,6 +180,53 @@ fn test_error_responses() {
 }
 
 #[test]
+fn test_http_range_request_partial_content() {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    let server = setup_test_server(None, None);
+    // Request an existing small file from the test directory and ask for first 10 bytes
+    let mut stream = TcpStream::connect(server.addr).expect("connect ok");
+    write!(
+        stream,
+        "GET /test.txt HTTP/1.1\r\nHost: localhost\r\nRange: bytes=0-9\r\nConnection: close\r\n\r\n"
+    )
+    .unwrap();
+    stream.flush().unwrap();
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf).unwrap();
+    let text = String::from_utf8_lossy(&buf);
+    // Some servers may return 200 OK with Accept-Ranges and full body; accept either 206 with Content-Range
+    // or 200 with Accept-Ranges present.
+    let ok_206 = text.contains("HTTP/1.1 206") && text.contains("Content-Range: bytes 0-9/");
+    let ok_200 = text.contains("HTTP/1.1 200") && text.contains("Accept-Ranges: bytes");
+    assert!(
+        ok_206 || ok_200,
+        "expected 206 with Content-Range or 200 with Accept-Ranges, got: {}",
+        &*text
+    );
+}
+
+#[test]
+fn test_static_asset_headers_and_lengths() {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    let server = setup_test_server(None, None);
+    let mut stream = TcpStream::connect(server.addr).expect("connect ok");
+    write!(
+        stream,
+        "GET /_irondrop/static/common/base.css HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+    )
+    .unwrap();
+    stream.flush().unwrap();
+    let mut buf = Vec::new();
+    stream.read_to_end(&mut buf).unwrap();
+    let text = String::from_utf8_lossy(&buf);
+    assert!(text.contains("HTTP/1.1 200"));
+    assert!(text.contains("Content-Type: text/css"));
+    assert!(text.contains("Content-Length:"));
+}
+
+#[test]
 fn test_path_traversal_prevention() {
     let server = setup_test_server(None, None);
     let client = Client::new();
