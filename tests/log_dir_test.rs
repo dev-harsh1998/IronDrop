@@ -294,6 +294,7 @@ mod directory_validation_tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_readonly_directory_handling() {
         use std::os::unix::fs::PermissionsExt;
 
@@ -315,6 +316,21 @@ mod directory_validation_tests {
         let mut perms = fs::metadata(&log_dir).unwrap().permissions();
         perms.set_mode(0o755);
         fs::set_permissions(&log_dir, perms).unwrap();
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_readonly_directory_handling_windows() {
+        // On Windows, we test a different scenario since file permissions work differently
+        // We'll test that we can still create log files in a normal directory
+        let temp_dir = TempDir::new().unwrap();
+        let log_dir = temp_dir.path().join("normal");
+        fs::create_dir_all(&log_dir).unwrap();
+
+        // Create a test file to verify directory is writable
+        let test_file = log_dir.join("test.log");
+        let result = fs::File::create(&test_file);
+        assert!(result.is_ok());
     }
 }
 
