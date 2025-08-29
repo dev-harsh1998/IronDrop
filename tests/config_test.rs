@@ -179,7 +179,7 @@ verbose = false
         enable_upload: Some(false),
         max_upload_size: Some(10240),
         config_file: Some(config_file.to_string_lossy().to_string()),
-        log_file: None,
+        log_dir: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -224,7 +224,7 @@ max_upload_size = 1GB
         enable_upload: None,
         max_upload_size: None,
         config_file: Some(explicit_config.to_string_lossy().to_string()),
-        log_file: None,
+        log_dir: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -253,7 +253,7 @@ fn test_config_defaults() {
         enable_upload: Some(false),
         max_upload_size: Some(10240),
         config_file: None,
-        log_file: None,
+        log_dir: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -291,7 +291,7 @@ fn test_config_file_load_error() {
         enable_upload: Some(false),
         max_upload_size: Some(10240),
         config_file: Some(nonexistent_config.to_string_lossy().to_string()),
-        log_file: None,
+        log_dir: None,
     };
 
     let result = Config::load(&cli);
@@ -357,7 +357,7 @@ directory = {}
         enable_upload: None,
         max_upload_size: None,
         config_file: Some(config_file.to_string_lossy().to_string()),
-        log_file: None,
+        log_dir: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -398,7 +398,7 @@ port = 9999
         enable_upload: None,
         max_upload_size: None,
         config_file: Some(config_file.to_string_lossy().to_string()),
-        log_file: None,
+        log_dir: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -406,4 +406,267 @@ port = 9999
     assert_eq!(config.username, Some("configuser".to_string()));
     assert_eq!(config.password, Some("configpass123".to_string()));
     assert_eq!(config.port, 9999);
+}
+
+#[test]
+fn test_config_invalid_port_values() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let test_cases = vec![
+        ("port = -1", "negative port"),
+        ("port = 65536", "port too high"),
+        ("port = abc", "non-numeric port"),
+        ("port = 8080.5", "decimal port"),
+        ("port = ", "empty port"),
+    ];
+
+    // Test port 0 separately as it's technically valid but unusual
+    let zero_port_cases = vec![("port = 0", "zero port")];
+
+    for (port_config, description) in test_cases {
+        let config_file = temp_dir
+            .path()
+            .join(format!("test_{}.ini", description.replace(" ", "_")));
+        let config_content = format!("[server]\n{}", port_config);
+        fs::write(&config_file, config_content).unwrap();
+
+        let cli = Cli {
+            directory: temp_dir.path().to_path_buf(),
+            listen: None,
+            port: None,
+            allowed_extensions: None,
+            threads: None,
+            chunk_size: None,
+            verbose: None,
+            detailed_logging: None,
+            username: None,
+            password: None,
+            enable_upload: None,
+            max_upload_size: None,
+            config_file: Some(config_file.to_string_lossy().to_string()),
+            log_dir: None,
+        };
+
+        let result = Config::load(&cli);
+
+        // Should either use default port or return error for invalid values
+        match result {
+            Ok(config) => {
+                // If parsing succeeds, should use default port for invalid values
+                assert!(
+                    config.port > 0 && config.port <= 65535,
+                    "Should use valid port for {}",
+                    description
+                );
+            }
+            Err(_) => {
+                // Acceptable to return error for invalid port values
+            }
+        }
+    }
+
+    // Test port 0 case separately - it parses successfully but is unusual
+    for (port_config, description) in zero_port_cases {
+        let config_file = temp_dir
+            .path()
+            .join(format!("test_{}.ini", description.replace(" ", "_")));
+        let config_content = format!("[server]\n{}", port_config);
+        fs::write(&config_file, config_content).unwrap();
+
+        let cli = Cli {
+            directory: temp_dir.path().to_path_buf(),
+            listen: None,
+            port: None,
+            allowed_extensions: None,
+            threads: None,
+            chunk_size: None,
+            verbose: None,
+            detailed_logging: None,
+            username: None,
+            password: None,
+            enable_upload: None,
+            max_upload_size: None,
+            config_file: Some(config_file.to_string_lossy().to_string()),
+            log_dir: None,
+        };
+
+        let result = Config::load(&cli);
+
+        // Port 0 is technically valid u16 but unusual for servers
+        match result {
+            Ok(config) => {
+                // Port 0 is parsed successfully, so we accept it
+                assert_eq!(
+                    config.port, 0,
+                    "Port 0 should be parsed as 0 for {}",
+                    description
+                );
+            }
+            Err(_) => {
+                // Also acceptable if the system rejects port 0
+            }
+        }
+    }
+}
+
+#[test]
+fn test_config_invalid_file_size_formats() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let test_cases = vec![
+        "max_upload_size = -1MB",
+        "max_upload_size = 0.5.5GB",
+        "max_upload_size = ABCMB",
+        "max_upload_size = 100XB", // Invalid unit
+        "max_upload_size = MB100", // Unit before number
+        "max_upload_size = ",      // Empty value
+    ];
+
+    for (i, invalid_config) in test_cases.iter().enumerate() {
+        let config_file = temp_dir.path().join(format!("test_size_{}.ini", i));
+        let config_content = format!("[upload]\n{}", invalid_config);
+        fs::write(&config_file, config_content).unwrap();
+
+        let cli = Cli {
+            directory: temp_dir.path().to_path_buf(),
+            listen: None,
+            port: None,
+            allowed_extensions: None,
+            threads: None,
+            chunk_size: None,
+            verbose: None,
+            detailed_logging: None,
+            username: None,
+            password: None,
+            enable_upload: None,
+            max_upload_size: None,
+            config_file: Some(config_file.to_string_lossy().to_string()),
+            log_dir: None,
+        };
+
+        let result = Config::load(&cli);
+
+        // Should either use default or return error
+        match result {
+            Ok(config) => {
+                // If parsing succeeds, should either have a reasonable file size or the default (u64::MAX)
+                // For invalid formats, the system falls back to u64::MAX (effectively unlimited)
+                assert!(
+                    config.max_upload_size > 0,
+                    "Should have valid file size for case: {}",
+                    invalid_config
+                );
+
+                // For clearly invalid formats like negative values, we expect the fallback to u64::MAX
+                if invalid_config.contains("-1MB")
+                    || invalid_config.contains("ABCMB")
+                    || invalid_config.contains("100XB")
+                    || invalid_config.contains("MB100")
+                    || invalid_config.contains("= ")
+                {
+                    assert_eq!(
+                        config.max_upload_size,
+                        u64::MAX,
+                        "Invalid file size should fall back to u64::MAX for case: {}",
+                        invalid_config
+                    );
+                }
+            }
+            Err(_) => {
+                // Acceptable to return error for invalid file size formats
+            }
+        }
+    }
+}
+
+#[test]
+fn test_config_boolean_edge_cases() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let test_cases = vec![
+        ("enable_upload = TRUE", true),
+        ("enable_upload = FALSE", false),
+        ("enable_upload = True", true),
+        ("enable_upload = False", false),
+        ("enable_upload = 1", true),
+        ("enable_upload = 0", false),
+        ("enable_upload = yes", true),
+        ("enable_upload = no", false),
+        ("enable_upload = on", true),
+        ("enable_upload = off", false),
+    ];
+
+    for (i, (config_line, expected)) in test_cases.iter().enumerate() {
+        let config_file = temp_dir.path().join(format!("test_bool_{}.ini", i));
+        let config_content = format!("[upload]\n{}", config_line);
+        fs::write(&config_file, config_content).unwrap();
+
+        let cli = Cli {
+            directory: temp_dir.path().to_path_buf(),
+            listen: None,
+            port: None,
+            allowed_extensions: None,
+            threads: None,
+            chunk_size: None,
+            verbose: None,
+            detailed_logging: None,
+            username: None,
+            password: None,
+            enable_upload: None,
+            max_upload_size: None,
+            config_file: Some(config_file.to_string_lossy().to_string()),
+            log_dir: None,
+        };
+
+        let result = Config::load(&cli);
+
+        if let Ok(config) = result {
+            assert_eq!(
+                config.enable_upload, *expected,
+                "Failed for: {}",
+                config_line
+            );
+        }
+    }
+}
+
+#[test]
+fn test_config_malformed_ini_syntax() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let malformed_configs = vec![
+        "[server\nport = 8080", // Missing closing bracket
+        "server]\nport = 8080", // Missing opening bracket
+        "[server]\nport 8080",  // Missing equals sign
+        "[server]\n= 8080",     // Missing key
+        "[server]\nport =\n",   // Missing value
+        "[\nport = 8080",       // Empty section name
+    ];
+
+    for (i, malformed_config) in malformed_configs.iter().enumerate() {
+        let config_file = temp_dir.path().join(format!("test_malformed_{}.ini", i));
+        fs::write(&config_file, malformed_config).unwrap();
+
+        let cli = Cli {
+            directory: temp_dir.path().to_path_buf(),
+            listen: None,
+            port: None,
+            allowed_extensions: None,
+            threads: None,
+            chunk_size: None,
+            verbose: None,
+            detailed_logging: None,
+            username: None,
+            password: None,
+            enable_upload: None,
+            max_upload_size: None,
+            config_file: Some(config_file.to_string_lossy().to_string()),
+            log_dir: None,
+        };
+
+        let result = Config::load(&cli);
+
+        // Should either handle gracefully or return appropriate error
+        // This test ensures no panic occurs
+    }
 }

@@ -76,6 +76,14 @@ pub enum ResponseBody {
 }
 
 impl Request {
+    /// Validates if the given method is a valid HTTP method
+    fn is_valid_http_method(method: &str) -> bool {
+        matches!(
+            method,
+            "GET" | "POST" | "PUT" | "DELETE" | "HEAD" | "OPTIONS" | "PATCH" | "TRACE" | "CONNECT"
+        )
+    }
+
     /// Enhanced HTTP request parser with better performance and compliance
     pub fn from_stream(stream: &mut TcpStream) -> Result<Self, AppError> {
         trace!("Starting HTTP request parsing from stream");
@@ -104,11 +112,25 @@ impl Request {
         }
 
         let method = parts[0].to_string();
-        let path = Self::decode_url(parts[1])?;
+        let raw_path = parts[1];
         let version = parts[2];
 
+        // Validate HTTP method
+        if !Self::is_valid_http_method(&method) {
+            debug!("Invalid HTTP method: {}", method);
+            return Err(AppError::BadRequest);
+        }
+
+        // Validate path doesn't contain null bytes or other invalid characters
+        if raw_path.contains('\0') || raw_path.is_empty() {
+            debug!("Invalid path: contains null byte or is empty");
+            return Err(AppError::BadRequest);
+        }
+
+        let path = Self::decode_url(raw_path)?;
+
         debug!("Parsed request: {} {}", method, path);
-        trace!("Raw path before decoding: {}", parts[1]);
+        trace!("Raw path before decoding: {}", raw_path);
         trace!("HTTP version: {}", version);
 
         // Validate HTTP version

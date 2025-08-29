@@ -554,7 +554,7 @@ pub fn handle_file_request(
                 .collect(),
             verbose: cli.verbose.unwrap_or(false),
             detailed_logging: cli.detailed_logging.unwrap_or(false),
-            log_file: cli.log_file.clone(),
+            log_dir: cli.log_dir.clone(),
         });
 
         let html_content = generate_directory_listing(&full_path, &request.path, config.as_ref())?;

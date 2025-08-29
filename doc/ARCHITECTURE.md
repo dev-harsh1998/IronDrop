@@ -179,7 +179,7 @@ tests/
 ├── test_1gb_upload.sh       # Large file upload testing
 └── test_executable_portability.sh # Portability validation
 
-Total: 59 tests across 13 test files
+Total: 179 tests across 16 test files
 ```
 
 ## Search System Architecture

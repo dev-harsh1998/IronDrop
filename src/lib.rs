@@ -45,6 +45,8 @@ use crate::config::Config;
 use clap::Parser;
 use log::error;
 use std::fs::OpenOptions;
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Initializes the logger, parses command-line arguments, and starts the server.
 ///
@@ -80,8 +82,8 @@ pub fn run() {
     }
 
     // Initialize logging with optional file output
-    if let Some(ref log_file_path) = config.log_file {
-        init_file_logger(log_file_path).unwrap_or_else(|e| {
+    if let Some(ref log_dir_path) = config.log_dir {
+        init_file_logger(log_dir_path).unwrap_or_else(|e| {
             eprintln!("Failed to initialize file logger: {e}");
             std::process::exit(1);
         });
@@ -108,9 +110,18 @@ pub fn run() {
     }
 }
 
-/// Initialize file-based logging
-fn init_file_logger(log_file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+/// Initialize file-based logging with timestamped log files
+fn init_file_logger(log_dir_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     use env_logger::Builder;
+
+    // Generate timestamp without chrono
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let log_filename = format!("irondrop_{}.log", timestamp);
+    let log_file_path = log_dir_path.join(log_filename);
 
     let log_file = OpenOptions::new()
         .create(true)

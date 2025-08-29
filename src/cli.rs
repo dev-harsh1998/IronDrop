@@ -68,9 +68,9 @@ pub struct Cli {
     #[arg(long, value_parser = validate_config_file)]
     pub config_file: Option<String>,
 
-    /// Log file path - Redirect all logging output to a file instead of stdout. If not provided, logs go to stdout 📝
-    #[arg(long, value_parser = validate_log_file)]
-    pub log_file: Option<String>,
+    /// Log directory path - Directory where timestamped log files will be created. If not provided, logs go to stdout 📝
+    #[arg(long, value_parser = validate_log_dir)]
+    pub log_dir: Option<PathBuf>,
 }
 
 /// Validate upload size (minimum 1 MB, no upper limit for direct streaming)
@@ -110,54 +110,6 @@ fn validate_config_file(s: &str) -> Result<String, String> {
         Ok(_) => Ok(s.to_string()),
         Err(e) => Err(format!("Cannot read config file {s}: {e}")),
     }
-}
-
-/// Validate log file path and ensure parent directory exists
-fn validate_log_file(s: &str) -> Result<String, String> {
-    if s.is_empty() {
-        return Err("Log file path cannot be empty".to_string());
-    }
-
-    let path = PathBuf::from(s);
-
-    // Check if parent directory exists
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            return Err(format!(
-                "Log file parent directory does not exist: {}",
-                parent.display()
-            ));
-        }
-        if !parent.is_dir() {
-            return Err(format!(
-                "Log file parent path is not a directory: {}",
-                parent.display()
-            ));
-        }
-    }
-
-    // If file exists, check if it's writable
-    if path.exists() {
-        if path.is_dir() {
-            return Err(format!("Log file path is a directory: {s}"));
-        }
-        // Try to open for append to check write permissions
-        match std::fs::OpenOptions::new().append(true).open(&path) {
-            Ok(_) => {}
-            Err(e) => return Err(format!("Cannot write to log file {s}: {e}")),
-        }
-    } else {
-        // Try to create the file to check write permissions
-        match std::fs::File::create(&path) {
-            Ok(_) => {
-                // Remove the test file
-                let _ = std::fs::remove_file(&path);
-            }
-            Err(e) => return Err(format!("Cannot create log file {s}: {e}")),
-        }
-    }
-
-    Ok(s.to_string())
 }
 
 impl Cli {
@@ -243,7 +195,7 @@ mod tests {
             enable_upload: Some(false),
             max_upload_size: Some(100),
             config_file: None,
-            log_file: None,
+            log_dir: None,
         };
 
         // Test conversion
@@ -278,7 +230,7 @@ mod tests {
             enable_upload: Some(true),
             max_upload_size: Some(100),
             config_file: None,
-            log_file: None,
+            log_dir: None,
         };
 
         assert!(cli.validate().is_ok());
@@ -294,5 +246,42 @@ mod tests {
         let mut file_cli = cli.clone();
         file_cli.directory = file_path;
         assert!(file_cli.validate().is_err());
+    }
+}
+
+/// Validate log directory path and ensure it exists and is writable
+fn validate_log_dir(s: &str) -> Result<PathBuf, String> {
+    if s.is_empty() {
+        return Err("Log directory path cannot be empty".to_string());
+    }
+
+    let path = PathBuf::from(s);
+
+    // Check if directory exists
+    if !path.exists() {
+        return Err(format!("Log directory does not exist: {}", path.display()));
+    }
+
+    // Check if it's a directory
+    if !path.is_dir() {
+        return Err(format!(
+            "Log directory path is not a directory: {}",
+            path.display()
+        ));
+    }
+
+    // Test write permissions by creating a temporary file
+    let test_file = path.join(".irondrop_write_test");
+    match std::fs::File::create(&test_file) {
+        Ok(_) => {
+            // Remove the test file
+            let _ = std::fs::remove_file(&test_file);
+            Ok(path)
+        }
+        Err(e) => Err(format!(
+            "Cannot write to log directory {}: {}",
+            path.display(),
+            e
+        )),
     }
 }

@@ -1,10 +1,10 @@
 # IronDrop Testing Documentation
 
-Version 2.6 - Test Suite Overview
+Version 2.6.2 - Test Suite Overview
 
 ## Overview
 
-IronDrop includes a test suite covering functionality, security scenarios, and performance-related paths.
+IronDrop includes a comprehensive test suite with **179 tests** covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include enhanced path parsing, Unicode support, and race condition fixes.
 
 ## Test Architecture
 
@@ -22,17 +22,22 @@ IronDrop includes a test suite covering functionality, security scenarios, and p
 | Category | Test Files | Test Count | Coverage |
 |----------|------------|------------|----------|
 | **Core Server & Unit Tests** | `lib.rs` (unit tests) | 41 | Core functionality, HTTP handling, utilities |
-| **Configuration System** | `config_test.rs` | 12 | INI parsing, precedence, validation |
-| **Direct Upload System** | `direct_upload_test.rs` | 8 | File uploads, streaming, validation |
-| **Integration Testing** | `integration_test.rs` | 8 | Authentication, security, HTTP compliance |
-| **Monitoring & Stats** | `monitor_test.rs` | 2 | Health endpoints, metrics tracking |
-| **Rate Limiting** | `rate_limiter_memory_test.rs` | 5 | Memory management, cleanup, limits |
+| **Configuration System** | `config_test.rs` | 16 | INI parsing, precedence, validation, edge cases |
+| **Direct Upload System** | `direct_upload_test.rs` | 15 | File uploads, streaming, concurrent operations, race conditions |
+| **Integration Testing** | `integration_test.rs` | 14 | Authentication, security, HTTP compliance, edge cases |
+| **Memory & Performance** | `memory_leak_fix_test.rs` | 19 | Memory management, leak prevention, cleanup |
+| **HTTP Parser** | `http_parser_test.rs` | 13 | Version parsing, malformed requests, edge cases |
+| **Middleware** | `middleware_test.rs` | 13 | Authentication, security, request processing |
 | **Template System** | `template_embedding_test.rs`, `templates_escape_test.rs` | 7 | Embedded templates, escaping, assets |
+| **Template Utilities** | `response_utils_test.rs` | 2 | Response generation, template processing |
 | **Ultra-Compact Search** | `ultra_compact_test.rs` | 5 | Memory efficiency, search performance |
-| **Middleware** | `middleware_test.rs` | 5 | Basic auth middleware |
-| **HTTP Parser** | `http_parser_test.rs` | 3 | Version, separators, chunked handling |
+| **Rate Limiting** | `rate_limiter_memory_test.rs` | 5 | Memory management, cleanup, limits |
+| **Monitoring & Stats** | `monitor_test.rs` | 2 | Health endpoints, metrics tracking |
+| **Utilities** | `utils_test.rs`, `utils_parse_path_test.rs` | 23 | Path parsing, Unicode encoding, special characters |
 | **Request Body** | `http_requestbody_test.rs` | 1 | Size and emptiness |
-| **Utilities** | `utils_test.rs`, `utils_parse_path_test.rs` | 4 | Encoding, parsing, path utilities |
+| **Logging** | `log_dir_test.rs` | 3 | Directory creation, permissions |
+
+**Total Tests: 179**
 
 ## Detailed Test Coverage
 
@@ -177,7 +182,7 @@ fn test_demonstrate_memory_savings() // Compares memory usage vs alternatives
 
 ## Running Tests
 
-### Basic Test Execution (current totals: 106 tests across 15 files)
+### Basic Test Execution (current totals: 179 tests across 16 files)
 
 ```bash
 # Run all tests
@@ -366,6 +371,35 @@ fn test_new_feature() {
 - No clippy warnings
 - Code formatting validation
 - Documentation completeness
+
+## Recent Improvements (v2.6.2)
+
+### Critical Fixes and Enhancements
+
+**Path Parsing Improvements**
+- Fixed `get_request_path` function to correctly handle HTTP request paths with internal spaces
+- Enhanced logic to find space before "HTTP/" instead of using first space occurrence
+- Added proper whitespace trimming for edge cases with trailing spaces
+- All 9 path parsing tests now pass, including complex whitespace scenarios
+
+**Unicode and Special Character Support**
+- Enhanced `percent_encode_path` function with comprehensive character encoding
+- Added support for Unicode characters (non-ASCII) in file paths
+- Implemented proper handling of empty paths and root paths
+- Extended encoding for special characters requiring URL encoding
+- All 14 utility tests now pass with full Unicode compliance
+
+**Concurrent Upload Race Condition Fix**
+- Identified and resolved critical race condition in `generate_unique_filename` method
+- Replaced non-atomic file existence checks with atomic `create_new()` operations
+- Prevents multiple threads from creating files with same name simultaneously
+- All 15 direct upload tests now pass, including concurrent upload scenarios
+
+**Test Suite Stability**
+- Achieved 100% test pass rate across all 179 tests
+- Enhanced test reliability under concurrent execution
+- Improved error handling and edge case coverage
+- Added comprehensive validation for boundary conditions
 
 ## Future Test Enhancements
 

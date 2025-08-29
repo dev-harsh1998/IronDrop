@@ -759,6 +759,25 @@ impl DirectUploadHandler {
             return Err(AppError::invalid_filename(filename));
         }
 
+        // Check for Windows reserved names (case-insensitive)
+        let base_name = if let Some(dot_pos) = filename.rfind('.') {
+            &filename[..dot_pos]
+        } else {
+            filename
+        };
+
+        let reserved_names = [
+            "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7",
+            "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+        ];
+
+        if reserved_names
+            .iter()
+            .any(|&reserved| base_name.eq_ignore_ascii_case(reserved))
+        {
+            return Err(AppError::invalid_filename(filename));
+        }
+
         Ok(())
     }
 
@@ -790,10 +809,25 @@ impl DirectUploadHandler {
 
     /// Generate a unique filename to avoid conflicts
     fn generate_unique_filename(&self, original: &str) -> Result<(String, bool), AppError> {
+        // Try the original filename first with atomic creation
         let target_path = self.target_dir.join(original);
 
-        if !target_path.exists() {
-            return Ok((original.to_string(), false));
+        // Use OpenOptions with create_new to atomically check and create
+        match OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&target_path)
+        {
+            Ok(file) => {
+                // File was created successfully, close it immediately
+                drop(file);
+                // Remove the empty file we just created for testing
+                let _ = fs::remove_file(&target_path);
+                return Ok((original.to_string(), false));
+            }
+            Err(_) => {
+                // File already exists, continue to generate unique name
+            }
         }
 
         // File exists, generate a unique name
@@ -809,8 +843,23 @@ impl DirectUploadHandler {
             let new_filename = format!("{stem}_{i}{extension}");
             let new_path = self.target_dir.join(&new_filename);
 
-            if !new_path.exists() {
-                return Ok((new_filename, true));
+            // Use atomic create_new operation to avoid race conditions
+            match OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&new_path)
+            {
+                Ok(file) => {
+                    // File was created successfully, close it immediately
+                    drop(file);
+                    // Remove the empty file we just created for testing
+                    let _ = fs::remove_file(&new_path);
+                    return Ok((new_filename, true));
+                }
+                Err(_) => {
+                    // File already exists, try next number
+                    continue;
+                }
             }
         }
 
@@ -980,7 +1029,7 @@ mod tests {
             enable_upload: Some(true),
             max_upload_size: Some(100), // 100MB for testing
             config_file: None,
-            log_file: None,
+            log_dir: None,
         }
     }
 

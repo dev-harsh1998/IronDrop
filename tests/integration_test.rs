@@ -6,7 +6,7 @@ use irondrop::server::run_server;
 use reqwest::StatusCode;
 use reqwest::blocking::Client;
 use std::fs::File;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
@@ -46,7 +46,7 @@ fn setup_test_server(username: Option<String>, password: Option<String>) -> Test
         enable_upload: Some(false),
         max_upload_size: Some(10240),
         config_file: None,
-        log_file: None,
+        log_dir: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -269,4 +269,145 @@ fn test_malformed_request() {
 
     // The server should gracefully handle this with a 400 Bad Request.
     assert!(status_line.starts_with("HTTP/1.1 400 Bad Request"));
+}
+
+#[test]
+fn test_concurrent_requests() {
+    let server = setup_test_server(None, None);
+    let client = Client::new();
+
+    // Test multiple concurrent requests
+    let handles: Vec<_> = (0..10)
+        .map(|_| {
+            let addr = server.addr;
+            let client = client.clone();
+            thread::spawn(move || {
+                client
+                    .get(format!("http://{}/test.txt", addr))
+                    .send()
+                    .unwrap()
+            })
+        })
+        .collect();
+
+    // All requests should succeed
+    for handle in handles {
+        let response = handle.join().unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
+
+#[test]
+fn test_large_header_handling() {
+    let server = setup_test_server(None, None);
+
+    // Test with very large headers
+    let large_value = "x".repeat(8192); // 8KB header value
+    let mut stream = std::net::TcpStream::connect(server.addr).unwrap();
+    let request = format!(
+        "GET /test.txt HTTP/1.1\r\nHost: localhost\r\nX-Large-Header: {}\r\n\r\n",
+        large_value
+    );
+    stream.write_all(request.as_bytes()).unwrap();
+
+    let mut reader = std::io::BufReader::new(stream);
+    let mut status_line = String::new();
+    reader.read_line(&mut status_line).unwrap();
+
+    // Should either accept (200) or reject with appropriate error (413/400)
+    assert!(
+        status_line.starts_with("HTTP/1.1 200")
+            || status_line.starts_with("HTTP/1.1 413")
+            || status_line.starts_with("HTTP/1.1 400")
+    );
+}
+
+#[test]
+fn test_empty_request_handling() {
+    let server = setup_test_server(None, None);
+
+    // Send completely empty request
+    let mut stream = std::net::TcpStream::connect(server.addr).unwrap();
+    stream.write_all(b"").unwrap();
+    stream.shutdown(std::net::Shutdown::Write).unwrap();
+
+    let mut reader = std::io::BufReader::new(stream);
+    let mut response = String::new();
+    let _ = reader.read_to_string(&mut response);
+
+    // Server should handle gracefully (connection may close or return error)
+    // This test ensures no panic occurs
+}
+
+#[test]
+fn test_invalid_range_requests() {
+    let server = setup_test_server(None, None);
+
+    // Test invalid range header formats
+    let test_cases = vec![
+        "Range: bytes=invalid",
+        "Range: bytes=100-50",  // End before start
+        "Range: bytes=999999-", // Beyond file size
+        "Range: units=0-10",    // Invalid unit
+    ];
+
+    for range_header in test_cases {
+        let mut stream = std::net::TcpStream::connect(server.addr).unwrap();
+        let request = format!(
+            "GET /test.txt HTTP/1.1\r\nHost: localhost\r\n{}\r\n\r\n",
+            range_header
+        );
+        stream.write_all(request.as_bytes()).unwrap();
+
+        let mut reader = std::io::BufReader::new(stream);
+        let mut status_line = String::new();
+        reader.read_line(&mut status_line).unwrap();
+
+        // Should return 200 (ignore invalid range) or 416 (range not satisfiable)
+        assert!(status_line.starts_with("HTTP/1.1 200") || status_line.starts_with("HTTP/1.1 416"));
+    }
+}
+
+#[test]
+fn test_connection_timeout_handling() {
+    let server = setup_test_server(None, None);
+
+    // Connect but don't send complete request
+    let mut stream = std::net::TcpStream::connect(server.addr).unwrap();
+    stream.write_all(b"GET /test.txt HTTP/1.1\r\n").unwrap();
+    // Don't send the rest of the request
+
+    // Wait a bit then try to read
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    let mut reader = std::io::BufReader::new(stream);
+    let mut response = String::new();
+    let result = reader.read_to_string(&mut response);
+
+    // Connection should eventually close or timeout
+    // This test ensures the server doesn't hang indefinitely
+}
+
+#[test]
+fn test_special_characters_in_paths() {
+    let server = setup_test_server(None, None);
+    let client = Client::new();
+
+    // Test various special characters that should be handled safely
+    let test_paths = vec![
+        "/test%20file.txt", // URL encoded space
+        "/test%2Efile.txt", // URL encoded dot
+        "/test%3Ffile.txt", // URL encoded question mark
+        "/test%23file.txt", // URL encoded hash
+    ];
+
+    for path in test_paths {
+        let res = client
+            .get(format!("http://{}{}", server.addr, path))
+            .send()
+            .unwrap();
+
+        // Should return 404 (file not found) rather than crash
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    }
 }

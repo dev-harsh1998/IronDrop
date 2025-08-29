@@ -1129,7 +1129,7 @@ pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
         enable_upload: Some(config.enable_upload),
         max_upload_size: Some(config.max_upload_size / (1024 * 1024)), // Convert bytes back to MB
         config_file: None, // Not needed for server execution
-        log_file: config.log_file,
+        log_dir: config.log_dir,
     };
 
     run_server(cli, None, None)

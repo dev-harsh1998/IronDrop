@@ -30,7 +30,7 @@ pub struct Config {
     // Logging settings
     pub verbose: bool,
     pub detailed_logging: bool,
-    pub log_file: Option<String>,
+    pub log_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -74,7 +74,7 @@ impl Config {
 
             verbose: Self::get_verbose(&ini, cli),
             detailed_logging: Self::get_detailed_logging(&ini, cli),
-            log_file: Self::get_log_file(&ini, cli),
+            log_dir: Self::get_log_dir(&ini, cli),
         };
 
         log::debug!("Configuration loading completed successfully");
@@ -299,14 +299,14 @@ impl Config {
         ini.get_bool_or("logging", "detailed", false)
     }
 
-    fn get_log_file(ini: &IniConfig, cli: &Cli) -> Option<String> {
+    fn get_log_dir(ini: &IniConfig, cli: &Cli) -> Option<PathBuf> {
         // CLI argument takes precedence if explicitly provided
-        if let Some(ref log_file) = cli.log_file {
-            return Some(log_file.clone());
+        if let Some(ref log_dir) = cli.log_dir {
+            return Some(log_dir.clone());
         }
 
         // INI file
-        ini.get_string("logging", "log_file")
+        ini.get_string("logging", "log_dir").map(PathBuf::from)
     }
 
     /// Print configuration summary
@@ -358,7 +358,7 @@ mod tests {
             enable_upload: None,
             max_upload_size: None,
             config_file: None,
-            log_file: None,
+            log_dir: None,
         }
     }
 

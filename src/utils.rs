@@ -7,61 +7,81 @@ use std::path::{Component, Path, PathBuf};
 
 // Helper function to percent-encode path segments for URLs. 🌐
 pub fn percent_encode_path(path: &Path) -> String {
-    path.components() // Iterate over path components. 🚶
-        .filter_map(|component| match component {
-            // Filter and map path components. 🗺️
-            Component::Normal(s) => Some(s.to_string_lossy().into_owned()), // For normal components (filenames/dirnames), convert to String.
-            _ => None, // Skip RootDir, ParentDir, CurDir, Prefix components - we don't need to encode these special components.
+    let path_str = path.to_string_lossy();
+
+    // Handle empty path
+    if path_str.is_empty() {
+        return String::new();
+    }
+
+    // Handle root path
+    if path_str == "/" {
+        return "/".to_string();
+    }
+
+    // Percent-encode the path
+    path_str
+        .chars()
+        .map(|c| match c {
+            ' ' => "%20".to_string(),
+            '"' => "%22".to_string(),
+            '#' => "%23".to_string(),
+            '%' => "%25".to_string(),
+            '<' => "%3C".to_string(),
+            '>' => "%3E".to_string(),
+            '?' => "%3F".to_string(),
+            // Encode non-ASCII characters
+            c if !c.is_ascii() => {
+                let mut buf = [0; 4];
+                let encoded = c.encode_utf8(&mut buf);
+                encoded
+                    .bytes()
+                    .map(|b| format!("%{:02X}", b))
+                    .collect::<String>()
+            }
+            c => c.to_string(),
         })
-        .collect::<Vec<_>>() // Collect all String components into a vector.
-        .join("/") // Join the components with "/" to form the path string.
-        .replace(" ", "%20") // Replace spaces with "%20" for URL encoding - important for spaces in filenames!
+        .collect()
 }
 
 // Extracts the requested path from the HTTP request line. 🗺️
 pub fn get_request_path(request_line: &str) -> &str {
     // Check if the request line starts with "GET ". 🔍
-    if request_line.starts_with("GET ") {
-        // Find the first space after "GET " - this marks the start of the path.
-        if let Some(path_start_index) = request_line.find(' ') {
-            // Get the part of the request line after "GET ".
-            let path_with_http_version = &request_line[path_start_index + 1..];
-            // Find the next space - this marks the end of the path (before HTTP version).
-            if let Some(path_end_index) = path_with_http_version.find(' ') {
-                // Extract the path part.
-                let path = &path_with_http_version[..path_end_index];
-                // Handle paths that start with "/".
-                if let Some(relative_path) = path.strip_prefix("/") {
-                    // Remove the leading "/".
-                    if relative_path.is_empty() {
-                        // If it's just "/", return root path.
-                        return "/";
-                    } else {
-                        // Otherwise, return the relative path.
-                        return relative_path;
-                    }
-                } else {
-                    // If it doesn't start with "/", return the path as is.
-                    return path;
-                }
+    if let Some(after_get) = request_line.strip_prefix("GET ") {
+        // Skip "GET " and find the path
+
+        // Skip any additional spaces after GET
+        let after_get = after_get.trim_start();
+
+        if after_get.is_empty() {
+            return "/";
+        }
+
+        // Find the path by looking for the space before "HTTP/" version
+        let path = if let Some(http_pos) = after_get.find(" HTTP/") {
+            after_get[..http_pos].trim()
+        } else {
+            // No HTTP version, take the rest as path
+            after_get.trim()
+        };
+
+        if path.is_empty() {
+            return "/";
+        }
+
+        // Handle paths that start with "/".
+        if let Some(relative_path) = path.strip_prefix("/") {
+            // Remove the leading "/".
+            if relative_path.is_empty() {
+                // If it's just "/", return root path.
+                return "/";
             } else {
-                // If there's no second space (unusual HTTP request but handle it).
-                let path = path_with_http_version; // Take the rest as path.
-                // Handle paths starting with "/".
-                if let Some(relative_path) = path.strip_prefix("/") {
-                    // Remove leading "/".
-                    if relative_path.is_empty() {
-                        // If it's just "/", return root path.
-                        return "/";
-                    } else {
-                        // Otherwise return the relative path.
-                        return relative_path;
-                    }
-                } else {
-                    // If it doesn't start with "/", return the path as is.
-                    return path;
-                }
+                // Otherwise, return the relative path.
+                return relative_path;
             }
+        } else {
+            // If it doesn't start with "/", return the path as is.
+            return path;
         }
     }
     "/" // Default to root path if request line parsing fails - safer fallback. 🗺️

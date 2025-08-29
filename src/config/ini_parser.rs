@@ -220,6 +220,10 @@ fn parse_file_size(value: &str) -> Option<u64> {
 
     // Try parsing as float for decimal values like "1.5"
     if let Ok(num) = num_str.parse::<f64>() {
+        // Reject negative numbers
+        if num < 0.0 {
+            return None;
+        }
         return Some((num * suffix as f64) as u64);
     }
 
@@ -249,6 +253,11 @@ mod tests {
             Some((2.5 * 1024.0 * 1024.0) as u64)
         );
         assert_eq!(parse_file_size("invalid"), None);
+
+        // Test invalid cases that should return None
+        assert_eq!(parse_file_size("-1MB"), None);
+        assert_eq!(parse_file_size("ABCMB"), None);
+        assert_eq!(parse_file_size("100XB"), None);
     }
 
     #[test]
