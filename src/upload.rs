@@ -493,10 +493,14 @@ impl DirectUploadHandler {
             temp_path.display()
         );
         {
-            let mut temp_file = File::create(&temp_path).map_err(|e| {
-                error!("Failed to create temporary file {temp_path:?}: {e}");
-                AppError::from(e)
-            })?;
+            let mut temp_file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temp_path)
+                .map_err(|e| {
+                    error!("Failed to create temporary file {temp_path:?}: {e}");
+                    AppError::from(e)
+                })?;
 
             temp_file.write_all(data).map_err(|e| {
                 error!("Failed to write data to temporary file {temp_path:?}: {e}");
@@ -604,10 +608,14 @@ impl DirectUploadHandler {
                 AppError::from(e)
             })?;
 
-            let temp_file = File::create(&temp_path).map_err(|e| {
-                error!("Failed to create temporary file {temp_path:?}: {e}");
-                AppError::from(e)
-            })?;
+            let temp_file = OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temp_path)
+                .map_err(|e| {
+                    error!("Failed to create temporary file {temp_path:?}: {e}");
+                    AppError::from(e)
+                })?;
 
             // Use buffered streams for better performance
             let mut reader = BufReader::new(source_file);
@@ -809,25 +817,12 @@ impl DirectUploadHandler {
 
     /// Generate a unique filename to avoid conflicts
     fn generate_unique_filename(&self, original: &str) -> Result<(String, bool), AppError> {
-        // Try the original filename first with atomic creation
+        // Try the original filename first by checking if it exists
         let target_path = self.target_dir.join(original);
 
-        // Use OpenOptions with create_new to atomically check and create
-        match OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&target_path)
-        {
-            Ok(file) => {
-                // File was created successfully, close it immediately
-                drop(file);
-                // Remove the empty file we just created for testing
-                let _ = fs::remove_file(&target_path);
-                return Ok((original.to_string(), false));
-            }
-            Err(_) => {
-                // File already exists, continue to generate unique name
-            }
+        // Check if file exists without creating it
+        if !target_path.exists() {
+            return Ok((original.to_string(), false));
         }
 
         // File exists, generate a unique name
@@ -843,23 +838,9 @@ impl DirectUploadHandler {
             let new_filename = format!("{stem}_{i}{extension}");
             let new_path = self.target_dir.join(&new_filename);
 
-            // Use atomic create_new operation to avoid race conditions
-            match OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(&new_path)
-            {
-                Ok(file) => {
-                    // File was created successfully, close it immediately
-                    drop(file);
-                    // Remove the empty file we just created for testing
-                    let _ = fs::remove_file(&new_path);
-                    return Ok((new_filename, true));
-                }
-                Err(_) => {
-                    // File already exists, try next number
-                    continue;
-                }
+            // Check if this filename is available
+            if !new_path.exists() {
+                return Ok((new_filename, true));
             }
         }
 
