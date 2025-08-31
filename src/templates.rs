@@ -522,6 +522,18 @@ impl TemplateEngine {
                 Self::get_file_icon(name)
             };
 
+            // Build absolute href using CURRENT_PATH to avoid base-URL ambiguity
+            let base_clean = current_path.trim_end_matches('/');
+            let href = if base_clean.is_empty() {
+                format!("/{}", percent_encode(name))
+            } else {
+                format!(
+                    "/{}/{}",
+                    base_clean.trim_start_matches('/'),
+                    percent_encode(name)
+                )
+            };
+
             entries_html.push_str(&format!(
                 r#"<tr>
                     <td>
@@ -533,7 +545,7 @@ impl TemplateEngine {
                     <td class="size">{}</td>
                     <td class="date">{}</td>
                 </tr>"#,
-                percent_encode(name),
+                href,
                 type_class,
                 icon_svg,
                 html_escape(display_name),

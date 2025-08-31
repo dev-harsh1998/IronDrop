@@ -1059,13 +1059,18 @@ impl UltraLowMemoryIndex {
             .replace('\\', "/"); // Normalize path separators for web URLs
 
         // Ensure path starts with / and doesn't have double slashes
-        let clean_path = if relative_path.is_empty() {
+        let mut clean_path = if relative_path.is_empty() {
             "/".to_string()
         } else if relative_path.starts_with('/') {
             relative_path
         } else {
             format!("/{}", relative_path)
         };
+
+        // Ensure directories end with a trailing slash for correct relative link resolution in browsers
+        if entry.is_dir() && !clean_path.ends_with('/') {
+            clean_path.push('/');
+        }
 
         let score = self.calculate_optimized_relevance_score(name, query);
 
@@ -1667,13 +1672,18 @@ fn search_directory_recursive(
                     .replace('\\', "/"); // Normalize path separators for web URLs
 
                 // Ensure path starts with / and doesn't have double slashes
-                let clean_path = if relative_path.is_empty() {
+                let mut clean_path = if relative_path.is_empty() {
                     "/".to_string()
                 } else if relative_path.starts_with('/') {
                     relative_path
                 } else {
                     format!("/{}", relative_path)
                 };
+
+                // Ensure directories end with a trailing slash
+                if metadata.is_dir() && !clean_path.ends_with('/') {
+                    clean_path.push('/');
+                }
 
                 let result = SearchResult {
                     name: file_name.clone(),

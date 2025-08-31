@@ -411,3 +411,135 @@ fn test_special_characters_in_paths() {
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
     }
 }
+
+// Helper to set up a server with a pre-populated filesystem tree
+fn setup_test_server_with_tree<F>(
+    username: Option<String>,
+    password: Option<String>,
+    populate: F,
+) -> TestServer
+where
+    F: FnOnce(&std::path::Path),
+{
+    let dir = tempdir().unwrap();
+
+    // Allow the caller to create files/dirs before server starts
+    populate(dir.path());
+
+    // Also create a default file as in the base helper
+    let file_path = dir.path().join("test.txt");
+    let mut file = File::create(&file_path).unwrap();
+    writeln!(file, "hello from test file").unwrap();
+
+    let cli = Cli {
+        directory: dir.path().to_path_buf(),
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(0),
+        allowed_extensions: Some("*".to_string()),
+        threads: Some(4),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
+        username,
+        password,
+        enable_upload: Some(false),
+        max_upload_size: Some(10240),
+        config_file: None,
+        log_dir: None,
+    };
+
+    let (shutdown_tx, shutdown_rx) = mpsc::channel();
+    let (addr_tx, addr_rx) = mpsc::channel();
+
+    let server_handle = thread::spawn(move || {
+        if let Err(e) = run_server(cli, Some(shutdown_rx), Some(addr_tx)) {
+            eprintln!("Server thread failed: {e}");
+        }
+    });
+
+    let server_addr = addr_rx.recv().unwrap();
+
+    TestServer {
+        addr: server_addr,
+        shutdown_tx,
+        handle: Some(server_handle),
+        _temp_dir: dir,
+    }
+}
+
+#[test]
+fn test_directory_trailing_slash_redirect_and_links() {
+    use std::fs::{File, create_dir_all};
+    use std::io::Write;
+
+    // Build directory tree: /call_rec_data/Ruby/{23,45}
+    let server = setup_test_server_with_tree(None, None, |root| {
+        let d1 = root.join("call_rec_data").join("Ruby").join("23");
+        let d2 = root.join("call_rec_data").join("Ruby").join("45");
+        create_dir_all(&d1).unwrap();
+        create_dir_all(&d2).unwrap();
+        // Add a file inside to ensure non-empty dirs
+        let mut f = File::create(d1.join("dummy.txt")).unwrap();
+        writeln!(f, "x").unwrap();
+    });
+
+    // 1) Request without trailing slash should 301 to canonical with slash
+    let no_redirect_client = reqwest::blocking::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    let res = no_redirect_client
+        .get(format!("http://{}/call_rec_data/Ruby", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
+    let loc = res.headers().get("location").unwrap().to_str().unwrap();
+    assert_eq!(loc, "/call_rec_data/Ruby/");
+
+    // 2) Fetch the directory listing HTML and verify child links are absolute and correct
+    let client = Client::new();
+    let res = client
+        .get(format!("http://{}/call_rec_data/Ruby/", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.text().unwrap();
+    assert!(body.contains("/call_rec_data/Ruby/23/"));
+    assert!(body.contains("/call_rec_data/Ruby/45/"));
+    // Ensure incorrect absolute path is not present
+    assert!(!body.contains("/call_rec_data/23/"));
+}
+
+#[test]
+fn test_search_api_directory_paths_have_trailing_slash() {
+    use serde_json::Value;
+    use std::fs::create_dir_all;
+
+    // Prepare dirs that include a target directory name for search
+    let server = setup_test_server_with_tree(None, None, |root| {
+        create_dir_all(root.join("call_rec_data").join("Ruby").join("23")).unwrap();
+    });
+
+    let client = Client::new();
+
+    // Query for "Ruby" at root
+    let res = client
+        .get(format!(
+            "http://{}/_irondrop/search?q=Ruby&path=/",
+            server.addr
+        ))
+        .send()
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let text = res.text().unwrap();
+    let json: Value = serde_json::from_str(&text).unwrap();
+    if let Some(arr) = json.as_array() {
+        // Look for directory entries and ensure trailing slash
+        for item in arr {
+            if item["type"] == "directory" {
+                let p = item["path"].as_str().unwrap_or("");
+                assert!(p.ends_with('/'));
+            }
+        }
+    }
+}

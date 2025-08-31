@@ -528,6 +528,19 @@ pub fn handle_file_request(
         debug!("Serving directory listing for: {}", full_path.display());
         trace!("Directory listing requested for path: {}", request.path);
 
+        // Redirect directory paths without trailing slash to canonical URL with slash
+        if !request.path.ends_with('/') {
+            let mut headers = HashMap::new();
+            let canonical = format!("{}/", request.path);
+            headers.insert("Location".to_string(), canonical);
+            return Ok(Response {
+                status_code: 301,
+                status_text: "Moved Permanently".to_string(),
+                headers,
+                body: ResponseBody::Text(String::new()),
+            });
+        }
+
         // Only serve directory listings for GET requests
         if request.method == "POST" {
             debug!("POST method not allowed for directory listings");

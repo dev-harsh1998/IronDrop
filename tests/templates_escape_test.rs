@@ -25,10 +25,10 @@ fn test_directory_listing_escapes_and_percent_encodes() {
 
     // Visible name should be HTML-escaped
     assert!(html.contains("my file &quot;weird&quot;&amp;&lt;.txt"));
-    // Href should percent-encode spaces and quotes (ampersand is not percent-encoded in current impl)
-    assert!(html.contains("href=\"my%20file%20%22weird%22&%3C.txt\""));
+    // Href should be absolute from current path and percent-encode spaces and quotes (ampersand is not percent-encoded in current impl)
+    assert!(html.contains("href=\"/downloads/my%20file%20%22weird%22&%3C.txt\""));
     // Directory entry name should be displayed without trailing slash
     assert!(html.contains(">dir with space<"));
-    // Directory link should include trailing slash in href encoding result
-    assert!(html.contains("href=\"dir%20with%20space/\""));
+    // Directory link should include trailing slash in href encoding result and be absolute
+    assert!(html.contains("href=\"/downloads/dir%20with%20space/\""));
 }
