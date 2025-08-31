@@ -60,6 +60,25 @@ impl RateLimiter {
         let mut connections = self.connections.lock().unwrap();
         let now = Instant::now();
 
+        // Hard limit on the number of entries to prevent unbounded memory growth
+        const MAX_RATE_LIMITER_ENTRIES: usize = 100_000;
+
+        // Check if we need to evict entries before inserting a new one
+        if !connections.contains_key(&ip) && connections.len() >= MAX_RATE_LIMITER_ENTRIES {
+            // Smart eviction: find the least recently used entry (oldest last_activity)
+            if let Some((&lru_ip, _)) = connections
+                .iter()
+                .min_by_key(|(_, info)| info.last_activity)
+            {
+                let lru_ip_copy = lru_ip;
+                connections.remove(&lru_ip_copy);
+                debug!(
+                    "Evicted LRU entry for IP {} to make space for new IP {}",
+                    lru_ip_copy, ip
+                );
+            }
+        }
+
         let conn_info = connections.entry(ip).or_insert(ConnectionInfo {
             request_count: 0,
             last_reset: now,
