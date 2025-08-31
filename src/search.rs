@@ -1114,8 +1114,17 @@ impl UltraLowMemoryIndex {
         // Reverse to get correct order (root to file)
         path_components.reverse();
 
-        // Remove the first component (base directory)
-        path_components.remove(0);
+        // Remove the first component if it's the base directory name
+        if !path_components.is_empty() {
+            let base_dir_name = self
+                .base_dir
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy();
+            if path_components[0] == base_dir_name {
+                path_components.remove(0);
+            }
+        }
 
         // Build path from base_dir + components
         let mut full_path = self.base_dir.clone();
