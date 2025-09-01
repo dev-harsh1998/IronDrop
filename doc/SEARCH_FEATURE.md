@@ -388,7 +388,7 @@ let engine = SearchEngine::new(
 
 ### Test Coverage
 
-The search functionality includes comprehensive tests as part of IronDrop's 125-test suite across 16 test files:
+The search functionality includes comprehensive tests as part of IronDrop's 189-test suite across 16 test files:
 
 1. **Ultra-Compact Search Tests** (`tests/ultra_compact_test.rs` - 4 tests):
    - RadixIndex memory efficiency with 10M entries

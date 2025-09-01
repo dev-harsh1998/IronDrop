@@ -85,9 +85,9 @@ mod integration_tests {
         // Generate directory listing HTML
         let listing_result = generate_directory_listing(temp_path, "/", None);
         assert!(listing_result.is_ok());
-        
+
         let listing_html = listing_result.unwrap();
-        
+
         // Check that visible files are included in the HTML
         for visible_file in &visible_files {
             assert!(
@@ -96,7 +96,7 @@ mod integration_tests {
                 visible_file
             );
         }
-        
+
         // Check that hidden files are excluded from the HTML
         for hidden_file in &hidden_files {
             assert!(
@@ -105,7 +105,7 @@ mod integration_tests {
                 hidden_file
             );
         }
-        
+
         // Check that hidden directory is excluded
         assert!(
             !listing_html.contains(".git"),
@@ -137,9 +137,9 @@ mod integration_tests {
         // Generate directory listing HTML
         let listing_result = generate_directory_listing(temp_path, "/", None);
         assert!(listing_result.is_ok());
-        
+
         let listing_html = listing_result.unwrap();
-        
+
         // Check that visible directories are included in the HTML
         for visible_dir in &visible_dirs {
             assert!(
@@ -148,7 +148,7 @@ mod integration_tests {
                 visible_dir
             );
         }
-        
+
         // Check that hidden directories are excluded from the HTML
         for hidden_dir in &hidden_dirs {
             assert!(
@@ -207,14 +207,21 @@ mod integration_tests {
         };
 
         let results = irondrop::search::perform_search(temp_path, &search_params).unwrap();
-        
+
         // Should find visible files
         let result_names: Vec<String> = results.iter().map(|r| r.name.clone()).collect();
-        assert!(result_names.contains(&"document.pdf".to_string()), "Should find visible document.pdf");
-        
+        assert!(
+            result_names.contains(&"document.pdf".to_string()),
+            "Should find visible document.pdf"
+        );
+
         // Should not find hidden files
         for hidden_file in &hidden_files {
-            assert!(!result_names.contains(&hidden_file.to_string()), "Should not find hidden file {}", hidden_file);
+            assert!(
+                !result_names.contains(&hidden_file.to_string()),
+                "Should not find hidden file {}",
+                hidden_file
+            );
         }
 
         // Test broader search that might match hidden files
@@ -226,11 +233,16 @@ mod integration_tests {
             case_sensitive: false,
         };
 
-        let broad_results = irondrop::search::perform_search(temp_path, &broad_search_params).unwrap();
-        let broad_result_names: Vec<String> = broad_results.iter().map(|r| r.name.clone()).collect();
-        
+        let broad_results =
+            irondrop::search::perform_search(temp_path, &broad_search_params).unwrap();
+        let broad_result_names: Vec<String> =
+            broad_results.iter().map(|r| r.name.clone()).collect();
+
         // Should not find .gitignore even though it contains "git"
-        assert!(!broad_result_names.contains(&".gitignore".to_string()), "Should not find .gitignore in search results");
+        assert!(
+            !broad_result_names.contains(&".gitignore".to_string()),
+            "Should not find .gitignore in search results"
+        );
 
         // Test search for nested files
         let nested_search_params = irondrop::search::SearchParams {
@@ -241,13 +253,21 @@ mod integration_tests {
             case_sensitive: false,
         };
 
-        let nested_results = irondrop::search::perform_search(temp_path, &nested_search_params).unwrap();
-        let nested_result_names: Vec<String> = nested_results.iter().map(|r| r.name.clone()).collect();
-        
+        let nested_results =
+            irondrop::search::perform_search(temp_path, &nested_search_params).unwrap();
+        let nested_result_names: Vec<String> =
+            nested_results.iter().map(|r| r.name.clone()).collect();
+
         // Should find visible nested file
-        assert!(nested_result_names.contains(&"visible_nested.txt".to_string()), "Should find visible nested file");
-        
+        assert!(
+            nested_result_names.contains(&"visible_nested.txt".to_string()),
+            "Should find visible nested file"
+        );
+
         // Should not find hidden nested file
-        assert!(!nested_result_names.contains(&".hidden_nested".to_string()), "Should not find hidden nested file");
+        assert!(
+            !nested_result_names.contains(&".hidden_nested".to_string()),
+            "Should not find hidden nested file"
+        );
     }
 }

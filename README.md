@@ -242,7 +242,7 @@ IronDrop has extensive documentation covering its architecture, API, and feature
 
 ## Testing
 
-IronDrop is rigorously tested with **179 comprehensive tests across 16 test files** covering all aspects of functionality.
+IronDrop is rigorously tested with **189 comprehensive tests across 16 test files** covering all aspects of functionality.
 
 ### Test Categories
 - **Integration Tests** (8 tests): End-to-end functionality and HTTP handling
@@ -278,7 +278,7 @@ IronDrop is licensed under the [MIT License](./LICENSE).
 <div align="center">
   <p>
     <strong>Made with ❤️ and 🦀 in Rust</strong><br>
-    <em>Zero dependencies • Production ready • Battle tested with 179 comprehensive tests</em>
+    <em>Zero dependencies • Production ready • Battle tested with 189 comprehensive tests</em>
   </p>
   <p>
     <a href="https://github.com/dev-harsh1998/IronDrop">⭐ Star us on GitHub</a>

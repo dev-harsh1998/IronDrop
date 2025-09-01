@@ -4,7 +4,7 @@ Version 2.6.2 - Test Suite Overview
 
 ## Overview
 
-IronDrop includes a comprehensive test suite with **179 tests** covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include enhanced path parsing, Unicode support, and race condition fixes.
+IronDrop includes a comprehensive test suite with **189 tests** covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include enhanced path parsing, Unicode support, and race condition fixes.
 
 ## Test Architecture
 
@@ -37,7 +37,7 @@ IronDrop includes a comprehensive test suite with **179 tests** covering functio
 | **Request Body** | `http_requestbody_test.rs` | 1 | Size and emptiness |
 | **Logging** | `log_dir_test.rs` | 3 | Directory creation, permissions |
 
-**Total Tests: 179**
+**Total Tests: 189**
 
 ## Detailed Test Coverage
 
@@ -182,7 +182,7 @@ fn test_demonstrate_memory_savings() // Compares memory usage vs alternatives
 
 ## Running Tests
 
-### Basic Test Execution (current totals: 179 tests across 16 files)
+### Basic Test Execution (current totals: 189 tests across 16 files)
 
 ```bash
 # Run all tests
@@ -396,7 +396,7 @@ fn test_new_feature() {
 - All 15 direct upload tests now pass, including concurrent upload scenarios
 
 **Test Suite Stability**
-- Achieved 100% test pass rate across all 179 tests
+- Achieved 100% test pass rate across all 189 tests
 - Enhanced test reliability under concurrent execution
 - Improved error handling and edge case coverage
 - Added comprehensive validation for boundary conditions
