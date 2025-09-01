@@ -11,6 +11,7 @@
 //! - Cache-aligned structures: Optimize for CPU cache lines
 
 use crate::error::AppError;
+use crate::utils::is_hidden_file;
 use log::{debug, error, info, trace, warn};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -772,6 +773,11 @@ impl UltraLowMemoryIndex {
             let file_path = entry.path();
             let file_name = entry.file_name().to_string_lossy().to_string();
             let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+
+            // Skip hidden files (starting with '._' or '.DS_Store')
+            if is_hidden_file(&file_name) {
+                continue;
+            }
 
             batch_entries.push((
                 file_name,
@@ -1589,6 +1595,10 @@ fn perform_parallel_search(
     // Expand to first level of subdirectories for better parallelization
     if let Ok(entries) = fs::read_dir(&dirs_to_search[0]) {
         for entry in entries.flatten() {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if is_hidden_file(&file_name) {
+                continue;
+            }
             if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
                 initial_dirs.push(entry.path());
             }
@@ -1658,6 +1668,9 @@ fn search_directory_recursive(
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let file_name = entry.file_name().to_string_lossy().to_string();
+            if is_hidden_file(&file_name) {
+                continue;
+            }
             let file_name_lower = file_name.to_lowercase();
 
             if file_name_lower.contains(&query_lower)

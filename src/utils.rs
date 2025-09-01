@@ -197,3 +197,9 @@ fn normalize_path(path: &Path) -> Result<PathBuf, AppError> {
     }
     Ok(components.iter().collect())
 }
+
+/// Check if a filename should be hidden from directory listings and search
+/// Returns true for files starting with '._', '.', or named '.DS_Store'
+pub fn is_hidden_file(filename: &str) -> bool {
+    filename.starts_with("._") || filename.starts_with(".") || filename == ".DS_Store"
+}

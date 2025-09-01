@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::error::AppError;
 use crate::templates::TemplateEngine;
+use crate::utils::is_hidden_file;
 use log::{debug, trace};
 use std::fs::{self, File};
 use std::io;
@@ -26,6 +27,12 @@ pub fn generate_directory_listing(
         let entry = entry?;
         let metadata = entry.metadata()?;
         let file_name = entry.file_name().into_string().unwrap_or_default();
+
+        // Skip hidden files (starting with '._' or '.DS_Store')
+        if is_hidden_file(&file_name) {
+            trace!("Skipping hidden file: {}", file_name);
+            continue;
+        }
 
         trace!(
             "Found entry: {} ({})",
