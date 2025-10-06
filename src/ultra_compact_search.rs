@@ -28,7 +28,7 @@ pub struct UltraCompactEntry {
 
 impl UltraCompactEntry {
     const FLAG_IS_DIR: u32 = 1 << 0;
-    const TIME_EPOCH: u64 = 1577836800; // 2020-01-01 00:00:00 UTC
+    const TIME_EPOCH: u64 = 1_577_836_800; // 2020-01-01 00:00:00 UTC
 
     pub fn new(
         name_offset: u32,
@@ -52,7 +52,7 @@ impl UltraCompactEntry {
         let time_packed = ((modified_secs.saturating_sub(Self::TIME_EPOCH)) / 4) as u32;
 
         // Pack flags and time
-        let mut packed_data = (time_packed << 2) & 0xFFFFFFFC;
+        let mut packed_data = (time_packed << 2) & 0xFFFF_FFFC;
         if is_dir {
             packed_data |= Self::FLAG_IS_DIR;
         }
@@ -176,10 +176,10 @@ impl StringPool {
 
     fn hash(s: &str) -> u32 {
         // Simple FNV-1a hash
-        let mut hash = 2166136261u32;
+        let mut hash = 2_166_136_261_u32;
         for byte in s.bytes() {
             hash ^= byte as u32;
-            hash = hash.wrapping_mul(16777619);
+            hash = hash.wrapping_mul(16_777_619);
         }
         hash
     }

@@ -70,19 +70,17 @@ pub fn get_request_path(request_line: &str) -> &str {
         }
 
         // Handle paths that start with "/".
-        if let Some(relative_path) = path.strip_prefix("/") {
+        if let Some(relative_path) = path.strip_prefix('/') {
             // Remove the leading "/".
             if relative_path.is_empty() {
                 // If it's just "/", return root path.
                 return "/";
-            } else {
-                // Otherwise, return the relative path.
-                return relative_path;
             }
-        } else {
-            // If it doesn't start with "/", return the path as is.
-            return path;
+            // Otherwise, return the relative path.
+            return relative_path;
         }
+        // If it doesn't start with "/", return the path as is.
+        return path;
     }
     "/" // Default to root path if request line parsing fails - safer fallback. 🗺️
 }

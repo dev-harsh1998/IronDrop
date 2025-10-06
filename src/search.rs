@@ -118,14 +118,13 @@ impl SearchCache {
 
                 debug!("Cache hit for query: {} (hits: {})", key, cached.hit_count);
                 return Some(cached.results.clone());
-            } else {
-                // Cache expired, remove it
-                self.cache.remove(key);
-                if let Some(pos) = self.order.iter().position(|k| k == key) {
-                    self.order.remove(pos);
-                }
-                debug!("Cache expired for query: {key}");
             }
+            // Cache expired, remove it
+            self.cache.remove(key);
+            if let Some(pos) = self.order.iter().position(|k| k == key) {
+                self.order.remove(pos);
+            }
+            debug!("Cache expired for query: {key}");
         }
         self.stats.misses += 1;
         None
@@ -448,12 +447,12 @@ impl UnifiedStringPool {
 
 /// Fast murmur3-style hash for string pool
 fn murmur3_hash(data: &[u8]) -> u32 {
-    const C1: u32 = 0xcc9e2d51;
-    const C2: u32 = 0x1b873593;
+    const C1: u32 = 0xcc9e_2d51;
+    const C2: u32 = 0x1b87_3593;
     const R1: u32 = 15;
     const R2: u32 = 13;
     const M: u32 = 5;
-    const N: u32 = 0xe6546b64;
+    const N: u32 = 0xe654_6b64;
 
     let mut hash = 0u32;
     let mut i = 0;
@@ -506,9 +505,9 @@ fn murmur3_hash(data: &[u8]) -> u32 {
     // Finalization
     hash ^= data.len() as u32;
     hash ^= hash >> 16;
-    hash = hash.wrapping_mul(0x85ebca6b);
+    hash = hash.wrapping_mul(0x85eb_ca6b);
     hash ^= hash >> 13;
-    hash = hash.wrapping_mul(0xc2b2ae35);
+    hash = hash.wrapping_mul(0xc2b2_ae35);
     hash ^= hash >> 16;
 
     hash

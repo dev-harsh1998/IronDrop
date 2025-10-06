@@ -920,7 +920,7 @@ impl DirectUploadHandler {
         };
 
         let files_list = format!(
-            r#"<li><strong>{}</strong>{} - {} bytes</li>"#,
+            r"<li><strong>{}</strong>{} - {} bytes</li>",
             file.saved_name,
             rename_note,
             format_bytes(file.size)
@@ -1093,8 +1093,8 @@ mod tests {
         assert_eq!(format_bytes(512), "512 B");
         assert_eq!(format_bytes(1024), "1.0 KB");
         assert_eq!(format_bytes(1536), "1.5 KB");
-        assert_eq!(format_bytes(1048576), "1.0 MB");
-        assert_eq!(format_bytes(1073741824), "1.0 GB");
+        assert_eq!(format_bytes(1_048_576), "1.0 MB");
+        assert_eq!(format_bytes(1_073_741_824), "1.0 GB");
     }
 
     #[test]

@@ -114,6 +114,10 @@ fn validate_config_file(s: &str) -> Result<String, String> {
 
 impl Cli {
     /// Validate the CLI configuration for security and consistency
+    /// # Errors
+    ///
+    /// Returns an error if configuration validation fails, including invalid
+    /// paths, missing directories, or out-of-range parameter values.
     pub fn validate(&self) -> Result<(), AppError> {
         // Validate upload configuration consistency
         if self.enable_upload.unwrap_or(false) {
@@ -141,15 +145,19 @@ impl Cli {
     }
 
     /// Convert upload size from MB to bytes with overflow checking
+    #[must_use]
     pub fn max_upload_size_bytes(&self) -> u64 {
         // Safe conversion from u64 MB to u64 bytes
         // No upper limit - direct streaming handles any size efficiently
         self.max_upload_size
-            .map(|size| size * 1024 * 1024)
-            .unwrap_or(u64::MAX)
+            .map_or(u64::MAX, |size| size * 1024 * 1024)
     }
 
     /// Get the resolved upload directory, using OS defaults if not specified
+    /// # Errors
+    ///
+    /// Returns an error if the configured upload directory does not exist
+    /// or cannot be created, or if permissions are insufficient.
     pub fn get_upload_directory(&self) -> Result<PathBuf, AppError> {
         // Always return an error since we no longer support pre-configured upload directories
         // Upload directories are now determined dynamically from the current URL

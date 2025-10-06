@@ -497,7 +497,7 @@ fn test_direct_upload_filename_sanitization() {
     let cli = create_test_cli(temp_dir.path().to_path_buf());
     let mut upload_handler = DirectUploadHandler::new(&cli).unwrap();
 
-    let problematic_filenames = vec![
+    let problematic_filenames = [
         ("file with spaces.txt", "should handle spaces"),
         ("file<>:\"|?*.txt", "should handle special characters"),
         (
@@ -728,9 +728,14 @@ fn test_direct_upload_disk_space_simulation() {
             let saved_file = temp_dir.path().join("large-test.bin");
             if saved_file.exists() {
                 let metadata = fs::metadata(&saved_file).unwrap();
+                let file_size = metadata.len();
+                assert!(
+                    usize::try_from(file_size).is_ok(),
+                    "File size should fit in usize"
+                );
                 assert_eq!(
-                    metadata.len() as usize,
-                    large_data.len(),
+                    file_size,
+                    u64::try_from(large_data.len()).expect("vec length fits in u64"),
                     "File size should match uploaded data"
                 );
             }

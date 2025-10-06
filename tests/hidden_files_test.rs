@@ -92,8 +92,7 @@ mod integration_tests {
         for visible_file in &visible_files {
             assert!(
                 listing_html.contains(visible_file),
-                "Visible file {} should be in listing HTML",
-                visible_file
+                "Visible file {visible_file} should be in listing HTML"
             );
         }
 
@@ -101,8 +100,7 @@ mod integration_tests {
         for hidden_file in &hidden_files {
             assert!(
                 !listing_html.contains(hidden_file),
-                "Hidden file {} should not be in listing HTML",
-                hidden_file
+                "Hidden file {hidden_file} should not be in listing HTML"
             );
         }
 
@@ -143,18 +141,16 @@ mod integration_tests {
         // Check that visible directories are included in the HTML
         for visible_dir in &visible_dirs {
             assert!(
-                listing_html.contains(&format!("{}/", visible_dir)),
-                "Visible directory {} should be in listing HTML",
-                visible_dir
+                listing_html.contains(&format!("{visible_dir}/")),
+                "Visible directory {visible_dir} should be in listing HTML"
             );
         }
 
         // Check that hidden directories are excluded from the HTML
         for hidden_dir in &hidden_dirs {
             assert!(
-                !listing_html.contains(&format!("{}/", hidden_dir)),
-                "Hidden directory {} should not be in listing HTML",
-                hidden_dir
+                !listing_html.contains(&format!("{hidden_dir}/")),
+                "Hidden directory {hidden_dir} should not be in listing HTML"
             );
         }
     }
@@ -211,16 +207,15 @@ mod integration_tests {
         // Should find visible files
         let result_names: Vec<String> = results.iter().map(|r| r.name.clone()).collect();
         assert!(
-            result_names.contains(&"document.pdf".to_string()),
+            result_names.iter().any(|n| n == "document.pdf"),
             "Should find visible document.pdf"
         );
 
         // Should not find hidden files
         for hidden_file in &hidden_files {
             assert!(
-                !result_names.contains(&hidden_file.to_string()),
-                "Should not find hidden file {}",
-                hidden_file
+                result_names.iter().all(|n| n != hidden_file),
+                "Should not find hidden file {hidden_file}"
             );
         }
 

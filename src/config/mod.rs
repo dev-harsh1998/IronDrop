@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-//! Configuration management for IronDrop
+//! Configuration management for `IronDrop`
 //! Supports INI files with CLI argument overrides
 
 pub mod ini_parser;
@@ -96,11 +96,10 @@ impl Config {
             let path = PathBuf::from(config_path);
             if path.exists() {
                 return Ok(Some(path));
-            } else {
-                return Err(format!(
-                    "Config file specified but not found: {config_path}"
-                ));
             }
+            return Err(format!(
+                "Config file specified but not found: {config_path}"
+            ));
         }
 
         // 2. Check current directory
@@ -389,7 +388,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_file = temp_dir.path().join("test.ini");
 
-        let ini_content = r#"
+        let ini_content = r"
 [server]
 listen = 0.0.0.0
 port = 9000
@@ -410,7 +409,7 @@ allowed_extensions = *.pdf,*.doc
 [logging]
 verbose = true
 detailed = false
-"#;
+";
 
         fs::write(&config_file, ini_content).unwrap();
 
@@ -438,12 +437,12 @@ detailed = false
         let temp_dir = TempDir::new().unwrap();
         let config_file = temp_dir.path().join("test.ini");
 
-        let ini_content = r#"
+        let ini_content = r"
 [server]
 listen = 0.0.0.0
 port = 9000
 threads = 16
-"#;
+";
 
         fs::write(&config_file, ini_content).unwrap();
 
@@ -485,11 +484,11 @@ threads = 16
         let temp_dir = TempDir::new().unwrap();
 
         let config_file = temp_dir.path().join("test.ini");
-        let ini_content = r#"
+        let ini_content = r"
 [upload]
 enable_upload = true
 max_upload_size = 2GB
-"#;
+";
 
         fs::write(&config_file, ini_content).unwrap();
 
@@ -517,10 +516,10 @@ max_upload_size = 2GB
             false
         };
 
-        let ini_content = r#"
+        let ini_content = r"
 [upload]
 max_upload_size = 1.5GB
-"#;
+";
 
         fs::write(&config_file, ini_content).unwrap();
 
@@ -559,10 +558,10 @@ max_upload_size = 1.5GB
         let config_file = temp_dir.path().join("test.ini");
 
         // Even if INI has directory, CLI should always win (since it's required)
-        let ini_content = r#"
+        let ini_content = r"
 [server]
 directory = /some/other/path
-"#;
+";
         fs::write(&config_file, ini_content).unwrap();
 
         let mut cli = create_test_cli(temp_dir.path().to_path_buf());

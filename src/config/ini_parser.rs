@@ -20,6 +20,7 @@ impl Default for IniConfig {
 }
 
 impl IniConfig {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sections: HashMap::new(),
@@ -28,6 +29,10 @@ impl IniConfig {
     }
 
     /// Load configuration from file
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read or parsed.
     pub fn load_file<P: AsRef<Path>>(path: P) -> Result<Self, String> {
         let content =
             fs::read_to_string(path).map_err(|e| format!("Failed to read config file: {e}"))?;
@@ -35,6 +40,14 @@ impl IniConfig {
     }
 
     /// Parse INI content from string
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the content contains invalid syntax.
+    ///
+    /// # Panics
+    ///
+    /// This function does not panic under normal circumstances.
     pub fn parse(content: &str) -> Result<Self, String> {
         let mut config = Self::new();
         let mut current_section = String::new();
@@ -262,7 +275,7 @@ mod tests {
 
     #[test]
     fn test_ini_parsing() {
-        let content = r#"
+        let content = r"
 # Global config
 debug=true
 
@@ -273,7 +286,7 @@ port=8080
 [upload]
 enabled=true
 max_size=10GB
-        "#;
+        ";
 
         let config = IniConfig::parse(content).unwrap();
         assert_eq!(config.get_bool("", "debug"), Some(true));
@@ -290,7 +303,7 @@ max_size=10GB
 
     #[test]
     fn test_boolean_parsing() {
-        let content = r#"
+        let content = r"
 [test]
 true1=true
 true2=yes
@@ -300,7 +313,7 @@ false1=false
 false2=no
 false3=0
 false4=off
-        "#;
+        ";
 
         let config = IniConfig::parse(content).unwrap();
         assert_eq!(config.get_bool("test", "true1"), Some(true));
@@ -315,10 +328,10 @@ false4=off
 
     #[test]
     fn test_list_parsing() {
-        let content = r#"
+        let content = r"
 [extensions]
 allowed=jpg,png,pdf,txt
-        "#;
+        ";
 
         let config = IniConfig::parse(content).unwrap();
         let list = config.get_list("extensions", "allowed");

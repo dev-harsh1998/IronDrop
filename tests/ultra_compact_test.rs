@@ -7,6 +7,11 @@ mod ultra_compact_tests {
     use std::time::{Instant, SystemTime};
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cast_precision_loss,
+        clippy::cast_sign_loss
+    )]
     fn test_memory_efficiency_10m_entries() {
         println!("\n=== Testing Ultra-Compact Memory Efficiency ===\n");
 
@@ -15,7 +20,7 @@ mod ultra_compact_tests {
 
         // Simulate directory structure
         let dirs_per_level = 100;
-        let files_per_dir = 100;
+        let files_per_dir: u32 = 100;
         let total_target = 10_000_000;
         let mut total_added = 0;
 
@@ -52,7 +57,7 @@ mod ultra_compact_tests {
                     index.add_entry(
                         &format!("file_{level:04}_{j:06}.dat"),
                         parent_id,
-                        1024 * (j as u64 + 1),
+                        1024_u64 * (u64::from(j) + 1),
                         false,
                         SystemTime::now(),
                     );
@@ -143,18 +148,19 @@ mod ultra_compact_tests {
                 "Query '{}': {} results in {:.2}ms",
                 query,
                 results.len(),
-                search_time.as_micros() as f64 / 1000.0
+                search_time.as_secs_f64() * 1_000.0
             );
         }
 
         // Path reconstruction test
         println!("\n=== Path Reconstruction ===");
-        let test_ids = vec![100, 1000, 10000, 100000, 1000000];
+        let test_ids = vec![100, 1_000, 10_000, 100_000, 1_000_000];
 
         for id in test_ids {
             if id < total_added {
                 let path_start = Instant::now();
-                let path = index.get_path(id as u32);
+                let id_u32 = u32::try_from(id).expect("id exceeds u32 range");
+                let path = index.get_path(id_u32);
                 let path_time = path_start.elapsed();
 
                 println!(

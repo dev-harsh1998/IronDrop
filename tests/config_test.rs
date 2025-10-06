@@ -104,13 +104,13 @@ single_item = *.doc
     let ini = IniConfig::parse(ini_content).expect("Failed to parse INI");
 
     let extensions = ini.get_list("security", "extensions");
-    assert_eq!(extensions, vec!["*.zip", "*.txt", "*.pdf"]);
+    assert_eq!(extensions, ["*.zip", "*.txt", "*.pdf"]);
 
     let empty = ini.get_list("security", "empty_list");
     assert_eq!(empty, Vec::<String>::new());
 
     let single = ini.get_list("security", "single_item");
-    assert_eq!(single, vec!["*.doc"]);
+    assert_eq!(single, ["*.doc"]);
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn test_config_defaults() {
     assert_eq!(config.max_upload_size, 10240 * 1024 * 1024); // 10GB in bytes
     assert_eq!(config.username, None);
     assert_eq!(config.password, None);
-    assert_eq!(config.allowed_extensions, vec!["*.zip", "*.txt"]);
+    assert_eq!(config.allowed_extensions, ["*.zip", "*.txt"]);
     assert_eq!(config.verbose, false);
     assert_eq!(config.detailed_logging, false);
 }
@@ -412,7 +412,7 @@ port = 9999
 fn test_config_invalid_port_values() {
     let temp_dir = TempDir::new().unwrap();
 
-    let test_cases = vec![
+    let test_cases = [
         ("port = -1", "negative port"),
         ("port = 65536", "port too high"),
         ("port = abc", "non-numeric port"),
@@ -421,7 +421,7 @@ fn test_config_invalid_port_values() {
     ];
 
     // Test port 0 separately as it's technically valid but unusual
-    let zero_port_cases = vec![("port = 0", "zero port")];
+    let zero_port_cases = [("port = 0", "zero port")];
 
     for (port_config, description) in test_cases {
         let config_file = temp_dir
@@ -452,10 +452,10 @@ fn test_config_invalid_port_values() {
         // Should either use default port or return error for invalid values
         match result {
             Ok(config) => {
-                // If parsing succeeds, should use default port for invalid values
+                // If parsing succeeds, should use a non-zero port for invalid values
                 assert!(
-                    config.port > 0 && config.port <= 65535,
-                    "Should use valid port for {}",
+                    config.port != 0,
+                    "Should use valid non-zero port for {}",
                     description
                 );
             }
@@ -513,7 +513,7 @@ fn test_config_invalid_port_values() {
 fn test_config_invalid_file_size_formats() {
     let temp_dir = TempDir::new().unwrap();
 
-    let test_cases = vec![
+    let test_cases = [
         "max_upload_size = -1MB",
         "max_upload_size = 0.5.5GB",
         "max_upload_size = ABCMB",
@@ -583,7 +583,7 @@ fn test_config_invalid_file_size_formats() {
 fn test_config_boolean_edge_cases() {
     let temp_dir = TempDir::new().unwrap();
 
-    let test_cases = vec![
+    let test_cases = [
         ("enable_upload = TRUE", true),
         ("enable_upload = FALSE", false),
         ("enable_upload = True", true),
@@ -634,7 +634,7 @@ fn test_config_boolean_edge_cases() {
 fn test_config_malformed_ini_syntax() {
     let temp_dir = TempDir::new().unwrap();
 
-    let malformed_configs = vec![
+    let malformed_configs = [
         "[server\nport = 8080", // Missing closing bracket
         "server]\nport = 8080", // Missing opening bracket
         "[server]\nport 8080",  // Missing equals sign

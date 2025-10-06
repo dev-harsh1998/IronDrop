@@ -552,9 +552,8 @@ impl ServerStats {
                     crate::search::clear_cache();
 
                     return true;
-                } else {
-                    trace!("Memory usage within normal limits: {}MB", memory_mb);
                 }
+                trace!("Memory usage within normal limits: {}MB", memory_mb);
             } else {
                 trace!("Memory usage unavailable but tracking is enabled");
             }
@@ -1140,7 +1139,7 @@ impl Worker {
 mod threadpool_tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{mpsc, Arc, Barrier};
+    use std::sync::{Arc, Barrier, mpsc};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -1173,7 +1172,8 @@ mod threadpool_tests {
 
         let mut received = 0;
         while received < total_jobs {
-            rx.recv_timeout(Duration::from_secs(3)).expect("timed out waiting for jobs");
+            rx.recv_timeout(Duration::from_secs(3))
+                .expect("timed out waiting for jobs");
             received += 1;
         }
 
@@ -1202,7 +1202,8 @@ mod threadpool_tests {
         let start = Instant::now();
         // All barrier tasks should complete promptly; sequential execution would deadlock
         for _ in 0..worker_count {
-            rx.recv_timeout(Duration::from_secs(2)).expect("barrier tasks did not complete");
+            rx.recv_timeout(Duration::from_secs(2))
+                .expect("barrier tasks did not complete");
         }
         let elapsed = start.elapsed();
 
@@ -1211,7 +1212,7 @@ mod threadpool_tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "assertion failed: size > 0")]
     fn threadpool_zero_size_panics() {
         let _pool = ThreadPool::new(0);
     }
@@ -1235,7 +1236,8 @@ mod threadpool_tests {
 
         let mut received = 0;
         while received < messages {
-            rx.recv_timeout(Duration::from_secs(2)).expect("did not receive all messages after shutdown");
+            rx.recv_timeout(Duration::from_secs(2))
+                .expect("did not receive all messages after shutdown");
             received += 1;
         }
         assert_eq!(received, messages);
@@ -1535,7 +1537,6 @@ pub fn run_server(
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 // No connections available, sleep briefly
                 std::thread::sleep(Duration::from_millis(100));
-                continue;
             }
             Err(e) => {
                 error!("❌ Error accepting connection: {e}");

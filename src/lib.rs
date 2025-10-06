@@ -12,14 +12,14 @@
 #![allow(clippy::needless_return)]
 #![allow(clippy::redundant_closure_for_method_calls)]
 
-/// # IronDrop
+/// # `IronDrop`
 ///
 /// A lightweight, configurable file download server written in Rust.
 ///
 /// This library contains the core logic for the server. The `run` function
 /// initializes and starts the server based on command-line arguments.
 
-/// The version of IronDrop, automatically derived from Cargo.toml
+/// The version of `IronDrop`, automatically derived from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod cli;

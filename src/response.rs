@@ -10,7 +10,7 @@ use std::path::Path;
 /// Native MIME type detection for common file types
 pub fn get_mime_type(path: &Path) -> &'static str {
     match path.extension().and_then(|ext| ext.to_str()) {
-        Some("html") | Some("htm") => "text/html",
+        Some("html" | "htm") => "text/html",
         Some("css") => "text/css",
         Some("js") => "application/javascript",
         Some("json") => "application/json",
@@ -18,7 +18,7 @@ pub fn get_mime_type(path: &Path) -> &'static str {
         Some("txt") => "text/plain",
         Some("md") => "text/markdown",
         Some("png") => "image/png",
-        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("jpg" | "jpeg") => "image/jpeg",
         Some("gif") => "image/gif",
         Some("svg") => "image/svg+xml",
         Some("ico") => "image/x-icon",

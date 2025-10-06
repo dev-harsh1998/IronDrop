@@ -346,9 +346,9 @@ fn test_invalid_range_requests() {
     // Test invalid range header formats
     let test_cases = vec![
         "Range: bytes=invalid",
-        "Range: bytes=100-50",  // End before start
-        "Range: bytes=999999-", // Beyond file size
-        "Range: units=0-10",    // Invalid unit
+        "Range: bytes=100-50",   // End before start
+        "Range: bytes=999_999-", // Beyond file size
+        "Range: units=0-10",     // Invalid unit
     ];
 
     for range_header in test_cases {

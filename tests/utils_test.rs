@@ -2,7 +2,7 @@
 
 use irondrop::utils::{parse_query_params, percent_encode_path, resolve_upload_directory};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[test]
 fn test_percent_encode_path_spaces() {
@@ -41,19 +41,19 @@ fn test_percent_encode_path_special_characters() {
     let p = Path::new("file with !@#$%^&*()+={}[]|\\:;\"'<>,.?/~`");
     let enc = percent_encode_path(p);
     // Should encode special characters that need encoding
-    assert!(enc.contains("%"));
-    assert!(!enc.contains(" ")); // spaces should be encoded
+    assert!(enc.contains('%'));
+    assert!(!enc.contains(' ')); // spaces should be encoded
 }
 
 #[test]
 fn test_percent_encode_path_unicode() {
     let p = Path::new("файл.txt"); // Cyrillic
     let enc = percent_encode_path(p);
-    assert!(enc.contains("%")); // Unicode should be percent-encoded
+    assert!(enc.contains('%')); // Unicode should be percent-encoded
 
     let p2 = Path::new("文件.txt"); // Chinese
     let enc2 = percent_encode_path(p2);
-    assert!(enc2.contains("%")); // Unicode should be percent-encoded
+    assert!(enc2.contains('%')); // Unicode should be percent-encoded
 }
 
 #[test]
@@ -170,7 +170,7 @@ fn test_resolve_upload_directory_special_characters() {
     let special_dir = base.join(special_name);
     if fs::create_dir(&special_dir).is_ok() {
         // URL-encoded path
-        let encoded_path = format!("/{}", special_name.replace(" ", "%20").replace("&", "%26"));
+        let encoded_path = format!("/{}", special_name.replace(' ', "%20").replace('&', "%26"));
         // This might fail depending on implementation, but shouldn't crash
         let _ = resolve_upload_directory(base, Some(&encoded_path));
     }
