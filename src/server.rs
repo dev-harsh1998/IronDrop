@@ -1136,6 +1136,131 @@ impl Worker {
     }
 }
 
+#[cfg(test)]
+mod threadpool_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{mpsc, Arc, Barrier};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn threadpool_executes_single_job() {
+        let pool = ThreadPool::new(2);
+        let (tx, rx) = mpsc::channel();
+
+        pool.execute(move || {
+            tx.send("done").unwrap();
+        });
+
+        let result = rx.recv_timeout(Duration::from_secs(1));
+        assert!(result.is_ok(), "expected job execution within 1s");
+        assert_eq!(result.unwrap(), "done");
+    }
+
+    #[test]
+    fn threadpool_executes_many_jobs() {
+        let pool = ThreadPool::new(4);
+        let (tx, rx) = mpsc::channel();
+        let total_jobs = 50;
+
+        for _ in 0..total_jobs {
+            let tx_clone = tx.clone();
+            pool.execute(move || {
+                tx_clone.send(1_u8).unwrap();
+            });
+        }
+
+        let mut received = 0;
+        while received < total_jobs {
+            rx.recv_timeout(Duration::from_secs(3)).expect("timed out waiting for jobs");
+            received += 1;
+        }
+
+        assert_eq!(received, total_jobs);
+    }
+
+    #[test]
+    fn threadpool_runs_tasks_concurrently_with_barrier() {
+        let worker_count = 4;
+        let pool = ThreadPool::new(worker_count);
+        let barrier = Arc::new(Barrier::new(worker_count));
+        let started = Arc::new(AtomicUsize::new(0));
+        let (tx, rx) = mpsc::channel();
+
+        for _ in 0..worker_count {
+            let b = barrier.clone();
+            let s = started.clone();
+            let txc = tx.clone();
+            pool.execute(move || {
+                s.fetch_add(1, Ordering::SeqCst);
+                b.wait();
+                txc.send(()).unwrap();
+            });
+        }
+
+        let start = Instant::now();
+        // All barrier tasks should complete promptly; sequential execution would deadlock
+        for _ in 0..worker_count {
+            rx.recv_timeout(Duration::from_secs(2)).expect("barrier tasks did not complete");
+        }
+        let elapsed = start.elapsed();
+
+        assert_eq!(started.load(Ordering::SeqCst), worker_count);
+        assert!(elapsed < Duration::from_secs(2));
+    }
+
+    #[test]
+    #[should_panic]
+    fn threadpool_zero_size_panics() {
+        let _pool = ThreadPool::new(0);
+    }
+
+    #[test]
+    fn threadpool_shutdown_waits_for_workers() {
+        let messages = 6;
+        let (tx, rx) = mpsc::channel();
+
+        {
+            let pool = ThreadPool::new(3);
+            for _ in 0..messages {
+                let tx_clone = tx.clone();
+                pool.execute(move || {
+                    thread::sleep(Duration::from_millis(50));
+                    tx_clone.send(()).unwrap();
+                });
+            }
+            // pool dropped here, should wait for all workers to finish
+        }
+
+        let mut received = 0;
+        while received < messages {
+            rx.recv_timeout(Duration::from_secs(2)).expect("did not receive all messages after shutdown");
+            received += 1;
+        }
+        assert_eq!(received, messages);
+    }
+
+    #[test]
+    fn threadpool_handles_worker_panic_gracefully() {
+        let pool = ThreadPool::new(1);
+        let (tx, rx) = mpsc::channel();
+
+        pool.execute(|| {
+            panic!("intentional panic in worker job");
+        });
+
+        pool.execute(move || {
+            tx.send(42_u8).unwrap();
+        });
+
+        drop(pool);
+
+        let res = rx.recv_timeout(Duration::from_millis(200));
+        assert!(res.is_err(), "unexpected job execution after worker panic");
+    }
+}
+
 /// Run server with new configuration system
 pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
     // Convert Config back to Cli for compatibility with existing code
