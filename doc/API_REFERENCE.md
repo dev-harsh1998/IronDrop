@@ -1,4 +1,4 @@
-# IronDrop API Reference v2.5
+# IronDrop API Reference v2.6.4
 
 ## Overview
 
@@ -193,7 +193,7 @@ Content-Type: text/html; charset=utf-8
 #### `POST /_irondrop/upload`
 Uploads files using direct binary streaming for optimal performance and unlimited file size support.
 
-**Direct Upload Features (v2.5):**
+**Direct Upload Features (v2.6.4):**
 - **Direct Binary Streaming**: No multipart parsing overhead
 - **Automatic Mode Selection**: Small uploads (≤2MB) processed in memory, large uploads (>2MB) streamed to disk
 - **Constant Memory Usage**: ~7MB RAM usage regardless of file size
@@ -827,4 +827,4 @@ All inputs are validated:
 - File names for path traversal attempts
 - HTTP headers for malformed content
 
-This API reference covers all functionality available in IronDrop v2.6 and provides comprehensive examples for client integration.
+This API reference covers all functionality available in IronDrop v2.6.4 and provides comprehensive examples for client integration.

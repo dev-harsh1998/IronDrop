@@ -26,7 +26,7 @@ Recent updates include direct streaming uploads and the ultra-compact search mod
 - Security architecture and defense-in-depth implementation
 - Performance characteristics and scalability considerations
 - Template system design and asset pipeline
-- Testing architecture with 189 comprehensive tests across 16 test files
+- Testing architecture with 199 comprehensive tests across 16 test files
 
 **Key Sections:**
 - Core module breakdown with line counts and responsibilities
@@ -91,7 +91,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 **Purpose**: Comprehensive testing suite documentation and validation procedures
 
 **Contents:**
-- **Complete Test Coverage**: 189 tests across 16 test files covering all functionality
+- **Complete Test Coverage**: 199 tests across 16 test files covering all functionality
 - **Test Categories**: Core server, integration, edge cases, memory optimization, performance, stress testing, streaming
 - **Security Testing**: Path traversal prevention, input validation, authentication mechanisms
 - **Performance Benchmarks**: Memory efficiency targets, upload speed thresholds, stress test metrics
@@ -99,7 +99,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - **Streaming Tests**: HTTP layer streaming validation and large file bash integration tests
 - **Test Infrastructure**: Helper functions, data management, execution procedures
 
-**Implementation Status**: ✅ **Production Ready** (v2.6)
+**Implementation Status**: ✅ **Production Ready** (v2.6.4)
 - **English-Only Testing**: All test messages and output standardized to English
 - **Comprehensive Coverage**: Edge cases, security scenarios, performance validation, and streaming functionality
 - **Memory Optimization Tests**: Ultra-compact search engine validation for 10M+ files
@@ -119,7 +119,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Multi-file concurrent upload handling
 - Client-side validation and error handling
 
-**Implementation Status**: ✅ **Production Ready** (v2.5)
+**Implementation Status**: ✅ **Production Ready** (v2.6.4)
 - Complete upload system with 29 comprehensive tests
 - Professional UI matching IronDrop's design language
 - Integrated with template engine and security systems
@@ -136,7 +136,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - CLI configuration security enhancements
 - Defense-in-depth implementation details
 
-**Security Status**: ✅ **Fully Implemented** (v2.5)
+**Security Status**: ✅ **Fully Implemented** (v2.6.4)
 - Comprehensive input validation at multiple layers
 - System directory blacklisting and write permission checks
 - Direct streaming with unlimited file size support
@@ -154,7 +154,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Configuration options and customization
 - Comprehensive API usage examples
 
-**Implementation Status**: ✅ **Production Ready** (v2.5.1)
+**Implementation Status**: ✅ **Production Ready** (v2.6.4)
 - RFC 7578 compliance with robust boundary detection and streaming support
 - Advanced streaming implementation for memory-efficient large file processing
 - 7+ dedicated test cases covering edge cases and streaming scenarios
@@ -175,7 +175,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - **Integration Guide**: Seamless integration with existing upload handlers
 - **Testing Framework**: Comprehensive test coverage with dedicated HTTP streaming tests
 
-**Implementation Status**: ✅ **Production Ready** (v2.5)
+**Implementation Status**: ✅ **Production Ready** (v2.6.4)
 - **Automatic Mode Selection**: ≤1MB in memory, >1MB streamed to disk
 - **Zero Configuration**: Works transparently with existing upload handlers
 - **Resource Protection**: Prevents memory exhaustion from large uploads
@@ -211,7 +211,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Security implementation and access control
 - Configuration options and troubleshooting guide
 
-**Implementation Status**: ✅ **Production Ready** (v2.5)
+**Implementation Status**: ✅ **Production Ready** (v2.6.4)
 - **Standard Search Engine**: Thread-safe search with LRU caching (5-minute TTL)
 - **Ultra-Compact Search Engine**: Memory-optimized for massive directories (10M+ files)
 - **Automatic Mode Selection**: Transparent switching based on directory size
@@ -222,7 +222,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Accessibility-compliant UI with keyboard navigation support
 - Performance testing and benchmarking infrastructure
 
-**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture.
+**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. (v2.6.4)
 
 ---
 
@@ -330,7 +330,7 @@ Open a browser at [http://127.0.0.1:8080](http://127.0.0.1:8080) and you will se
 
 ---
 
-## 🎉 What's New in v2.5
+## 🎉 What's New in v2.6.4
 
 ### 📤 **Complete File Upload System**
 IronDrop v2.5 introduces a **production-ready file upload system** with enterprise-grade features:
@@ -339,7 +339,7 @@ IronDrop v2.5 introduces a **production-ready file upload system** with enterpri
 - **⚡ Performance**: Handles unlimited file sizes with constant memory usage and concurrent processing
 - **🎨 Professional UI**: Integrated upload interface accessible at `/upload` with real-time feedback
 - **🛡️ Robust Validation**: Multi-layer security including extension filtering, size limits, and malformed data rejection
-- **🧪 Battle-Tested**: 189 tests across 16 test files covering edge cases, security scenarios, and performance stress testing
+- **🧪 Battle-Tested**: 199 tests across 16 test files covering edge cases, security scenarios, and performance stress testing
 
 ### 🔍 **Advanced Search System** (New in v2.5)
 IronDrop v2.5 introduces a **dual-mode search engine** optimized for directories of any size:
@@ -625,7 +625,7 @@ Every module is documented and formatted with `cargo fmt` and `clippy -- -D warn
 
 ### Comprehensive Test Suite
 
-The project includes **189 comprehensive tests across 16 test files** covering all aspects of functionality, with complete upload system validation:
+The project includes **199 comprehensive tests across 16 test files** covering all aspects of functionality, with complete upload system validation:
 
 ```bash
 # Run all tests (covers upload, download, security, concurrency)
@@ -977,7 +977,7 @@ UI system and template integration:
 
 ### 🧪 **Testing & Quality Assurance**
 
-IronDrop includes **189 comprehensive tests across 16 test files** covering:
+IronDrop includes **199 comprehensive tests across 16 test files** covering:
 
 - **Core Server Tests** (19 tests): HTTP handling, directory listing, authentication
 - **Upload System Tests** (29 tests): File uploads, validation, concurrent handling
@@ -1069,7 +1069,7 @@ We welcome contributions! Here's how to get started:
 
 ### **For Developers**
 - **Pure Rust**: No external dependencies, everything built from scratch
-- **Comprehensive Tests**: 189 tests across 16 files ensure reliability and stability
+- **Comprehensive Tests**: 199 tests across 16 files ensure reliability and stability
 - **Clean Architecture**: Well-documented, modular codebase
 - **Performance Focus**: Custom thread pool and optimized file streaming
 

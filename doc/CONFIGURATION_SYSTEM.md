@@ -1,4 +1,4 @@
-## IronDrop Configuration System (v2.6)
+## IronDrop Configuration System (v2.6.4)
 
 ### Overview
 IronDrop 2.5 introduces a first‑class configuration system with hierarchical precedence and zero external dependencies. It complements (not replaces) the existing CLI flags, enabling reproducible deployments, easier automation, and environment portability. The system is intentionally simple: an internal INI parser (`src/config/ini_parser.rs`) plus a composition layer (`src/config/mod.rs`) that merges values from multiple sources.

@@ -1,6 +1,6 @@
 [package]
 name = "irondrop"
-version = "2.6.3"
+version = "2.6.4"
 edition = "2024"
 license = "MIT"
 description = "Drop files, not dependencies - a well tested fully featured & battle-ready server in a single Rust binary with support for indexing through 10M files."

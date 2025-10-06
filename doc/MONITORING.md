@@ -1,4 +1,4 @@
-# IronDrop Monitoring Guide (v2.6)
+# IronDrop Monitoring Guide (v2.6.4)
 
 This guide documents the built-in monitoring capabilities introduced with the `/monitor` endpoint and supporting health APIs.
 
@@ -125,4 +125,4 @@ done
 Monitoring schema may evolve with additive fields. Consumers should ignore unknown keys. Breaking changes (renames/removals) will bump minor version >= 2.x.
 
 ---
-*Monitoring Guide for IronDrop v2.6*
+*Monitoring Guide for IronDrop v2.6.4*

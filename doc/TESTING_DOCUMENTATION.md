@@ -1,10 +1,10 @@
 # IronDrop Testing Documentation
 
-Version 2.6.2 - Test Suite Overview
+Version 2.6.4 - Test Suite Overview
 
 ## Overview
 
-IronDrop includes a comprehensive test suite with **189 tests** covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include enhanced path parsing, Unicode support, and race condition fixes.
+IronDrop includes a comprehensive test suite with **199 tests** covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include enhanced path parsing, Unicode support, and race condition fixes.
 
 ## Test Architecture
 
@@ -21,25 +21,43 @@ IronDrop includes a comprehensive test suite with **189 tests** covering functio
 
 | Category | Test Files | Test Count | Coverage |
 |----------|------------|------------|----------|
-| **Core Server & Unit Tests** | `lib.rs` (unit tests) | 41 | Core functionality, HTTP handling, utilities |
+| **Core Server & Unit Tests** | `server.rs`, `upload.rs`, `router.rs`, `config/mod.rs`, `config/ini_parser.rs`, `error.rs`, `cli.rs` (unit tests) | 40 | Core functionality, HTTP handling, utilities |
 | **Configuration System** | `config_test.rs` | 16 | INI parsing, precedence, validation, edge cases |
 | **Direct Upload System** | `direct_upload_test.rs` | 15 | File uploads, streaming, concurrent operations, race conditions |
-| **Integration Testing** | `integration_test.rs` | 14 | Authentication, security, HTTP compliance, edge cases |
-| **Memory & Performance** | `memory_leak_fix_test.rs` | 19 | Memory management, leak prevention, cleanup |
+| **Integration Testing** | `integration_test.rs` | 16 | Authentication, security, HTTP compliance, edge cases |
+| **Memory & Performance** | `memory_leak_fix_test.rs`, `src/ultra_memory_test.rs` | 6 | Memory management, leak prevention, cleanup |
 | **HTTP Parser** | `http_parser_test.rs` | 13 | Version parsing, malformed requests, edge cases |
 | **Middleware** | `middleware_test.rs` | 13 | Authentication, security, request processing |
 | **Template System** | `template_embedding_test.rs`, `templates_escape_test.rs` | 7 | Embedded templates, escaping, assets |
 | **Template Utilities** | `response_utils_test.rs` | 2 | Response generation, template processing |
-| **Ultra-Compact Search** | `ultra_compact_test.rs` | 5 | Memory efficiency, search performance |
-| **Rate Limiting** | `rate_limiter_memory_test.rs` | 5 | Memory management, cleanup, limits |
+| **Ultra-Compact Search** | `ultra_compact_test.rs`, `src/ultra_compact_search.rs` | 10 | Memory efficiency, search performance |
+| **Rate Limiting** | `rate_limiter_memory_test.rs`, `rate_limiter_smart_eviction_test.rs` | 7 | Memory management, cleanup, limits |
 | **Monitoring & Stats** | `monitor_test.rs` | 2 | Health endpoints, metrics tracking |
 | **Utilities** | `utils_test.rs`, `utils_parse_path_test.rs` | 23 | Path parsing, Unicode encoding, special characters |
 | **Request Body** | `http_requestbody_test.rs` | 1 | Size and emptiness |
-| **Logging** | `log_dir_test.rs` | 3 | Directory creation, permissions |
+| **Hidden Files** | `hidden_files_test.rs` | 8 | Dotfile handling, listing behavior, ignore rules |
+| **Logging** | `log_dir_test.rs` | 20 | Directory creation, permissions |
 
-**Total Tests: 189**
+**Total Tests: 199**
 
 ## Detailed Test Coverage
+
+### Core Server & Unit Tests
+
+**Purpose**: Validates server internals, threadpool behavior, routing, and upload logic
+
+**Key Test Areas**:
+- Thread pool initialization and panic behavior
+- Router path matching and method handling
+- Upload path resolution and limits
+- Config parsing and validation units
+
+**Critical Tests**:
+```rust
+#[test]
+#[should_panic(expected = "assertion failed: size > 0")]
+fn threadpool_zero_size_panics() // Deterministic panic text for zero-size pools
+```
 
 ### Configuration System Tests (`config_test.rs`)
 
@@ -182,7 +200,7 @@ fn test_demonstrate_memory_savings() // Compares memory usage vs alternatives
 
 ## Running Tests
 
-### Basic Test Execution (current totals: 189 tests across 16 files)
+### Basic Test Execution (current totals: 199 tests across 16 files)
 
 ```bash
 # Run all tests
@@ -372,7 +390,7 @@ fn test_new_feature() {
 - Code formatting validation
 - Documentation completeness
 
-## Recent Improvements (v2.6.2)
+## Recent Improvements (v2.6.4)
 
 ### Critical Fixes and Enhancements
 
@@ -430,6 +448,6 @@ fn test_new_feature() {
 
 ---
 
-*This document is part of the IronDrop v2.6 documentation suite. The test suite is continuously evolving to ensure comprehensive coverage and reliability.*
+*This document is part of the IronDrop v2.6.4 documentation suite. The test suite is continuously evolving to ensure comprehensive coverage and reliability.*
 
 Return to documentation index: [./README.md](./README.md)

@@ -1,10 +1,10 @@
-# IronDrop Direct Upload System v2.5
+# IronDrop Direct Upload System v2.6.4
 
 This document describes the simplified direct upload system that replaced the multipart parser in IronDrop.
 
 ## Overview
 
-IronDrop v2.5 removed multipart parsing in favor of a direct binary upload system focused on predictable memory use and simpler processing. The system handles raw binary uploads with bounded memory.
+IronDrop replaces legacy multipart parsing with a direct binary upload system focused on predictable memory use and simpler processing. The system handles raw binary uploads with bounded memory. (v2.6.4)
 
 **Current Status**: Production-ready with direct streaming implementation and comprehensive test coverage (verified memory stability across all file sizes).
 

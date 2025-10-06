@@ -1,10 +1,10 @@
-# IronDrop Direct Upload Streaming (v2.6)
+# IronDrop Direct Upload Streaming (v2.6.4)
 
 ## Overview
 
 IronDrop implements direct streaming uploads. Large request bodies are streamed to disk, avoiding unbounded memory growth. Small bodies are processed in memory.
 
-**Status**: Production-ready (v2.5)
+**Status**: Production-ready (v2.6.4)
 - Direct streaming implementation with bounded memory usage
 - Handling from small to very large files
 - Tests cover stability and cleanup
@@ -310,7 +310,7 @@ The streaming system integrates with IronDrop's monitoring:
 
 ## Version History
 
-- **v2.6**: Direct streaming implementation with unlimited file size support
+- **v2.6.4**: Direct streaming implementation with unlimited file size support
   - Automatic memory/disk switching based on content size
   - `RequestBody` enum with `Memory` and `File` variants
   - Comprehensive test coverage with dedicated streaming tests
