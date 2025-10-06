@@ -359,8 +359,9 @@ impl CompactCache {
 
     pub fn put(&mut self, query: &str, entry_ids: Vec<u32>) {
         if self.cache.len() >= self.max_entries {
-            // Simple eviction: remove first entry
-            self.cache.remove(0);
+            // Simple eviction: remove last entry (O(1))
+            // This avoids O(n) shifting that occurs with removing at index 0
+            self.cache.pop();
         }
 
         let hash = Self::hash(query);
@@ -480,6 +481,20 @@ mod tests {
         assert!(!results.is_empty());
         // In debug mode, timing can vary - just check it's reasonable (<100ms)
         assert!(elapsed.as_millis() < 100); // Should be under 100ms even in debug
+    }
+
+    #[test]
+    fn test_compact_cache_eviction_pop_last() {
+        let mut cache = CompactCache::new(3);
+        cache.put("a", vec![1]);
+        cache.put("b", vec![2]);
+        cache.put("c", vec![3]);
+        // Fill beyond capacity triggers eviction using pop()
+        cache.put("d", vec![4]);
+        // Ensure we still have max_entries
+        assert_eq!(cache.cache.len(), 3);
+        // The cache stores sorted by hash; check that 'd' is retrievable
+        assert!(cache.get("d").is_some());
     }
 }
 

@@ -24,7 +24,7 @@ fn test_create_error_response_headers_and_body() {
 
     let handle = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
-        let mut resp = create_error_response(401, "Unauthorized");
+        let resp = create_error_response(401, "Unauthorized");
         // Should include WWW-Authenticate for 401
         resp.send(&mut stream, "[test]").unwrap();
     });
