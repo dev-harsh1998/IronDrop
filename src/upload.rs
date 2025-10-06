@@ -645,7 +645,7 @@ impl DirectUploadHandler {
                 total_bytes += bytes_read as u64;
 
                 // Log progress for large files
-                if total_bytes % (1024 * 1024) == 0 || total_bytes < 1024 * 1024 {
+                if total_bytes.is_multiple_of(1024 * 1024) || total_bytes < 1024 * 1024 {
                     trace!("Streamed {} bytes so far", total_bytes);
                 }
 
