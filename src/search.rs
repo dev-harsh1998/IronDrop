@@ -756,7 +756,7 @@ impl UltraLowMemoryIndex {
         };
 
         let mut batch_entries = Vec::with_capacity(1000);
-        let mut subdirs = Vec::new();
+        let mut subdirs = Vec::with_capacity(100);
 
         // Collect entries in this directory
         for entry_result in dir_entries {
@@ -1634,13 +1634,18 @@ fn perform_parallel_search(
     // Drop the original sender so the channel closes when all threads finish
     drop(tx);
 
-    // Collect results from all threads
-    let mut results = Vec::new();
+    // Collect results from all threads with capacity management
+    let mut results = Vec::with_capacity(params.limit * 2);
     for result in rx {
         results.push(result);
         if results.len() >= params.limit * 2 {
             break;
         }
+    }
+
+    // Shrink capacity if it's grown too large to prevent memory leak
+    if results.capacity() > results.len() * 2 {
+        results.shrink_to_fit();
     }
 
     // Wait for all threads to complete

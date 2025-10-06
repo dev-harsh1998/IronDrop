@@ -436,8 +436,14 @@ impl ServerStats {
             // Record processing time (keep last 100 entries for average calculation)
             if let Ok(mut times) = self.upload_processing_times.lock() {
                 times.push(processing_time_ms);
-                if times.len() > 100 {
-                    times.remove(0);
+                // Use more efficient removal and shrink capacity to prevent unbounded growth
+                let len = times.len();
+                if len > 100 {
+                    times.drain(0..len - 100);
+                    // Shrink capacity if it's grown too large (prevent memory leak)
+                    if times.capacity() > 200 {
+                        times.shrink_to(100);
+                    }
                 }
             }
         }
