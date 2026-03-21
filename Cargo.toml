@@ -31,4 +31,9 @@ debug = false       # No debug symbols
 debug-assertions = false  # Disable debug assertions
 overflow-checks = false   # Disable integer overflow checks
 
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
 
