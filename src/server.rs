@@ -848,6 +848,10 @@ fn get_process_memory_bytes() -> Option<u64> {
 
         unsafe extern "system" {
             fn GetCurrentProcess() -> *mut c_void;
+        }
+
+        #[link(name = "psapi")]
+        unsafe extern "system" {
             fn GetProcessMemoryInfo(
                 hProcess: *mut c_void,
                 ppsmemCounters: *mut PROCESS_MEMORY_COUNTERS,
