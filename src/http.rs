@@ -7,12 +7,14 @@ use crate::fs::FileDetails;
 use crate::response::create_error_response;
 use crate::router::Router;
 use log::{debug, error, info, trace, warn};
+use rustls;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Maximum size for request body (10GB) to prevent memory exhaustion attacks
 const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024 * 1024;
@@ -23,6 +25,56 @@ const MAX_HEADERS_SIZE: usize = 8 * 1024;
 /// Threshold for streaming request bodies to disk (64MB)
 /// This ensures total memory usage stays well below 128MB
 pub const STREAM_TO_DISK_THRESHOLD: usize = 64 * 1024 * 1024;
+
+/// Abstraction over plain TCP and TLS-encrypted streams.
+/// Allows the HTTP handling code to work transparently with both.
+pub enum ClientStream {
+    Plain(TcpStream),
+    Tls(Box<rustls::StreamOwned<rustls::ServerConnection, TcpStream>>),
+}
+
+impl ClientStream {
+    /// Get the peer address of the underlying TCP connection
+    pub fn peer_addr(&self) -> std::io::Result<std::net::SocketAddr> {
+        match self {
+            ClientStream::Plain(s) => s.peer_addr(),
+            ClientStream::Tls(s) => s.sock.peer_addr(),
+        }
+    }
+
+    /// Set the read timeout on the underlying TCP connection
+    pub fn set_read_timeout(&self, dur: Option<Duration>) -> std::io::Result<()> {
+        match self {
+            ClientStream::Plain(s) => s.set_read_timeout(dur),
+            ClientStream::Tls(s) => s.sock.set_read_timeout(dur),
+        }
+    }
+}
+
+impl std::io::Read for ClientStream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            ClientStream::Plain(s) => s.read(buf),
+            ClientStream::Tls(s) => s.read(buf),
+        }
+    }
+}
+
+impl std::io::Write for ClientStream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            ClientStream::Plain(s) => s.write(buf),
+            ClientStream::Tls(s) => s.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            ClientStream::Plain(s) => s.flush(),
+            ClientStream::Tls(s) => s.flush(),
+        }
+    }
+}
 
 /// Represents a parsed incoming HTTP request.
 #[derive(Debug)]
@@ -85,7 +137,7 @@ impl Request {
     }
 
     /// Enhanced HTTP request parser with better performance and compliance
-    pub fn from_stream(stream: &mut TcpStream) -> Result<Self, AppError> {
+    pub fn from_stream(stream: &mut ClientStream) -> Result<Self, AppError> {
         trace!("Starting HTTP request parsing from stream");
         // Set a reasonable timeout for reading requests
         stream.set_read_timeout(Some(std::time::Duration::from_secs(30)))?;
@@ -192,7 +244,9 @@ impl Request {
     }
 
     /// Read HTTP headers efficiently in chunks and return remaining bytes from body
-    fn read_headers_with_remaining(stream: &mut TcpStream) -> Result<(String, Vec<u8>), AppError> {
+    fn read_headers_with_remaining(
+        stream: &mut ClientStream,
+    ) -> Result<(String, Vec<u8>), AppError> {
         let mut buffer = vec![0; MAX_HEADERS_SIZE];
         let mut total_read = 0;
 
@@ -266,7 +320,7 @@ impl Request {
     /// Read request body based on Content-Length header with security validations
     /// Large bodies are streamed to disk to prevent memory exhaustion
     fn read_request_body(
-        stream: &mut TcpStream,
+        stream: &mut ClientStream,
         headers: &HashMap<String, String>,
         remaining_bytes: Vec<u8>,
     ) -> Result<Option<RequestBody>, AppError> {
@@ -312,7 +366,7 @@ impl Request {
 
     /// Read small request body into memory
     fn read_body_to_memory(
-        stream: &mut TcpStream,
+        stream: &mut ClientStream,
         content_length: usize,
         remaining_bytes: Vec<u8>,
     ) -> Result<Vec<u8>, AppError> {
@@ -366,7 +420,7 @@ impl Request {
 
     /// Read large request body directly to disk to prevent memory exhaustion
     fn read_body_to_disk(
-        stream: &mut TcpStream,
+        stream: &mut ClientStream,
         content_length: usize,
         remaining_bytes: Vec<u8>,
     ) -> Result<(PathBuf, u64), AppError> {
@@ -505,7 +559,7 @@ impl Request {
 /// Top-level function to handle a client connection.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_client(
-    mut stream: TcpStream,
+    mut stream: ClientStream,
     base_dir: &Arc<PathBuf>,
     allowed_extensions: &Arc<Vec<glob::Pattern>>,
     username: &Arc<Option<String>>,
@@ -643,7 +697,7 @@ fn route_request(
 
 /// Sends a fully formed `Response` to the client with enhanced headers.
 fn send_response(
-    stream: &mut TcpStream,
+    stream: &mut ClientStream,
     response: Response,
     log_prefix: &str,
 ) -> Result<u64, std::io::Error> {
@@ -774,7 +828,7 @@ fn send_response(
 }
 
 /// Sends a pre-canned error response using the new response system.
-fn send_error_response(stream: &mut TcpStream, error: AppError, log_prefix: &str) {
+fn send_error_response(stream: &mut ClientStream, error: AppError, log_prefix: &str) {
     let (status_code, status_text) = match error {
         AppError::NotFound => (404, "Not Found"),
         AppError::Forbidden => (403, "Forbidden"),

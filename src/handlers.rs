@@ -568,6 +568,8 @@ pub fn handle_file_request(
             verbose: cli.verbose.unwrap_or(false),
             detailed_logging: cli.detailed_logging.unwrap_or(false),
             log_dir: cli.log_dir.clone(),
+            ssl_cert: cli.ssl_cert.clone(),
+            ssl_key: cli.ssl_key.clone(),
         });
 
         let html_content = generate_directory_listing(&full_path, &request.path, config.as_ref())?;

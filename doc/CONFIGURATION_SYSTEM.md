@@ -31,9 +31,11 @@ If none exist, startup proceeds with defaults + CLI overrides.
 | Flag | Description |
 |------|-------------|
 | `--config-file <path>` | Explicit path to an INI configuration file. Errors if not found. |
+| `--ssl-cert <path>` | Path to PEM certificate file for HTTPS. Requires `--ssl-key`. |
+| `--ssl-key <path>` | Path to PEM private key file for HTTPS. Requires `--ssl-cert`. |
 
 ### INI Format Features
-* Sections (`[server]`, `[upload]`, `[auth]`, `[logging]`, `[security]`)
+* Sections (`[server]`, `[upload]`, `[auth]`, `[logging]`, `[security]`, `[ssl]`)
 * Comments starting with `#` or `;`
 * Key = value pairs (whitespace tolerant)
 * Inline comments after values (`key = value  # note`)
@@ -64,6 +66,10 @@ allowed_extensions = *.zip,*.txt,*.pdf
 [logging]
 verbose = true              # Enables debug logging
 detailed = false            # Enables info‑level below verbose
+
+[ssl]
+cert = /path/to/cert.pem   # PEM certificate file (required for HTTPS)
+key = /path/to/key.pem     # PEM private key file (required for HTTPS)
 ```
 
 ### Data Type Parsing

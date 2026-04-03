@@ -71,6 +71,14 @@ pub struct Cli {
     /// Log directory path - Directory where timestamped log files will be created. If not provided, logs go to stdout 📝
     #[arg(long, value_parser = validate_log_dir)]
     pub log_dir: Option<PathBuf>,
+
+    /// Path to SSL/TLS certificate file (PEM format) for HTTPS support
+    #[arg(long, value_parser = validate_ssl_file)]
+    pub ssl_cert: Option<PathBuf>,
+
+    /// Path to SSL/TLS private key file (PEM format) for HTTPS support
+    #[arg(long, value_parser = validate_ssl_file)]
+    pub ssl_key: Option<PathBuf>,
 }
 
 /// Validate upload size (minimum 1 MB, no upper limit for direct streaming)
@@ -128,6 +136,13 @@ impl Cli {
                     "Large upload size limit configured: {max_size} MB. Using direct disk streaming for efficient memory usage."
                 );
             }
+        }
+
+        // Validate SSL configuration consistency
+        if self.ssl_cert.is_some() != self.ssl_key.is_some() {
+            return Err(AppError::InvalidConfiguration(
+                "Both --ssl-cert and --ssl-key must be provided together for HTTPS".to_string(),
+            ));
         }
 
         // Validate main serving directory
@@ -204,6 +219,8 @@ mod tests {
             max_upload_size: Some(100),
             config_file: None,
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         };
 
         // Test conversion
@@ -239,6 +256,8 @@ mod tests {
             max_upload_size: Some(100),
             config_file: None,
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         };
 
         assert!(cli.validate().is_ok());
@@ -291,5 +310,27 @@ fn validate_log_dir(s: &str) -> Result<PathBuf, String> {
             path.display(),
             e
         )),
+    }
+}
+
+/// Validate SSL certificate/key file path exists and is readable
+fn validate_ssl_file(s: &str) -> Result<PathBuf, String> {
+    if s.is_empty() {
+        return Err("SSL file path cannot be empty".to_string());
+    }
+
+    let path = PathBuf::from(s);
+
+    if !path.exists() {
+        return Err(format!("SSL file does not exist: {}", path.display()));
+    }
+
+    if !path.is_file() {
+        return Err(format!("SSL path is not a file: {}", path.display()));
+    }
+
+    match std::fs::File::open(&path) {
+        Ok(_) => Ok(path),
+        Err(e) => Err(format!("Cannot read SSL file {}: {}", path.display(), e)),
     }
 }

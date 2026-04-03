@@ -44,6 +44,8 @@ fn setup_test_server() -> TestServer {
         max_upload_size: Some(10240),
         config_file: None,
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();

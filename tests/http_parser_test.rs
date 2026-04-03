@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-use irondrop::http::Request;
+use irondrop::http::{ClientStream, Request};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
@@ -18,8 +18,9 @@ fn serve_and_parse(request: &str) -> Result<Request, irondrop::error::AppError> 
         std::thread::sleep(std::time::Duration::from_millis(50));
     });
 
-    let mut client = TcpStream::connect(addr).unwrap();
-    Request::from_stream(&mut client).map(|r| {
+    let client = TcpStream::connect(addr).unwrap();
+    let mut client_stream = ClientStream::Plain(client);
+    Request::from_stream(&mut client_stream).map(|r| {
         handle.join().unwrap();
         r
     })

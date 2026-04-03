@@ -47,6 +47,8 @@ fn setup_test_server(username: Option<String>, password: Option<String>) -> Test
         max_upload_size: Some(10240),
         config_file: None,
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -446,6 +448,8 @@ where
         max_upload_size: Some(10240),
         config_file: None,
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();

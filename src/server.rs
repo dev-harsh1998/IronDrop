@@ -16,6 +16,9 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use rustls::ServerConfig;
+use std::io::BufReader;
+
 #[cfg(target_os = "linux")]
 use std::fs;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -1267,6 +1270,87 @@ mod threadpool_tests {
     }
 }
 
+/// Load TLS certificates from a PEM file
+fn load_tls_certs(
+    path: &std::path::Path,
+) -> Result<Vec<rustls::pki_types::CertificateDer<'static>>, AppError> {
+    let file = std::fs::File::open(path).map_err(|e| {
+        AppError::InvalidConfiguration(format!(
+            "Failed to open SSL certificate file {}: {}",
+            path.display(),
+            e
+        ))
+    })?;
+    let mut reader = BufReader::new(file);
+    let certs: Vec<rustls::pki_types::CertificateDer<'static>> = rustls_pemfile::certs(&mut reader)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            AppError::InvalidConfiguration(format!(
+                "Failed to parse SSL certificate file {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
+    if certs.is_empty() {
+        return Err(AppError::InvalidConfiguration(format!(
+            "No certificates found in {}",
+            path.display()
+        )));
+    }
+    info!(
+        "Loaded {} certificate(s) from {}",
+        certs.len(),
+        path.display()
+    );
+    Ok(certs)
+}
+
+/// Load TLS private key from a PEM file
+fn load_tls_key(
+    path: &std::path::Path,
+) -> Result<rustls::pki_types::PrivateKeyDer<'static>, AppError> {
+    let file = std::fs::File::open(path).map_err(|e| {
+        AppError::InvalidConfiguration(format!(
+            "Failed to open SSL key file {}: {}",
+            path.display(),
+            e
+        ))
+    })?;
+    let mut reader = BufReader::new(file);
+    let key = rustls_pemfile::private_key(&mut reader)
+        .map_err(|e| {
+            AppError::InvalidConfiguration(format!(
+                "Failed to parse SSL key file {}: {}",
+                path.display(),
+                e
+            ))
+        })?
+        .ok_or_else(|| {
+            AppError::InvalidConfiguration(format!("No private key found in {}", path.display()))
+        })?;
+    info!("Loaded private key from {}", path.display());
+    Ok(key)
+}
+
+/// Build TLS server configuration from certificate and key paths
+fn build_tls_config(
+    cert_path: &std::path::Path,
+    key_path: &std::path::Path,
+) -> Result<Arc<ServerConfig>, AppError> {
+    let certs = load_tls_certs(cert_path)?;
+    let key = load_tls_key(key_path)?;
+
+    let config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .map_err(|e| {
+            AppError::InvalidConfiguration(format!("Failed to build TLS configuration: {}", e))
+        })?;
+
+    info!("TLS configuration built successfully");
+    Ok(Arc::new(config))
+}
+
 /// Run server with new configuration system
 pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
     // Convert Config back to Cli for compatibility with existing code
@@ -1286,6 +1370,8 @@ pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
         max_upload_size: Some(config.max_upload_size / (1024 * 1024)), // Convert bytes back to MB
         config_file: None, // Not needed for server execution
         log_dir: config.log_dir,
+        ssl_cert: config.ssl_cert,
+        ssl_key: config.ssl_key,
     };
 
     run_server(cli, None, None)
@@ -1335,6 +1421,20 @@ pub fn run_server(
     listener.set_nonblocking(true)?;
     debug!("Server bound successfully to: {}", local_addr);
 
+    // Set up TLS configuration if SSL cert and key are provided
+    let tls_config: Option<Arc<ServerConfig>> =
+        if let (Some(cert_path), Some(key_path)) = (&cli.ssl_cert, &cli.ssl_key) {
+            info!(
+                "🔒 Setting up TLS with cert: {}, key: {}",
+                cert_path.display(),
+                key_path.display()
+            );
+            Some(build_tls_config(cert_path, key_path)?)
+        } else {
+            None
+        };
+    let is_https = tls_config.is_some();
+
     // Initialize security and monitoring systems
     debug!("Initializing rate limiter: 120 req/min, 10 concurrent per IP");
     let rate_limiter = Arc::new(RateLimiter::new(120, 10)); // 120 req/min, 10 concurrent per IP
@@ -1349,12 +1449,17 @@ pub fn run_server(
         ));
     }
 
+    let protocol = if is_https { "https" } else { "http" };
     info!(
-        "🚀 Server listening on {} for directory '{}' (allowed extensions: {:?})",
+        "🚀 Server listening on {}://{} for directory '{}' (allowed extensions: {:?})",
+        protocol,
         local_addr,
         base_dir.display(),
         allowed_extensions
     );
+    if is_https {
+        info!("🔒 TLS/SSL: Enabled");
+    }
     info!("⚡ Security: Rate limiting enabled (120 req/min, 10 concurrent per IP)");
     info!("📊 Monitoring: Statistics collection enabled");
 
@@ -1491,6 +1596,7 @@ pub fn run_server(
                     stats,
                     cli_ref,
                     router,
+                    tls_config_clone,
                 ) = (
                     base_dir.clone(),
                     allowed_extensions.clone(),
@@ -1501,6 +1607,7 @@ pub fn run_server(
                     stats.clone(),
                     cli_arc.clone(),
                     shared_router.clone(),
+                    tls_config.clone(),
                 );
 
                 trace!("Submitting client {} to thread pool", client_ip);
@@ -1508,8 +1615,25 @@ pub fn run_server(
                     trace!("Thread pool worker starting for client: {}", client_ip);
                     let start_time = Instant::now();
 
+                    // Wrap stream with TLS if configured
+                    let client_stream = if let Some(ref tls_cfg) = tls_config_clone {
+                        match rustls::ServerConnection::new(Arc::clone(tls_cfg)) {
+                            Ok(conn) => {
+                                let tls_stream = rustls::StreamOwned::new(conn, stream);
+                                crate::http::ClientStream::Tls(Box::new(tls_stream))
+                            }
+                            Err(e) => {
+                                error!("TLS handshake setup failed for {}: {}", client_ip, e);
+                                rate_limiter.release_connection(client_ip);
+                                return;
+                            }
+                        }
+                    } else {
+                        crate::http::ClientStream::Plain(stream)
+                    };
+
                     let result = handle_client_with_stats(
-                        stream,
+                        client_stream,
                         peer_addr,
                         &base_dir,
                         &allowed_extensions,
@@ -1588,7 +1712,7 @@ pub fn run_server(
 /// Enhanced client handler with statistics tracking
 #[allow(clippy::too_many_arguments)]
 fn handle_client_with_stats(
-    stream: std::net::TcpStream,
+    stream: crate::http::ClientStream,
     peer_addr: SocketAddr,
     base_dir: &Arc<std::path::PathBuf>,
     allowed_extensions: &Arc<Vec<glob::Pattern>>,

@@ -1011,6 +1011,8 @@ mod tests {
             max_upload_size: Some(100), // 100MB for testing
             config_file: None,
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         }
     }
 
