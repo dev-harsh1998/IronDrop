@@ -4,7 +4,6 @@ use crate::error::AppError;
 use crate::templates::{TemplateEngine, get_error_description};
 use log::{debug, error, trace};
 use std::io::prelude::*;
-use std::net::TcpStream;
 use std::path::Path;
 
 /// Native MIME type detection for common file types
@@ -104,7 +103,7 @@ impl HttpResponse {
         self
     }
 
-    pub fn send(self, stream: &mut TcpStream, log_prefix: &str) -> Result<(), AppError> {
+    pub fn send(self, stream: &mut impl Write, log_prefix: &str) -> Result<(), AppError> {
         debug!(
             "{} Sending HTTP response: {} {}",
             log_prefix, self.status_code, self.status_text
@@ -172,7 +171,7 @@ pub fn create_error_response(status_code: u16, status_text: &str) -> HttpRespons
 
 /// Legacy function for compatibility - will be removed in refactor
 pub fn send_response(
-    stream: &mut TcpStream,
+    stream: &mut impl Write,
     status_code: u16,
     status_text: &str,
     body: &str,

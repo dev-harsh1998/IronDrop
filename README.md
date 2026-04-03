@@ -23,6 +23,7 @@ IronDrop focuses on predictable behavior, simplicity, and low overhead. Use it t
 - Search (standard and ultra-compact modes for large directories)
 - Monitoring dashboard at `/monitor` and a JSON endpoint (`/monitor?json=1`)
 - Basic security features: rate limiting, optional Basic Auth, path safety checks
+- Native SSL/TLS support via `--ssl-cert` and `--ssl-key` (built-in HTTPS, no reverse proxy required)
 - Single binary; templates and assets are embedded
  - Pure standard library networking and file I/O (no external HTTP stack or async runtime)
  - Ultra-compact search index option for very large directory trees (tested up to ~10M entries)
@@ -36,7 +37,7 @@ Designed to keep memory usage steady and to stream large files without buffering
 
 ## Security
 
-Includes rate limiting, optional Basic Auth, basic input validation, and path traversal protection. See [RFC & OWASP Compliance](./doc/RFC_OWASP_COMPLIANCE.md) and [Security Fixes](./doc/SECURITY_FIXES.md) for details.
+Includes native SSL/TLS (HTTPS), rate limiting, optional Basic Auth, basic input validation, and path traversal protection. See [RFC & OWASP Compliance](./doc/RFC_OWASP_COMPLIANCE.md) and [Security Fixes](./doc/SECURITY_FIXES.md) for details.
 
 ## 📦 Installation
 
@@ -145,6 +146,19 @@ irondrop -d /path/to/media \
 irondrop --config-file ./config/production.ini
 ```
 
+#### 🔒 **HTTPS File Server**
+```bash
+# Generate a self-signed certificate (for testing)
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
+
+# Serve files over HTTPS
+irondrop -d ./files --ssl-cert cert.pem --ssl-key key.pem --listen 0.0.0.0
+
+# HTTPS with authentication
+irondrop -d ./files --ssl-cert cert.pem --ssl-key key.pem \
+  --username admin --password secret --listen 0.0.0.0
+```
+
 ### 🛠️ Configuration Options
 
 #### **Command Line Options**
@@ -160,6 +174,8 @@ IronDrop offers extensive customization through command-line arguments:
 | `-a, --allowed-extensions` | Restrict file types | `-a "*.pdf,*.doc,*.zip"` |
 | `-t, --threads` | Worker threads (default: 8) | `-t 16` |
 | `--config-file` | Use INI configuration file | `--config-file prod.ini` |
+| `--ssl-cert` | SSL certificate file (PEM) for HTTPS | `--ssl-cert cert.pem` |
+| `--ssl-key` | SSL private key file (PEM) for HTTPS | `--ssl-key key.pem` |
 | `-v, --verbose` | Debug logging | `-v true` |
 
 #### **📄 Configuration File (Recommended for Production)**
@@ -197,6 +213,7 @@ Once IronDrop is running, these endpoints are available:
 
 - Use authentication (`--username`/`--password`) when exposing to untrusted networks
 - Adjust `--threads` based on workload
+- Use `--ssl-cert` and `--ssl-key` for native HTTPS without a reverse proxy
 
 ### ❓ Need Help?
 

@@ -31,6 +31,10 @@ pub struct Config {
     pub verbose: bool,
     pub detailed_logging: bool,
     pub log_dir: Option<PathBuf>,
+
+    // SSL settings
+    pub ssl_cert: Option<PathBuf>,
+    pub ssl_key: Option<PathBuf>,
 }
 
 impl Config {
@@ -75,6 +79,8 @@ impl Config {
             verbose: Self::get_verbose(&ini, cli),
             detailed_logging: Self::get_detailed_logging(&ini, cli),
             log_dir: Self::get_log_dir(&ini, cli),
+            ssl_cert: Self::get_ssl_cert(&ini, cli),
+            ssl_key: Self::get_ssl_key(&ini, cli),
         };
 
         log::debug!("Configuration loading completed successfully");
@@ -308,6 +314,20 @@ impl Config {
         ini.get_string("logging", "log_dir").map(PathBuf::from)
     }
 
+    fn get_ssl_cert(ini: &IniConfig, cli: &Cli) -> Option<PathBuf> {
+        if let Some(ref cert) = cli.ssl_cert {
+            return Some(cert.clone());
+        }
+        ini.get_string("ssl", "cert").map(PathBuf::from)
+    }
+
+    fn get_ssl_key(ini: &IniConfig, cli: &Cli) -> Option<PathBuf> {
+        if let Some(ref key) = cli.ssl_key {
+            return Some(key.clone());
+        }
+        ini.get_string("ssl", "key").map(PathBuf::from)
+    }
+
     /// Print configuration summary
     pub fn print_summary(&self) {
         log::info!("Configuration Summary:");
@@ -333,6 +353,13 @@ impl Config {
         log::info!("  Allowed Extensions: {:?}", self.allowed_extensions);
         log::info!("  Verbose Logging: {}", self.verbose);
         log::info!("  Detailed Logging: {}", self.detailed_logging);
+        if let (Some(cert), Some(key)) = (&self.ssl_cert, &self.ssl_key) {
+            log::info!("  SSL/TLS: Enabled");
+            log::info!("  SSL Certificate: {}", cert.display());
+            log::info!("  SSL Key: {}", key.display());
+        } else {
+            log::info!("  SSL/TLS: Disabled (HTTP only)");
+        }
     }
 }
 
@@ -358,6 +385,8 @@ mod tests {
             max_upload_size: None,
             config_file: None,
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         }
     }
 

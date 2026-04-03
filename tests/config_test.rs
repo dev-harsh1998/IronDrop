@@ -180,6 +180,8 @@ verbose = false
         max_upload_size: Some(10240),
         config_file: Some(config_file.to_string_lossy().to_string()),
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -225,6 +227,8 @@ max_upload_size = 1GB
         max_upload_size: None,
         config_file: Some(explicit_config.to_string_lossy().to_string()),
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -254,6 +258,8 @@ fn test_config_defaults() {
         max_upload_size: Some(10240),
         config_file: None,
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -292,6 +298,8 @@ fn test_config_file_load_error() {
         max_upload_size: Some(10240),
         config_file: Some(nonexistent_config.to_string_lossy().to_string()),
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let result = Config::load(&cli);
@@ -358,6 +366,8 @@ directory = {}
         max_upload_size: None,
         config_file: Some(config_file.to_string_lossy().to_string()),
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -399,6 +409,8 @@ port = 9999
         max_upload_size: None,
         config_file: Some(config_file.to_string_lossy().to_string()),
         log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -445,6 +457,8 @@ fn test_config_invalid_port_values() {
             max_upload_size: None,
             config_file: Some(config_file.to_string_lossy().to_string()),
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         };
 
         let result = Config::load(&cli);
@@ -488,6 +502,8 @@ fn test_config_invalid_port_values() {
             max_upload_size: None,
             config_file: Some(config_file.to_string_lossy().to_string()),
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         };
 
         let result = Config::load(&cli);
@@ -542,6 +558,8 @@ fn test_config_invalid_file_size_formats() {
             max_upload_size: None,
             config_file: Some(config_file.to_string_lossy().to_string()),
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         };
 
         let result = Config::load(&cli);
@@ -616,6 +634,8 @@ fn test_config_boolean_edge_cases() {
             max_upload_size: None,
             config_file: Some(config_file.to_string_lossy().to_string()),
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         };
 
         let result = Config::load(&cli);
@@ -662,6 +682,8 @@ fn test_config_malformed_ini_syntax() {
             max_upload_size: None,
             config_file: Some(config_file.to_string_lossy().to_string()),
             log_dir: None,
+            ssl_cert: None,
+            ssl_key: None,
         };
 
         let result = Config::load(&cli);

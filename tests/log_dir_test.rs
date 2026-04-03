@@ -32,6 +32,8 @@ fn create_test_cli_with_log_dir(log_dir: Option<PathBuf>) -> Cli {
         max_upload_size: None,
         config_file: None,
         log_dir,
+        ssl_cert: None,
+        ssl_key: None,
     }
 }
 

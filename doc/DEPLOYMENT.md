@@ -248,7 +248,90 @@ docker-compose logs -f irondrop
 docker-compose pull && docker-compose up -d
 ```
 
-## Reverse Proxy Configuration
+## Native SSL/TLS (HTTPS)
+
+IronDrop has built-in TLS support using rustls (a pure Rust TLS implementation). This means you can serve files over HTTPS directly without a reverse proxy.
+
+### Quick Setup
+
+```bash
+# Generate a self-signed certificate (testing only)
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
+  -days 365 -nodes -subj '/CN=localhost'
+
+# Start HTTPS server
+irondrop -d /var/www/files --ssl-cert cert.pem --ssl-key key.pem --listen 0.0.0.0
+```
+
+### Production Setup with Let's Encrypt
+
+```bash
+# Install certbot and obtain certificate
+sudo certbot certonly --standalone -d files.example.com
+
+# Start with Let's Encrypt certificates
+irondrop -d /var/www/files \
+  --ssl-cert /etc/letsencrypt/live/files.example.com/fullchain.pem \
+  --ssl-key /etc/letsencrypt/live/files.example.com/privkey.pem \
+  --listen 0.0.0.0 --port 443
+```
+
+### INI Configuration
+
+```ini
+[server]
+listen = 0.0.0.0
+port = 443
+
+[ssl]
+cert = /etc/letsencrypt/live/files.example.com/fullchain.pem
+key = /etc/letsencrypt/live/files.example.com/privkey.pem
+```
+
+### systemd Service with HTTPS
+
+```ini
+[Unit]
+Description=IronDrop HTTPS File Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/irondrop -d /var/www/files \
+  --ssl-cert /etc/letsencrypt/live/files.example.com/fullchain.pem \
+  --ssl-key /etc/letsencrypt/live/files.example.com/privkey.pem \
+  --listen 0.0.0.0 --port 443
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### TLS Details
+
+- **Protocol versions**: TLS 1.2 and TLS 1.3
+- **Implementation**: rustls (pure Rust, no OpenSSL dependency)
+- **Certificate format**: PEM (both certificate and private key)
+- **Certificate chains**: Supported (include full chain in cert file)
+- **Performance**: TLS handshake runs on thread pool workers alongside request handling
+
+### Native TLS vs Reverse Proxy
+
+| Feature | Native TLS | Reverse Proxy (nginx) |
+|---------|-----------|----------------------|
+| Setup complexity | Simple (2 flags) | More configuration |
+| HTTP/2 | Not supported | Supported |
+| Load balancing | Single instance | Multiple backends |
+| Certificate management | Manual or certbot | Manual or certbot |
+| Additional dependencies | None | nginx/Apache |
+| Best for | Simple deployments | High-traffic production |
+
+For simple deployments, native TLS is sufficient. For high-traffic production with HTTP/2, load balancing, or caching, a reverse proxy is recommended.
+
+## Reverse Proxy Configuration (Optional)
+
+> **Note:** IronDrop now supports native HTTPS via `--ssl-cert` and `--ssl-key`. A reverse proxy is only needed for advanced features like HTTP/2, load balancing, or caching. See [Native SSL/TLS](#native-ssltls-https) above.
 
 ### nginx Configuration
 
