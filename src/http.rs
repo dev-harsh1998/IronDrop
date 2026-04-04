@@ -712,39 +712,48 @@ fn send_response(
     );
 
     let mut response_str = format!(
-        "HTTP/1.1 {} {}\r\n",
+        "HTTP/1.1 {} {}
+",
         response.status_code, response.status_text
     );
 
     // Add standard server headers first
-    response_str.push_str(&format!("Server: irondrop/{}\r\n", crate::VERSION));
-    response_str.push_str("Connection: close\r\n");
+    response_str.push_str(&format!(
+        "Server: irondrop/{}
+",
+        crate::VERSION
+    ));
+    response_str.push_str(
+        "Connection: close
+",
+    );
 
     // Add response-specific headers
-    for (key, value) in response.headers {
+    for (key, value) in &response.headers {
         trace!("{} Response header: {}: {}", log_prefix, key, value);
-        response_str.push_str(&format!("{key}: {value}\r\n"));
+        response_str.push_str(&format!(
+            "{key}: {value}
+"
+        ));
     }
 
-    // Calculate and add content length for text and binary responses without copying
-    match &response.body {
-        ResponseBody::Text(text) => {
-            let bytes = text.as_bytes();
-            response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
-        }
-        ResponseBody::StaticText(text) => {
-            let bytes = text.as_bytes();
-            response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
-        }
-        ResponseBody::Binary(bytes) => {
-            response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
-        }
-        ResponseBody::StaticBinary(bytes) => {
-            response_str.push_str(&format!("Content-Length: {}\r\n", bytes.len()));
-        }
-        ResponseBody::Stream(file_details) => {
-            response_str.push_str(&format!("Content-Length: {}\r\n", file_details.size));
-        }
+    // Add Content-Length header ONLY if it is not already present in response.headers
+    let has_content_length = response
+        .headers
+        .keys()
+        .any(|k| k.to_lowercase() == "content-length");
+    if !has_content_length {
+        let length = match &response.body {
+            ResponseBody::Text(text) => text.len(),
+            ResponseBody::StaticText(text) => text.len(),
+            ResponseBody::Binary(bytes) => bytes.len(),
+            ResponseBody::StaticBinary(bytes) => bytes.len(),
+            ResponseBody::Stream(file_details) => file_details.size as usize,
+        };
+        response_str.push_str(&format!(
+            "Content-Length: {length}
+"
+        ));
     }
 
     response_str.push_str("\r\n");
