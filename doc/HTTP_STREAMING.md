@@ -13,8 +13,8 @@ IronDrop implements direct streaming uploads. Large request bodies are streamed 
 ## Key Features
 
 ### Direct streaming logic
-- **Small uploads** (≤2MB): Processed in memory for optimal performance
-- **Large uploads** (>2MB): Directly streamed to disk with constant memory usage
+- **Small uploads** (≤64MB): Processed in memory for optimal performance
+- **Large uploads** (>64MB): Directly streamed to disk with constant memory usage
 - **No size limits**: Removed artificial 10GB restrictions
 - **Constant memory**: RAM usage stays at ~7MB regardless of file size
 
@@ -182,7 +182,7 @@ fn test_small_body_memory_storage() {
 #[test]
 fn test_large_body_disk_streaming() {
     // Verifies large uploads are streamed to disk
-    let large_body = "a".repeat(2 * 1024 * 1024); // 2MB
+    let large_body = "a".repeat(2 * 1024 * 1024); // 64MB
     // ... test implementation
 }
 ```
@@ -201,7 +201,7 @@ fn test_large_body_disk_streaming() {
 
 ```bash
 # Optional: Override default streaming threshold
-export IRONDROP_STREAMING_THRESHOLD=2097152  # 2MB
+export IRONDROP_STREAMING_THRESHOLD=2097152  # 64MB
 ```
 
 ### CLI Configuration

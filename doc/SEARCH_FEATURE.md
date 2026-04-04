@@ -172,7 +172,7 @@ This selection is transparent to the API and frontend - search behavior remains 
 
 ## API Endpoints
 
-### GET `/api/search?q={query}&limit={limit}&offset={offset}`
+### GET `/_irondrop/search?q={query}&limit={limit}&offset={offset}`
 
 **Purpose**: Perform search query against the directory index using the optimal search engine
 

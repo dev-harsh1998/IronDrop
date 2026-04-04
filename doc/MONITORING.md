@@ -9,13 +9,13 @@ IronDrop exposes lightweight operational telemetry without external dependencies
 | Endpoint | Format | Purpose |
 |----------|--------|---------|
 | `/monitor` | HTML | Human dashboard for live stats |
-| `/monitor?json=1` | JSON | Machine-readable metrics for scripting / scraping |
+| `/_irondrop/monitor?json=1` | JSON | Machine-readable metrics for scripting / scraping |
 | `/_health` | JSON | Minimal liveness probe (OK / version / uptime) |
 | `/_status` | JSON | Extended status (configuration + cumulative counters) |
 
 ## Data Model
 
-`/monitor?json=1` returns three top-level sections:
+`/_irondrop/monitor?json=1` returns three top-level sections:
 
 ```json
 {
@@ -64,7 +64,7 @@ The `/monitor` HTML view is an embedded template with:
 
 ### Quick CLI Scrape
 ```bash
-curl -s http://localhost:8080/monitor?json=1 | jq '.requests.bytes_served'
+curl -s http://localhost:8080/_irondrop/monitor?json=1 | jq '.requests.bytes_served'
 ```
 
 ### Basic Health Probe (Kubernetes / Docker)
@@ -74,7 +74,7 @@ curl -f http://localhost:8080/_health > /dev/null || echo "Unhealthy"
 
 ### Shell Alert When Upload Failures Detected
 ```bash
-if [ "$(curl -s http://localhost:8080/monitor?json=1 | jq '.uploads.failed_uploads')" -gt 0 ]; then
+if [ "$(curl -s http://localhost:8080/_irondrop/monitor?json=1 | jq '.uploads.failed_uploads')" -gt 0 ]; then
   echo "Upload failures detected" >&2
 fi
 ```
@@ -83,7 +83,7 @@ fi
 ```bash
 prev=0
 while sleep 60; do
-  cur=$(curl -s http://localhost:8080/monitor?json=1 | jq '.requests.total')
+  cur=$(curl -s http://localhost:8080/_irondrop/monitor?json=1 | jq '.requests.total')
   echo "RPM=$((cur-prev))"
   prev=$cur
 done

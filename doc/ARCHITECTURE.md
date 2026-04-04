@@ -99,7 +99,7 @@ IronDrop is a file server written in Rust. It uses only the standard library for
         │           │           │           │           │           │
         ▼           ▼           ▼           ▼           ▼           ▼
   [Static Assets] [Health]  [Upload API]  [File Sys]  [Search API] [Monitor]
-   /_irondrop/    /_health   /_irondrop/   Directory   /_irondrop/  /monitor
+   /_irondrop/    /_irondrop/health   /_irondrop/   Directory   /_irondrop/  /monitor
     /static/*               /upload       Listing     /search
         │           │           │           │           │           │
         ▼           ▼           ▼           ▼           ▼           ▼
@@ -166,7 +166,7 @@ templates/
     └── script.js        # Error page enhancements
 
 tests/
-├── comprehensive_test.rs     # Core server tests (19 tests)
+├── integration_test.rs     # Core server tests (19 tests)
 ├── integration_test.rs       # Auth + security tests (6 tests)
 ├── edge_case_test.rs         # Upload edge cases (10 tests)
 ├── memory_optimization_test.rs # Memory efficiency (6 tests)
@@ -236,7 +236,7 @@ Standard Entry (24 bytes):     Ultra-Compact Entry (11 bytes):
 
 The search system integrates with the HTTP layer through dedicated endpoints:
 
-- **`GET /api/search?q=query`**: Primary search interface
+- **`GET /_irondrop/search?q=query`**: Primary search interface
 - **Frontend Integration**: Real-time search with 300ms debouncing
 - **Result Pagination**: Configurable limits and offsets
 - **JSON Response Format**: Structured results with metadata
@@ -263,8 +263,8 @@ IronDrop v2.6.4 provides advanced HTTP layer streaming for efficient handling of
 
 ```rust
 pub enum RequestBody {
-    Memory(Vec<u8>),           // Small uploads (≤1MB)
-    File(PathBuf),             // Large uploads (>1MB)
+    Memory(Vec<u8>),           // Small uploads (≤64MB)
+    File(PathBuf),             // Large uploads (>64MB)
 }
 ```
 
@@ -281,7 +281,7 @@ The `RequestBody` enum provides a unified interface for handling HTTP request bo
 HTTP Request → Content-Length Check → Size Threshold Comparison
                                               │
                     ┌─────────────────────────┼─────────────────────────┐
-                    │ ≤1MB                    │                    >1MB │
+                    │ ≤64MB                    │                    >64MB │
                     ▼                         ▼                         ▼
             Memory Processing           Disk Streaming              Disk Streaming
             ┌─────────────────┐        ┌─────────────────┐        ┌─────────────────┐
@@ -301,8 +301,8 @@ HTTP Request → Content-Length Check → Size Threshold Comparison
 | Upload Size | Processing Mode | Memory Usage | Disk I/O | Latency |
 |-------------|----------------|--------------|----------|---------|
 | <1KB        | Memory         | ~1KB         | None     | <1ms    |
-| 1KB-1MB     | Memory         | ~Size        | None     | <10ms   |
-| 1MB-100MB   | Disk Streaming | ~64KB        | Sequential| <100ms  |
+| 1KB-64MB     | Memory         | ~Size        | None     | <10ms   |
+| 64MB-100MB   | Disk Streaming | ~64KB        | Sequential| <100ms  |
 | 100MB-1GB   | Disk Streaming | ~64KB        | Sequential| <1s     |
 | 1GB-10GB    | Disk Streaming | ~64KB        | Sequential| <10s    |
 
@@ -356,7 +356,7 @@ The streaming system provides comprehensive monitoring capabilities:
 
 ```rust
 pub struct StreamingConfig {
-    pub memory_threshold: usize,      // Default: 1MB
+    pub memory_threshold: usize,      // Default: 64MB
     pub chunk_size: usize,           // Default: 64KB
     pub temp_dir: Option<PathBuf>,   // Default: system temp
     pub max_concurrent: usize,       // Default: 10
@@ -398,8 +398,8 @@ Dedicated HTTP streaming tests verify correct behavior:
 4. **Audit and Monitoring Layer**
    - Comprehensive request logging with unique IDs
    - Performance metrics collection and statistics
-   - Health check endpoints (`/_health`, `/_status`)
-   - Unified monitoring dashboard (`/monitor`, `/monitor?json=1`)
+   - Health check endpoints (`/_irondrop/health`, `/_irondrop/status`)
+   - Unified monitoring dashboard (`/monitor`, `/_irondrop/monitor?json=1`)
    - Error tracking and security event logging
 
 ### Security Features by Component
@@ -419,8 +419,8 @@ Dedicated HTTP streaming tests verify correct behavior:
 - **Baseline**: ~3MB + (thread_count × 8KB stack)
 - **Template Cache**: In-memory storage for frequently accessed templates
 - **Upload Buffer**: HTTP streaming with automatic memory/disk switching
-- **Small Uploads (≤1MB)**: Direct memory processing for optimal performance
-- **Large Uploads (>1MB)**: Disk streaming with ~64KB memory footprint
+- **Small Uploads (≤64MB)**: Direct memory processing for optimal performance
+- **Large Uploads (>64MB)**: Disk streaming with ~64KB memory footprint
 - **File Operations**: Configurable chunk sizes (default: 1KB)
 
 ### Concurrent Processing
@@ -481,7 +481,7 @@ Static Asset Request → Asset Router → Direct File Serving → CSS/JS Respons
 ### Test Coverage by Component
 | Test File | Component Coverage | Test Count |
 |-----------|-------------------|------------|
-| `comprehensive_test.rs` | Core server functionality | 19 |
+| `integration_test.rs` | Core server functionality | 19 |
 | `integration_test.rs` | Authentication and security | 6 |
 | `upload_integration_test.rs` | Upload system | 29 |
 | `multipart_test.rs` | Multipart parser | 7 |

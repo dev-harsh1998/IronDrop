@@ -195,7 +195,7 @@ Uploads files using direct binary streaming for optimal performance and unlimite
 
 **Direct Upload Features (v2.6.4):**
 - **Direct Binary Streaming**: No multipart parsing overhead
-- **Automatic Mode Selection**: Small uploads (≤2MB) processed in memory, large uploads (>2MB) streamed to disk
+- **Automatic Mode Selection**: Small uploads (≤64MB) processed in memory, large uploads (>64MB) streamed to disk
 - **Constant Memory Usage**: ~7MB RAM usage regardless of file size
 - **Unlimited File Sizes**: No artificial size restrictions
 - **Atomic Operations**: Complete uploads or clean failure with automatic cleanup
@@ -211,8 +211,8 @@ X-Filename: document.pdf
 ```
 
 **Processing Modes:**
-- **Memory Mode** (≤2MB): Direct processing in memory for minimal latency
-- **Streaming Mode** (>2MB): Direct streaming to disk with constant ~7MB memory usage
+- **Memory Mode** (≤64MB): Direct processing in memory for minimal latency
+- **Streaming Mode** (>64MB): Direct streaming to disk with constant ~7MB memory usage
 
 **Success Response (JSON):**
 ```json
@@ -292,7 +292,7 @@ Content-Type: text/html
 
 ### 4. Search API
 
-#### `GET /api/search`
+#### `GET /_irondrop/search`
 Searches for files and directories within the served directory tree.
 
 **Query Parameters:**
@@ -304,10 +304,10 @@ Searches for files and directories within the served directory tree.
 
 **Examples:**
 ```http
-GET /api/search?q=document
-GET /api/search?q=report&limit=20&offset=10
-GET /api/search?q=Config&case_sensitive=true
-GET /api/search?q=readme&path=/docs
+GET /_irondrop/search?q=document
+GET /_irondrop/search?q=report&limit=20&offset=10
+GET /_irondrop/search?q=Config&case_sensitive=true
+GET /_irondrop/search?q=readme&path=/docs
 ```
 
 **Success Response:**
@@ -413,7 +413,7 @@ Static asset not found
 
 ### 6. Health and Monitoring
 
-#### `GET /_health`
+#### `GET /_irondrop/health`
 Basic health check endpoint.
 
 **Response:**
@@ -426,7 +426,7 @@ Basic health check endpoint.
 }
 ```
 
-#### `GET /_status`
+#### `GET /_irondrop/status`
 Detailed server status and statistics.
 
 **Response:**
@@ -472,7 +472,7 @@ Content-Type: text/html; charset=utf-8
 </html>
 ```
 
-#### `GET /_irondrop/monitor?json=1`
+#### `GET /_irondrop/_irondrop/monitor?json=1`
 Machine-readable JSON stats for integration with external monitoring / scripting.
 
 **Response (JSON):**
@@ -539,12 +539,12 @@ API information and capabilities.
     },
     "health_check": {
       "method": "GET",
-      "path": "/_health",
+      "path": "/_irondrop/health",
       "description": "Basic health check"
     },
     "status": {
       "method": "GET",
-      "path": "/_status",
+      "path": "/_irondrop/status",
       "description": "Detailed server status"
     }
   },
@@ -709,7 +709,7 @@ if (result.status === 'success') {
 **Search Files:**
 ```javascript
 // Search for files
-const searchResponse = await fetch('/api/search?q=document&limit=10');
+const searchResponse = await fetch('/_irondrop/search?q=document&limit=10');
 const searchData = await searchResponse.json();
 
 if (searchData.status === 'success') {
@@ -723,7 +723,7 @@ if (searchData.status === 'success') {
 **Health Check:**
 ```javascript
 // Monitor server health
-const health = await fetch('/_health').then(r => r.json());
+const health = await fetch('/_irondrop/health').then(r => r.json());
 console.log(`Server uptime: ${health.uptime_seconds}s`);
 ```
 
@@ -746,12 +746,12 @@ curl "http://localhost:8080/directory" -H "Accept: application/json" | jq .
 
 **Search files:**
 ```bash
-curl "http://localhost:8080/api/search?q=document&limit=5" | jq .
+curl "http://localhost:8080/_irondrop/search?q=document&limit=5" | jq .
 ```
 
 **Health check:**
 ```bash
-curl http://localhost:8080/_health
+curl http://localhost:8080/_irondrop/health
 ```
 
 **With authentication:**
@@ -794,7 +794,7 @@ if response.status_code == 200:
 ```python
 import requests
 
-response = requests.get('http://localhost:8080/api/search', 
+response = requests.get('http://localhost:8080/_irondrop/search', 
                        params={'q': 'document', 'limit': 10})
 data = response.json()
 
