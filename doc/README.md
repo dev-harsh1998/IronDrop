@@ -99,7 +99,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - **Streaming Tests**: HTTP layer streaming validation and large file bash integration tests
 - **Test Infrastructure**: Helper functions, data management, execution procedures
 
-**Implementation Status**: ✅ **Production Ready** (v2.6.4)
+**Implementation Status**: ✅ **Production Ready** (v2.6.5)
 - **English-Only Testing**: All test messages and output standardized to English
 - **Comprehensive Coverage**: Edge cases, security scenarios, performance validation, and streaming functionality
 - **Memory Optimization Tests**: Ultra-compact search engine validation for 10M+ files
@@ -119,7 +119,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Multi-file concurrent upload handling
 - Client-side validation and error handling
 
-**Implementation Status**: ✅ **Production Ready** (v2.6.4)
+**Implementation Status**: ✅ **Production Ready** (v2.6.5)
 - Complete upload system with 29 comprehensive tests
 - Professional UI matching IronDrop's design language
 - Integrated with template engine and security systems
@@ -136,7 +136,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - CLI configuration security enhancements
 - Defense-in-depth implementation details
 
-**Security Status**: ✅ **Fully Implemented** (v2.6.4)
+**Security Status**: ✅ **Fully Implemented** (v2.6.5)
 - Comprehensive input validation at multiple layers
 - System directory blacklisting and write permission checks
 - Direct streaming with unlimited file size support
@@ -154,7 +154,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Configuration options and customization
 - Comprehensive API usage examples
 
-**Implementation Status**: ✅ **Production Ready** (v2.6.4)
+**Implementation Status**: ✅ **Production Ready** (v2.6.5)
 - RFC 7578 compliance with robust boundary detection and streaming support
 - Advanced streaming implementation for memory-efficient large file processing
 - 7+ dedicated test cases covering edge cases and streaming scenarios
@@ -175,7 +175,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - **Integration Guide**: Seamless integration with existing upload handlers
 - **Testing Framework**: Comprehensive test coverage with dedicated HTTP streaming tests
 
-**Implementation Status**: ✅ **Production Ready** (v2.6.4)
+**Implementation Status**: ✅ **Production Ready** (v2.6.5)
 - **Automatic Mode Selection**: ≤1MB in memory, >1MB streamed to disk
 - **Zero Configuration**: Works transparently with existing upload handlers
 - **Resource Protection**: Prevents memory exhaustion from large uploads
@@ -211,7 +211,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Security implementation and access control
 - Configuration options and troubleshooting guide
 
-**Implementation Status**: ✅ **Production Ready** (v2.6.4)
+**Implementation Status**: ✅ **Production Ready** (v2.6.5)
 - **Standard Search Engine**: Thread-safe search with LRU caching (5-minute TTL)
 - **Ultra-Compact Search Engine**: Memory-optimized for massive directories (10M+ files)
 - **Automatic Mode Selection**: Transparent switching based on directory size
@@ -222,7 +222,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Accessibility-compliant UI with keyboard navigation support
 - Performance testing and benchmarking infrastructure
 
-**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. (v2.6.4)
+**🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. (v2.6.5)
 
 ---
 
@@ -330,7 +330,7 @@ Open a browser at [http://127.0.0.1:8080](http://127.0.0.1:8080) and you will se
 
 ---
 
-## 🎉 What's New in v2.6.4
+## 🎉 What's New in v2.6.5
 
 ### 📤 **Complete File Upload System**
 IronDrop v2.5 introduces a **production-ready file upload system** with enterprise-grade features:

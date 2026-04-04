@@ -1,4 +1,4 @@
-# IronDrop API Reference v2.6.4
+# IronDrop API Reference v2.6.5
 
 ## Overview
 
@@ -31,7 +31,7 @@ User-Agent: <client-identifier>
 #### Response Headers
 ```http
 # Standard headers
-Server: IronDrop/2.6
+Server: IronDrop/2.6.5
 Content-Type: <mime-type>
 Content-Length: <content-length>
 Connection: keep-alive
@@ -193,7 +193,7 @@ Content-Type: text/html; charset=utf-8
 #### `POST /_irondrop/upload`
 Uploads files using direct binary streaming for optimal performance and unlimited file size support.
 
-**Direct Upload Features (v2.6.4):**
+**Direct Upload Features (v2.6.5):**
 - **Direct Binary Streaming**: No multipart parsing overhead
 - **Automatic Mode Selection**: Small uploads (≤64MB) processed in memory, large uploads (>64MB) streamed to disk
 - **Constant Memory Usage**: ~7MB RAM usage regardless of file size
@@ -420,7 +420,7 @@ Basic health check endpoint.
 ```json
 {
   "status": "healthy",
-  "version": "2.6",
+  "version": "2.6.5",
   "uptime_seconds": 3600,
   "timestamp": "2024-01-01T12:00:00Z"
 }
@@ -827,4 +827,4 @@ All inputs are validated:
 - File names for path traversal attempts
 - HTTP headers for malformed content
 
-This API reference covers all functionality available in IronDrop v2.6.4 and provides comprehensive examples for client integration.
+This API reference covers all functionality available in IronDrop v2.6.5 and provides comprehensive examples for client integration.
