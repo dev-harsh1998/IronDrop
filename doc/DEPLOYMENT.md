@@ -1,4 +1,4 @@
-# IronDrop Deployment Guide v2.6.4
+# IronDrop Deployment Guide v2.6.5
 
 ## Overview
 
@@ -333,17 +333,15 @@ For simple deployments, native TLS is sufficient. For high-traffic production wi
 
 > **Note:** IronDrop now supports native HTTPS via `--ssl-cert` and `--ssl-key`. A reverse proxy is only needed for advanced features like HTTP/2, load balancing, or caching. See [Native SSL/TLS](#native-ssltls-https) above.
 
-### nginx Configuration
+### Nginx Reverse Proxy Deployment
 
+Using Nginx as a reverse proxy is recommended for production environments to handle SSL termination, load balancing, and complex path configurations.
+
+#### 1. Root Domain Deployment
+Use this configuration to host IronDrop directly at a domain or subdomain (e.g., `https://files.example.com/`).
+
+**Nginx Configuration:**
 ```nginx
-# /etc/nginx/sites-available/irondrop
-upstream irondrop_backend {
-    server 127.0.0.1:8080;
-    # For multiple instances:
-    # server 127.0.0.1:8081;
-    # server 127.0.0.1:8082;
-}
-
 server {
     listen 80;
     server_name files.example.com;
@@ -354,64 +352,98 @@ server {
     listen 443 ssl http2;
     server_name files.example.com;
 
-    # SSL configuration
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
-    ssl_prefer_server_ciphers off;
-
-    # Security headers
-    add_header X-Frame-Options DENY always;
-    add_header X-Content-Type-Options nosniff always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Strict-Transport-Security "max-age=63072000" always;
-
-    # Upload size limit
-    client_max_body_size 10G;
-    client_body_timeout 300s;
-
-    # Compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css application/javascript application/json;
+    # SSL configuration (Certbot/Let's Encrypt recommended)
+    ssl_certificate /etc/letsencrypt/live/files.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/files.example.com/privkey.pem;
 
     location / {
-        proxy_pass http://irondrop_backend;
+        proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Timeouts
-        proxy_connect_timeout 30s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-
-        # Buffer settings for large uploads
+        # Performance optimizations for large files
+        client_max_body_size 0; # Disable limit for large uploads
+        proxy_read_timeout 1d;
+        proxy_send_timeout 1d;
+        proxy_connect_timeout 1d;
+        send_timeout 1d;
+        proxy_max_temp_file_size 0;
+        
+        # Disable buffering for streaming
         proxy_buffering off;
         proxy_request_buffering off;
     }
-
-    # Health check endpoint
-    location /_health {
-        proxy_pass http://irondrop_backend;
-        access_log off;
-    }
-
-    # Rate limiting
-    limit_req_zone $binary_remote_addr zone=uploads:10m rate=10r/m;
-    location /upload {
-        limit_req zone=uploads burst=5 nodelay;
-        proxy_pass http://irondrop_backend;
-        
-        # Extended timeouts for uploads
-        proxy_send_timeout 600s;
-        proxy_read_timeout 600s;
-    }
 }
 ```
+
+#### 2. Subpath Deployment
+Use this configuration to host IronDrop on a custom subpath (e.g., `https://example.com/webstorage/`). This requires path rewriting and HTML link filtering.
+
+**Nginx Configuration:**
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name example.com;
+
+    # 1. Main Application Subpath
+    location /webstorage/ {
+        proxy_pass http://127.0.0.1:8080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Rewrite app redirects and HTML links for subpath compatibility
+        proxy_redirect / /webstorage/;
+        sub_filter 'href="/"' 'href="/webstorage/"';
+        sub_filter 'href="/monitor"' 'href="/webstorage/monitor"';
+        sub_filter 'href="/search"' 'href="/webstorage/search"';
+        sub_filter 'href="/upload"' 'href="/webstorage/upload"';
+        sub_filter 'href="/_irondrop/' 'href="/webstorage/_irondrop/';
+        sub_filter_once off;
+
+        # Large file transfer settings
+        client_max_body_size 0;
+        proxy_read_timeout 1d;
+        proxy_send_timeout 1d;
+        proxy_connect_timeout 1d;
+        proxy_max_temp_file_size 0;
+        send_timeout 1d;
+        proxy_buffering off;
+    }
+
+    # 2. Internal Asset Handling
+    location /_irondrop/ {
+        proxy_pass http://127.0.0.1:8080/_irondrop/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        proxy_redirect / /webstorage/;
+        sub_filter 'href="/"' 'href="/webstorage/"';
+        sub_filter 'href="/monitor"' 'href="/webstorage/monitor"';
+        sub_filter 'href="/upload"' 'href="/webstorage/upload"';
+        sub_filter_once off;
+
+        client_max_body_size 0;
+        proxy_read_timeout 1d;
+        send_timeout 1d;
+    }
+
+    # 3. Convenience Redirects
+    location = /webstorage { return 301 /webstorage/; }
+}
+```
+
+#### Deployment Steps
+1. **Save Configuration:** Save the block to `/etc/nginx/sites-available/irondrop`.
+2. **Enable Site:** `sudo ln -s /etc/nginx/sites-available/irondrop /etc/nginx/sites-enabled/` (if using Debian/Ubuntu).
+3. **Customize Path:** If using the subpath config, replace all instances of `/webstorage/` with your desired subpath.
+4. **Test Syntax:** `sudo nginx -t`
+5. **Reload Nginx:** `sudo systemctl reload nginx`
 
 ### Apache Configuration
 
@@ -757,4 +789,4 @@ perf record -g irondrop -d /srv/files
 strace -p $(pgrep irondrop)
 ```
 
-This deployment guide provides comprehensive coverage of production deployment scenarios and operational best practices for IronDrop v2.6.4.
+This deployment guide provides comprehensive coverage of production deployment scenarios and operational best practices for IronDrop v2.6.5.

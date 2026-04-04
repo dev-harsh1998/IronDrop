@@ -146,7 +146,7 @@ irondrop -d /path/to/media \
 irondrop --config-file ./config/production.ini
 ```
 
-#### 🔒 **HTTPS File Server**
+#### 🔒 HTTPS File Server
 ```bash
 # Generate a self-signed certificate (for testing)
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
@@ -158,6 +158,33 @@ irondrop -d ./files --ssl-cert cert.pem --ssl-key key.pem --listen 0.0.0.0
 irondrop -d ./files --ssl-cert cert.pem --ssl-key key.pem \
   --username admin --password secret --listen 0.0.0.0
 ```
+
+#### 🌐 Reverse Proxy (Nginx)
+For production deployments, it is recommended to run IronDrop behind Nginx.
+
+**Root Domain Configuration:**
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    client_max_body_size 0; # Enable large uploads
+    proxy_buffering off;    # Enable streaming
+}
+```
+
+**Subpath Configuration (e.g., `/webstorage/`):**
+```nginx
+location /webstorage/ {
+    proxy_pass http://127.0.0.1:8080/;
+    proxy_redirect / /webstorage/;
+    sub_filter 'href="/"' 'href="/webstorage/"';
+    sub_filter_once off;
+    # ... see deployment guide for full sub_filter list
+}
+```
+
+See the [Deployment Guide](./doc/DEPLOYMENT.md#nginx-reverse-proxy-deployment) for full configuration examples and optimization settings.
 
 ### 🛠️ Configuration Options
 
