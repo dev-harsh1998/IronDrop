@@ -21,6 +21,7 @@ pub struct Config {
     // Upload settings
     pub enable_upload: bool,
     pub max_upload_size: u64,
+    pub enable_webdav: bool,
 
     // Security settings
     pub username: Option<String>,
@@ -71,6 +72,7 @@ impl Config {
 
             enable_upload: Self::get_enable_upload(&ini, cli),
             max_upload_size: Self::get_max_upload_size(&ini, cli),
+            enable_webdav: Self::get_enable_webdav(&ini, cli),
 
             username: Self::get_username(&ini, cli),
             password: Self::get_password(&ini, cli),
@@ -244,6 +246,19 @@ impl Config {
         u64::MAX
     }
 
+    fn get_enable_webdav(ini: &IniConfig, cli: &Cli) -> bool {
+        if let Some(enable_webdav) = cli.enable_webdav {
+            return enable_webdav;
+        }
+        if let Some(enabled) = ini.get_bool("webdav", "enable_webdav") {
+            return enabled;
+        }
+        if let Some(enabled) = ini.get_bool("server", "enable_webdav") {
+            return enabled;
+        }
+        false
+    }
+
     fn get_username(ini: &IniConfig, cli: &Cli) -> Option<String> {
         // CLI argument
         if let Some(ref username) = cli.username {
@@ -342,6 +357,7 @@ impl Config {
                 self.max_upload_size / (1024 * 1024)
             );
         }
+        log::info!("  WebDAV Enabled: {}", self.enable_webdav);
         log::info!(
             "  Authentication: {}",
             if self.username.is_some() {
@@ -383,6 +399,7 @@ mod tests {
             password: None,
             enable_upload: None,
             max_upload_size: None,
+            enable_webdav: None,
             config_file: None,
             log_dir: None,
             ssl_cert: None,
@@ -405,6 +422,7 @@ mod tests {
         assert_eq!(config.directory, temp_dir.path());
         assert!(!config.enable_upload);
         assert_eq!(config.max_upload_size, u64::MAX); // No limit with direct streaming
+        assert!(!config.enable_webdav);
         assert_eq!(config.username, None);
         assert_eq!(config.password, None);
         assert_eq!(config.allowed_extensions, vec!["*.zip", "*.txt"]);
@@ -427,6 +445,9 @@ chunk_size = 2048
 [upload]
 enable_upload = true
 max_upload_size = 5GB
+
+[webdav]
+enable_webdav = true
 
 [auth]
 username = testuser
@@ -454,6 +475,7 @@ detailed = false
         assert_eq!(config.chunk_size, 2048);
         assert!(config.enable_upload);
         assert_eq!(config.max_upload_size, 5 * 1024 * 1024 * 1024);
+        assert!(config.enable_webdav);
         assert_eq!(config.username, Some("testuser".to_string()));
         assert_eq!(config.password, Some("testpass".to_string()));
         assert_eq!(config.allowed_extensions, vec!["*.pdf", "*.doc"]);
@@ -517,6 +539,9 @@ threads = 16
 [upload]
 enable_upload = true
 max_upload_size = 2GB
+
+[webdav]
+enable_webdav = true
 ";
 
         fs::write(&config_file, ini_content).unwrap();
@@ -528,6 +553,7 @@ max_upload_size = 2GB
 
         assert!(config.enable_upload);
         assert_eq!(config.max_upload_size, 2 * 1024 * 1024 * 1024);
+        assert!(config.enable_webdav);
     }
 
     #[test]

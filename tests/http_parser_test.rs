@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: MIT
 
 use irondrop::http::{ClientStream, Request};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
 
 fn serve_and_parse(request: &str) -> Result<Request, irondrop::error::AppError> {
+    serve_and_parse_bytes(request.as_bytes())
+}
+
+fn serve_and_parse_bytes(request: &[u8]) -> Result<Request, irondrop::error::AppError> {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let req_owned = request.as_bytes().to_vec();
+    let req_owned = request.to_vec();
 
     let handle = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
@@ -41,8 +45,92 @@ fn test_lf_only_headers_separator() {
 }
 
 #[test]
-fn test_chunked_encoding_rejected() {
-    let req = "POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n";
+fn test_chunked_encoding_is_accepted() {
+    let req = concat!(
+        "POST / HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Transfer-Encoding: chunked\r\n",
+        "\r\n",
+        "4\r\n",
+        "Wiki\r\n",
+        "5\r\n",
+        "pedia\r\n",
+        "0\r\n",
+        "\r\n"
+    );
+    let result = serve_and_parse(req).expect("chunked request should parse");
+    assert_eq!(result.method, "POST");
+    match result.body {
+        Some(irondrop::http::RequestBody::Memory(body)) => assert_eq!(body, b"Wikipedia"),
+        _ => panic!("expected memory body for chunked payload"),
+    }
+}
+
+#[test]
+fn test_chunked_encoding_malformed_chunk_size_rejected() {
+    let req = concat!(
+        "POST / HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Transfer-Encoding: chunked\r\n",
+        "\r\n",
+        "ZZ\r\n",
+        "abc\r\n",
+        "0\r\n",
+        "\r\n"
+    );
+    let result = serve_and_parse(req);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_chunked_encoding_invalid_terminator_rejected() {
+    let req = concat!(
+        "POST / HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Transfer-Encoding: chunked\r\n",
+        "\r\n",
+        "3\r\n",
+        "abcX",
+        "0\r\n",
+        "\r\n"
+    );
+    let result = serve_and_parse(req);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_chunked_encoding_with_trailers_is_accepted() {
+    let req = concat!(
+        "POST / HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Transfer-Encoding: chunked\r\n",
+        "\r\n",
+        "3\r\n",
+        "abc\r\n",
+        "0\r\n",
+        "X-Test: ok\r\n",
+        "\r\n"
+    );
+    let result = serve_and_parse(req).expect("chunked request with trailer should parse");
+    match result.body {
+        Some(irondrop::http::RequestBody::Memory(body)) => assert_eq!(body, b"abc"),
+        _ => panic!("expected memory body for chunked payload"),
+    }
+}
+
+#[test]
+fn test_chunked_and_content_length_conflict_rejected() {
+    let req = concat!(
+        "POST / HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Content-Length: 4\r\n",
+        "Transfer-Encoding: chunked\r\n",
+        "\r\n",
+        "4\r\n",
+        "Wiki\r\n",
+        "0\r\n",
+        "\r\n"
+    );
     let result = serve_and_parse(req);
     assert!(result.is_err());
 }
@@ -50,7 +138,7 @@ fn test_chunked_encoding_rejected() {
 #[test]
 fn test_missing_host_header() {
     let req = "GET / HTTP/1.1\r\n\r\n";
-    let result = serve_and_parse(req);
+    let _result = serve_and_parse(req);
     // Should handle gracefully - either accept or reject with appropriate error
     // This test ensures no panic occurs
 }
@@ -94,7 +182,7 @@ fn test_malformed_headers() {
     ];
 
     for req in test_cases {
-        let result = serve_and_parse(req);
+        let _result = serve_and_parse(req);
         // Should either parse successfully (ignoring bad headers) or return error
         // This test ensures no panic occurs
     }
@@ -104,7 +192,7 @@ fn test_malformed_headers() {
 fn test_extremely_long_request_line() {
     let long_path = "/".to_string() + &"x".repeat(65536); // 64KB path
     let req = format!("GET {} HTTP/1.1\r\nHost: x\r\n\r\n", long_path);
-    let result = serve_and_parse(&req);
+    let _result = serve_and_parse(&req);
     // Should either accept or reject with appropriate error (414 URI Too Long)
     // This test ensures no panic or infinite loop occurs
 }
@@ -131,14 +219,14 @@ fn test_multiple_content_length_headers() {
 fn test_header_continuation_lines() {
     // HTTP/1.1 allows header continuation with leading whitespace
     let req = "GET / HTTP/1.1\r\nHost: x\r\nX-Custom: value1\r\n continuation\r\n\r\n";
-    let result = serve_and_parse(req);
+    let _result = serve_and_parse(req);
     // Should handle header continuation or reject gracefully
 }
 
 #[test]
 fn test_request_with_body_but_no_content_length() {
     let req = "POST / HTTP/1.1\r\nHost: x\r\n\r\nsome body data";
-    let result = serve_and_parse(req);
+    let _result = serve_and_parse(req);
     // Should handle gracefully - either require Content-Length or read until connection close
 }
 
@@ -153,7 +241,53 @@ fn test_http_version_variations() {
     ];
 
     for req in test_cases {
-        let result = serve_and_parse(req);
+        let _result = serve_and_parse(req);
         // Should accept HTTP/1.0 and HTTP/1.1, reject others
+    }
+}
+
+#[test]
+fn test_webdav_methods_are_accepted() {
+    let methods = [
+        "PROPFIND",
+        "MKCOL",
+        "COPY",
+        "MOVE",
+        "PROPPATCH",
+        "LOCK",
+        "UNLOCK",
+    ];
+
+    for method in methods {
+        let req = format!("{method} /dav/path HTTP/1.1\r\nHost: x\r\n\r\n");
+        let result = serve_and_parse(&req);
+        assert!(result.is_ok(), "method {method} should be accepted");
+    }
+}
+
+#[test]
+fn test_chunked_body_split_across_tcp_frames() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let handle = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .write_all(b"POST / HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWi")
+            .unwrap();
+        stream.flush().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        stream.write_all(b"ki\r\n0\r\n\r\n").unwrap();
+        stream.flush().unwrap();
+    });
+
+    let client = TcpStream::connect(addr).unwrap();
+    let mut client_stream = ClientStream::Plain(client);
+    let parsed = Request::from_stream(&mut client_stream).expect("request should parse");
+    handle.join().unwrap();
+
+    match parsed.body {
+        Some(irondrop::http::RequestBody::Memory(body)) => assert_eq!(body, b"Wiki"),
+        _ => panic!("expected in-memory body"),
     }
 }

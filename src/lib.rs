@@ -39,6 +39,7 @@ pub mod ultra_compact_search;
 pub mod ultra_memory_test;
 pub mod upload;
 pub mod utils;
+pub mod webdav;
 
 use crate::cli::Cli;
 use crate::config::Config;

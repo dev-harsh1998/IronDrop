@@ -6,3 +6,4 @@ Cargo.lock
 .copilot
 *.DS_Store
 .direnv
+*.log

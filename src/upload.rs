@@ -1009,6 +1009,7 @@ mod tests {
             password: None,
             enable_upload: Some(true),
             max_upload_size: Some(100), // 100MB for testing
+            enable_webdav: Some(false),
             config_file: None,
             log_dir: None,
             ssl_cert: None,

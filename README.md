@@ -25,15 +25,33 @@ IronDrop focuses on predictable behavior, simplicity, and low overhead. Use it t
 - Basic security features: rate limiting, optional Basic Auth, path safety checks
 - Native SSL/TLS support via `--ssl-cert` and `--ssl-key` (built-in HTTPS, no reverse proxy required)
 - Single binary; templates and assets are embedded
- - Pure standard library networking and file I/O (no external HTTP stack or async runtime)
- - Ultra-compact search index option for very large directory trees (tested up to ~10M entries)
+- Core engine is dependency-free in critical paths: networking, search, and filesystem access are implemented in-house
+- Standard production dependencies are still used where practical (for example `clap`, `log`/`env_logger`, and `rustls`)
+- Ultra-compact search index option for very large directory trees (tested up to ~10M entries)
+- WebDAV (RFC 4918 Class 1 + Class 2 core): `OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`
+
+## WebDAV RFC 4918 support
+
+IronDrop includes an RFC 4918-focused implementation. The WebDAV core engine is implemented in-house and keeps critical request/response logic dependency-free.
+
+- Supported methods: `OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`
+- Capability headers: `DAV: 1,2`, `Allow`, `MS-Author-Via`
+- `PROPFIND`: `allprop`, `propname`, named `prop`, per-property `propstat` grouping (`200`/`404`), and finite-depth refusal (`403` + `propfind-finite-depth`)
+- `PROPPATCH`: dead-property `set`/`remove` with `207 Multi-Status` results
+- Locking: exclusive write locks, lock refresh, `If` header token evaluation (including `Not` conditions), and token-gated write preconditions
+- Tree operations: lock-aware `DELETE` multistatus behavior (`207` with `423`/`424` where applicable)
+
+Current RFC scope limits:
+
+- ACL/versioning/bindings RFCs are out of scope (`RFC 3744`, `RFC 3253`, `RFC 5842`)
+- Lock and dead-property storage is in-process (non-persistent across server restarts)
 
 ## Performance
 
 Designed to keep memory usage steady and to stream large files without buffering them in memory. The ultra-compact search mode reduces memory for very large directory trees.
 
 - Ultra-compact search: approximately ~110 MB of RAM for around 10 million paths; search latency depends on CPU, disk, and query specifics.
-- No-dependency footprint: networking and file streaming are implemented with Rust's `std::net` and `std::fs`, producing a single self-contained binary.
+- Dependency profile: networking/search/filesystem core paths are dependency-free, while operational dependencies such as `clap`, `log`/`env_logger`, and `rustls` are used as stable standard building blocks.
 
 ## Security
 
@@ -273,6 +291,7 @@ IronDrop has extensive documentation covering its architecture, API, and feature
 
 ### 🔧 **Feature Documentation**
 *   [**Search Feature Deep Dive**](./doc/SEARCH_FEATURE.md) - Ultra-compact search system details
+*   [**WebDAV Implementation Guide**](./doc/WEBDAV_IMPLEMENTATION.md) - End-to-end flow and RFC 4918 behavior
 *   [**Upload Integration Guide**](./doc/UPLOAD_INTEGRATION.md) - File upload system and UI
 *   [**Direct Upload System**](./doc/MULTIPART_README.md) - Memory-efficient direct streaming architecture
 *   [**Configuration System**](./doc/CONFIGURATION_SYSTEM.md) - INI-based configuration guide
@@ -286,16 +305,15 @@ IronDrop has extensive documentation covering its architecture, API, and feature
 
 ## Testing
 
-IronDrop is rigorously tested with **199 comprehensive tests across 16 test files** covering all aspects of functionality.
+IronDrop is rigorously tested with **272 automated tests**:
 
-### Test Categories
-- **Integration Tests** (16 tests): End-to-end functionality and HTTP handling
-- **Monitor Tests** (2 tests): Real-time monitoring dashboard and metrics
-- **Rate Limiter Tests** (7 tests): Memory-based rate limiting and DoS protection
-- **Template Tests** (8 tests): Embedded template system and rendering
-- **Ultra-Compact Search Tests** (10 tests): Advanced search engine functionality
-- **Configuration Tests** (12 tests): INI parsing and configuration validation
-- **Core Server & Unit Tests** (40 tests): Library functions, utilities, and core logic
+- **48 unit tests** in core source modules
+- **224 integration/system tests** across **28** test files (including WebDAV RFC suites)
+
+### Coverage Areas
+- HTTP parser/request handling, auth, rate limiting, monitoring, uploads, search, and utilities
+- WebDAV RFC-focused behavior (`PROPFIND`, `PROPPATCH`, `COPY/MOVE`, `LOCK/UNLOCK`, error XML, edge preconditions)
+- Security and robustness paths (path traversal checks, symlink safeguards, malformed input handling)
 
 ```bash
 # Run all tests
@@ -322,7 +340,7 @@ IronDrop is licensed under the [MIT License](./LICENSE).
 <div align="center">
   <p>
     <strong>Made with ❤️ and 🦀 in Rust</strong><br>
-    <em>Zero dependencies • Production ready • Battle tested with 199 comprehensive tests</em>
+    <em>Dependency-free core engine paths • Production ready • Battle tested with 272 automated tests</em>
   </p>
   <p>
     <a href="https://github.com/dev-harsh1998/IronDrop">⭐ Star us on GitHub</a>
