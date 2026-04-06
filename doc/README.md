@@ -12,6 +12,22 @@ This documentation suite provides complete coverage of IronDrop's architecture, 
 
 Recent updates include direct streaming uploads and the ultra-compact search mode.
 
+## WebDAV support snapshot
+
+Current WebDAV support targets RFC 4918 Class 1 + Class 2 core behavior without new dependencies:
+
+- Implemented methods: `OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`
+- Protocol details: `DAV: 1,2` capability advertisement, `Allow` and `MS-Author-Via` headers, `207 Multi-Status` XML where required
+- `PROPFIND` semantics: `allprop`, `propname`, named `prop`, and `200`/`404` `propstat` grouping
+- `PROPPATCH` semantics: dead-property `set`/`remove` with `207` response model
+- Lock semantics: token-gated writes with `If`-header parsing, lock refresh, and lock-aware copy/move/delete preconditions
+- `PROPFIND` `Depth: infinity` on collections is refused with RFC-shaped `403` DAV precondition (`propfind-finite-depth`)
+
+Known scope limits:
+
+- No ACL/versioning/bindings extensions (`RFC 3744`, `RFC 3253`, `RFC 5842`)
+- Lock/dead-property state is in-memory (non-persistent across restarts)
+
 ## 📖 Core Documentation
 
 ### 🏗️ [Architecture Documentation](./ARCHITECTURE.md)
@@ -223,6 +239,17 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Performance testing and benchmarking infrastructure
 
 **🎉 NEW in v2.6**: Revolutionary direct streaming upload system with **unlimited file size support**, constant memory usage (~7MB), and simplified binary upload architecture. (v2.6.5)
+
+### 🌐 [WebDAV Implementation Guide](./WEBDAV_IMPLEMENTATION.md) ⭐
+**Audience**: Backend Developers, Integrators, Client Compatibility Engineers  
+**Purpose**: Easy-to-follow RFC 4918 flow guide for the implemented WebDAV engine
+
+**Contents:**
+- Request routing and method dispatch flow
+- PROPFIND/PROPPATCH logic and XML response shape
+- COPY/MOVE/DELETE precondition and lock checks
+- LOCK/UNLOCK token flow and `If` header evaluation
+- Practical troubleshooting checklist with expected status codes
 
 ---
 

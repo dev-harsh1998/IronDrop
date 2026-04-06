@@ -132,7 +132,22 @@ impl Request {
     fn is_valid_http_method(method: &str) -> bool {
         matches!(
             method,
-            "GET" | "POST" | "PUT" | "DELETE" | "HEAD" | "OPTIONS" | "PATCH" | "TRACE" | "CONNECT"
+            "GET"
+                | "POST"
+                | "PUT"
+                | "DELETE"
+                | "HEAD"
+                | "OPTIONS"
+                | "PATCH"
+                | "TRACE"
+                | "CONNECT"
+                | "PROPFIND"
+                | "MKCOL"
+                | "COPY"
+                | "MOVE"
+                | "PROPPATCH"
+                | "LOCK"
+                | "UNLOCK"
         )
     }
 
@@ -324,6 +339,20 @@ impl Request {
         headers: &HashMap<String, String>,
         remaining_bytes: Vec<u8>,
     ) -> Result<Option<RequestBody>, AppError> {
+        let has_content_length = headers.contains_key("content-length");
+        let has_chunked_transfer = Self::has_chunked_transfer_encoding(headers);
+
+        // RFC 9112: Transfer-Encoding and Content-Length must not be sent together.
+        if has_content_length && has_chunked_transfer {
+            return Err(AppError::BadRequest);
+        }
+
+        // Chunked request bodies are decoded before any method-specific handling.
+        if has_chunked_transfer {
+            let body = Self::read_chunked_body(stream, remaining_bytes)?;
+            return Ok(Some(body));
+        }
+
         // Check if we have a Content-Length header
         let content_length = match headers.get("content-length") {
             Some(length_str) => match length_str.parse::<usize>() {
@@ -331,13 +360,6 @@ impl Request {
                 Err(_) => return Err(AppError::BadRequest),
             },
             None => {
-                // Check for Transfer-Encoding: chunked (not fully implemented but detected)
-                if let Some(encoding) = headers.get("transfer-encoding")
-                    && encoding.to_lowercase().contains("chunked")
-                {
-                    warn!("Chunked transfer encoding not yet supported");
-                    return Err(AppError::BadRequest);
-                }
                 // No body expected
                 return Ok(None);
             }
@@ -362,6 +384,188 @@ impl Request {
             Self::read_body_to_disk(stream, content_length, remaining_bytes)
                 .map(|(path, size)| Some(RequestBody::File { path, size }))
         }
+    }
+
+    fn has_chunked_transfer_encoding(headers: &HashMap<String, String>) -> bool {
+        headers
+            .get("transfer-encoding")
+            .map(|encoding| {
+                encoding
+                    .split(',')
+                    .map(|token| token.trim())
+                    .any(|token| token.eq_ignore_ascii_case("chunked"))
+            })
+            .unwrap_or(false)
+    }
+
+    fn read_chunked_body(
+        stream: &mut ClientStream,
+        mut pending: Vec<u8>,
+    ) -> Result<RequestBody, AppError> {
+        const CHUNK_LINE_LIMIT: usize = 8 * 1024;
+
+        let mut total_size: usize = 0;
+        let mut memory_body: Vec<u8> = Vec::new();
+        let mut file_sink: Option<(PathBuf, File)> = None;
+
+        loop {
+            let line = Self::read_crlf_line(stream, &mut pending, CHUNK_LINE_LIMIT)?;
+            let line_str = std::str::from_utf8(&line).map_err(|_| AppError::BadRequest)?;
+            let size_token = line_str
+                .split(';')
+                .next()
+                .ok_or(AppError::BadRequest)?
+                .trim();
+            if size_token.is_empty() {
+                return Err(AppError::BadRequest);
+            }
+
+            let chunk_size =
+                usize::from_str_radix(size_token, 16).map_err(|_| AppError::BadRequest)?;
+            if chunk_size == 0 {
+                Self::consume_chunked_trailers(stream, &mut pending)?;
+                break;
+            }
+
+            let next_total = total_size
+                .checked_add(chunk_size)
+                .ok_or(AppError::PayloadTooLarge(MAX_REQUEST_BODY_SIZE as u64))?;
+            if next_total > MAX_REQUEST_BODY_SIZE {
+                return Err(AppError::PayloadTooLarge(MAX_REQUEST_BODY_SIZE as u64));
+            }
+
+            let chunk_data = Self::read_exact_from_buffer(stream, &mut pending, chunk_size)?;
+            Self::consume_expected_crlf(stream, &mut pending)?;
+
+            if file_sink.is_none() && next_total <= STREAM_TO_DISK_THRESHOLD {
+                memory_body.extend_from_slice(&chunk_data);
+            } else {
+                if file_sink.is_none() {
+                    let (temp_path, mut temp_file) = Self::create_temp_body_file()?;
+                    if !memory_body.is_empty() {
+                        temp_file.write_all(&memory_body).map_err(|e| {
+                            let _ = std::fs::remove_file(&temp_path);
+                            AppError::from(e)
+                        })?;
+                        memory_body.clear();
+                    }
+                    file_sink = Some((temp_path, temp_file));
+                }
+                if let Some((temp_path, temp_file)) = file_sink.as_mut() {
+                    temp_file.write_all(&chunk_data).map_err(|e| {
+                        let _ = std::fs::remove_file(temp_path);
+                        AppError::from(e)
+                    })?;
+                }
+            }
+
+            total_size = next_total;
+        }
+
+        if let Some((temp_path, temp_file)) = file_sink.as_mut() {
+            temp_file.sync_all().map_err(|e| {
+                let _ = std::fs::remove_file(temp_path);
+                AppError::from(e)
+            })?;
+        }
+
+        if let Some((temp_path, _)) = file_sink {
+            Ok(RequestBody::File {
+                path: temp_path,
+                size: total_size as u64,
+            })
+        } else {
+            Ok(RequestBody::Memory(memory_body))
+        }
+    }
+
+    fn create_temp_body_file() -> Result<(PathBuf, File), AppError> {
+        let temp_filename = format!(
+            "irondrop_request_{}_{:x}.tmp",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+        let temp_path = std::env::temp_dir().join(temp_filename);
+        let temp_file = File::create(&temp_path).map_err(|e| {
+            error!("Failed to create temporary file {temp_path:?}: {e}");
+            AppError::from(e)
+        })?;
+        Ok((temp_path, temp_file))
+    }
+
+    fn read_crlf_line(
+        stream: &mut ClientStream,
+        pending: &mut Vec<u8>,
+        max_line_len: usize,
+    ) -> Result<Vec<u8>, AppError> {
+        loop {
+            if let Some(pos) = pending.windows(2).position(|w| w == b"\r\n") {
+                let line = pending[..pos].to_vec();
+                pending.drain(0..pos + 2);
+                return Ok(line);
+            }
+
+            if pending.len() > max_line_len + 2 {
+                return Err(AppError::BadRequest);
+            }
+
+            let mut buffer = [0u8; 8192];
+            match stream.read(&mut buffer) {
+                Ok(0) => return Err(AppError::BadRequest),
+                Ok(n) => pending.extend_from_slice(&buffer[..n]),
+                Err(e) => return Err(AppError::Io(e)),
+            }
+        }
+    }
+
+    fn read_exact_from_buffer(
+        stream: &mut ClientStream,
+        pending: &mut Vec<u8>,
+        count: usize,
+    ) -> Result<Vec<u8>, AppError> {
+        while pending.len() < count {
+            let mut buffer = [0u8; 8192];
+            match stream.read(&mut buffer) {
+                Ok(0) => return Err(AppError::BadRequest),
+                Ok(n) => pending.extend_from_slice(&buffer[..n]),
+                Err(e) => return Err(AppError::Io(e)),
+            }
+        }
+        Ok(pending.drain(0..count).collect())
+    }
+
+    fn consume_expected_crlf(
+        stream: &mut ClientStream,
+        pending: &mut Vec<u8>,
+    ) -> Result<(), AppError> {
+        let crlf = Self::read_exact_from_buffer(stream, pending, 2)?;
+        if crlf != b"\r\n" {
+            return Err(AppError::BadRequest);
+        }
+        Ok(())
+    }
+
+    fn consume_chunked_trailers(
+        stream: &mut ClientStream,
+        pending: &mut Vec<u8>,
+    ) -> Result<(), AppError> {
+        let mut total_trailer_size = 0usize;
+        loop {
+            let line = Self::read_crlf_line(stream, pending, MAX_HEADERS_SIZE)?;
+            total_trailer_size += line.len() + 2;
+            if total_trailer_size > MAX_HEADERS_SIZE {
+                return Err(AppError::BadRequest);
+            }
+
+            // Empty line marks end of trailers.
+            if line.is_empty() {
+                break;
+            }
+        }
+        Ok(())
     }
 
     /// Read small request body into memory
@@ -614,6 +818,10 @@ pub fn handle_client(
 
     match response_result {
         Ok(response) => {
+            info!(
+                "{} {} {} -> {}",
+                log_prefix, request.method, request.path, response.status_code
+            );
             trace!("{} Response status: {}", log_prefix, response.status_code);
             match send_response(&mut stream, response, &log_prefix) {
                 Ok(body_bytes) => {

@@ -492,6 +492,14 @@ pub fn handle_file_request(
             // For the current implementation, we'll allow POST but treat it like GET for basic functionality
             debug!("POST request received, treating as GET for basic functionality");
         }
+        "OPTIONS" | "PROPFIND" | "PROPPATCH" | "MKCOL" | "PUT" | "DELETE" | "COPY" | "MOVE"
+        | "LOCK" | "UNLOCK" => {
+            if !cli_config.and_then(|c| c.enable_webdav).unwrap_or(false) {
+                debug!("WebDAV method rejected because WebDAV is disabled");
+                return Err(AppError::MethodNotAllowed);
+            }
+            return crate::webdav::handle_webdav_request(request, base_dir, allowed_extensions);
+        }
         _ => {
             debug!("Method not allowed: {}", request.method);
             return Err(AppError::MethodNotAllowed);
@@ -556,6 +564,7 @@ pub fn handle_file_request(
             directory: cli.directory.clone(),
             enable_upload: cli.enable_upload.unwrap_or(false),
             max_upload_size: cli.max_upload_size_bytes(),
+            enable_webdav: cli.enable_webdav.unwrap_or(false),
             username: cli.username.clone(),
             password: cli.password.clone(),
             allowed_extensions: cli

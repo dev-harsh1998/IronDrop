@@ -1368,6 +1368,7 @@ pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
         password: config.password,
         enable_upload: Some(config.enable_upload),
         max_upload_size: Some(config.max_upload_size / (1024 * 1024)), // Convert bytes back to MB
+        enable_webdav: Some(config.enable_webdav),
         config_file: None, // Not needed for server execution
         log_dir: config.log_dir,
         ssl_cert: config.ssl_cert,
@@ -1436,8 +1437,17 @@ pub fn run_server(
     let is_https = tls_config.is_some();
 
     // Initialize security and monitoring systems
-    debug!("Initializing rate limiter: 120 req/min, 10 concurrent per IP");
-    let rate_limiter = Arc::new(RateLimiter::new(120, 10)); // 120 req/min, 10 concurrent per IP
+    let webdav_enabled = cli.enable_webdav.unwrap_or(false);
+    let (rate_limit_per_minute, concurrent_per_ip) = if webdav_enabled {
+        (3500, 128)
+    } else {
+        (120, 10)
+    };
+    debug!(
+        "Initializing rate limiter: {} req/min, {} concurrent per IP",
+        rate_limit_per_minute, concurrent_per_ip
+    );
+    let rate_limiter = Arc::new(RateLimiter::new(rate_limit_per_minute, concurrent_per_ip));
     debug!("Initializing server statistics");
     let stats = Arc::new(ServerStats::new());
 
@@ -1460,8 +1470,19 @@ pub fn run_server(
     if is_https {
         info!("🔒 TLS/SSL: Enabled");
     }
-    info!("⚡ Security: Rate limiting enabled (120 req/min, 10 concurrent per IP)");
+    info!(
+        "⚡ Security: Rate limiting enabled ({} req/min, {} concurrent per IP)",
+        rate_limit_per_minute, concurrent_per_ip
+    );
     info!("📊 Monitoring: Statistics collection enabled");
+    info!(
+        "🧩 WebDAV: {}",
+        if cli.enable_webdav.unwrap_or(false) {
+            "Enabled"
+        } else {
+            "Disabled"
+        }
+    );
 
     let thread_count = cli.threads.unwrap_or(8);
     debug!("Creating thread pool with {} threads", thread_count);

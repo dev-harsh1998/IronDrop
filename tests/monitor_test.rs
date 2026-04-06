@@ -42,6 +42,7 @@ fn setup_test_server() -> TestServer {
         password: None,
         enable_upload: Some(false),
         max_upload_size: Some(10240),
+        enable_webdav: Some(false),
         config_file: None,
         log_dir: None,
         ssl_cert: None,

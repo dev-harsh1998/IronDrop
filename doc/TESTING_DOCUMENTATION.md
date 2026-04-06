@@ -4,7 +4,7 @@ Version 2.6.5 - Test Suite Overview
 
 ## Overview
 
-IronDrop includes a comprehensive test suite with **199 tests** covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include enhanced path parsing, Unicode support, and race condition fixes.
+IronDrop includes a comprehensive test suite with **272 automated tests** covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include expanded WebDAV RFC suites, hardened path handling, and stronger lock/precondition validation.
 
 ## Test Architecture
 
@@ -21,24 +21,11 @@ IronDrop includes a comprehensive test suite with **199 tests** covering functio
 
 | Category | Test Files | Test Count | Coverage |
 |----------|------------|------------|----------|
-| **Core Server & Unit Tests** | `server.rs`, `upload.rs`, `router.rs`, `config/mod.rs`, `config/ini_parser.rs`, `error.rs`, `cli.rs` (unit tests) | 40 | Core functionality, HTTP handling, utilities |
-| **Configuration System** | `config_test.rs` | 16 | INI parsing, precedence, validation, edge cases |
-| **Direct Upload System** | `direct_upload_test.rs` | 15 | File uploads, streaming, concurrent operations, race conditions |
-| **Integration Testing** | `integration_test.rs` | 16 | Authentication, security, HTTP compliance, edge cases |
-| **Memory & Performance** | `memory_leak_fix_test.rs`, `src/ultra_memory_test.rs` | 6 | Memory management, leak prevention, cleanup |
-| **HTTP Parser** | `http_parser_test.rs` | 13 | Version parsing, malformed requests, edge cases |
-| **Middleware** | `middleware_test.rs` | 13 | Authentication, security, request processing |
-| **Template System** | `template_embedding_test.rs`, `templates_escape_test.rs` | 7 | Embedded templates, escaping, assets |
-| **Template Utilities** | `response_utils_test.rs` | 2 | Response generation, template processing |
-| **Ultra-Compact Search** | `ultra_compact_test.rs`, `src/ultra_compact_search.rs` | 10 | Memory efficiency, search performance |
-| **Rate Limiting** | `rate_limiter_memory_test.rs`, `rate_limiter_smart_eviction_test.rs` | 7 | Memory management, cleanup, limits |
-| **Monitoring & Stats** | `monitor_test.rs` | 2 | Health endpoints, metrics tracking |
-| **Utilities** | `utils_test.rs`, `utils_parse_path_test.rs` | 23 | Path parsing, Unicode encoding, special characters |
-| **Request Body** | `http_requestbody_test.rs` | 1 | Size and emptiness |
-| **Hidden Files** | `hidden_files_test.rs` | 8 | Dotfile handling, listing behavior, ignore rules |
-| **Logging** | `log_dir_test.rs` | 20 | Directory creation, permissions |
+| **Core Unit Tests** | `src/*.rs` unit modules | 48 | Core functionality, parser behavior, routing, upload/search internals |
+| **Integration/System Tests** | `tests/*.rs` (non-WebDAV) | 167 | Auth, config, uploads, monitoring, middleware, parser, utilities, resilience |
+| **WebDAV RFC/Edge Tests** | `tests/webdav*_test.rs` | 57 | RFC 4918 behavior, lock semantics, multistatus/error XML, tree operations |
 
-**Total Tests: 199**
+**Total Tests: 272**
 
 ## Detailed Test Coverage
 
@@ -200,7 +187,7 @@ fn test_demonstrate_memory_savings() // Compares memory usage vs alternatives
 
 ## Running Tests
 
-### Basic Test Execution (current totals: 199 tests across 16 files)
+### Basic Test Execution (current totals: 272 tests: 48 unit + 224 integration/system)
 
 ```bash
 # Run all tests
@@ -414,7 +401,7 @@ fn test_new_feature() {
 - All 15 direct upload tests now pass, including concurrent upload scenarios
 
 **Test Suite Stability**
-- Achieved 100% test pass rate across all 189 tests
+- Achieved 100% test pass rate across all 272 tests
 - Enhanced test reliability under concurrent execution
 - Improved error handling and edge case coverage
 - Added comprehensive validation for boundary conditions
