@@ -1,4 +1,4 @@
-# IronDrop Deployment Guide v2.6.5
+# IronDrop Deployment Guide v2.7.0
 
 ## Overview
 
@@ -789,4 +789,4 @@ perf record -g irondrop -d /srv/files
 strace -p $(pgrep irondrop)
 ```
 
-This deployment guide provides comprehensive coverage of production deployment scenarios and operational best practices for IronDrop v2.6.5.
+This deployment guide provides comprehensive coverage of production deployment scenarios and operational best practices for IronDrop v2.7.0.

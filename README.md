@@ -29,12 +29,14 @@ IronDrop focuses on predictable behavior, simplicity, and low overhead. Use it t
 - Standard production dependencies are still used where practical (for example `clap`, `log`/`env_logger`, and `rustls`)
 - Ultra-compact search index option for very large directory trees (tested up to ~10M entries)
 - WebDAV (RFC 4918 Class 1 + Class 2 core): `OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`
+  - Enabled only when `--enable-webdav true` (or equivalent config setting) is provided
 
 ## WebDAV RFC 4918 support
 
 IronDrop includes an RFC 4918-focused implementation. The WebDAV core engine is implemented in-house and keeps critical request/response logic dependency-free.
 
 - Supported methods: `OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`
+- WebDAV is feature-gated and disabled by default; enable explicitly with `--enable-webdav true`
 - Capability headers: `DAV: 1,2`, `Allow`, `MS-Author-Via`
 - `PROPFIND`: `allprop`, `propname`, named `prop`, per-property `propstat` grouping (`200`/`404`), and finite-depth refusal (`403` + `propfind-finite-depth`)
 - `PROPPATCH`: dead-property `set`/`remove` with `207 Multi-Status` results
@@ -215,6 +217,7 @@ IronDrop offers extensive customization through command-line arguments:
 | `-l, --listen` | Listen address (default: 127.0.0.1) | `-l 0.0.0.0` |
 | `-p, --port` | Port number (default: 8080) | `-p 3000` |
 | `--enable-upload` | Enable file uploads | `--enable-upload true` |
+| `--enable-webdav` | Enable WebDAV methods (`OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`) | `--enable-webdav true` |
 | `--username/--password` | Basic authentication | `--username admin --password secret` |
 | `-a, --allowed-extensions` | Restrict file types | `-a "*.pdf,*.doc,*.zip"` |
 | `-t, --threads` | Worker threads (default: 8) | `-t 16` |
@@ -236,6 +239,19 @@ irondrop --config-file my-server.ini
 ```
 
 The configuration file supports all command-line options and more! See the [detailed example](./config/irondrop.ini) with comments explaining every option.
+
+WebDAV can also be enabled in config:
+
+```ini
+[webdav]
+enable_webdav = true
+```
+
+Quick CLI example:
+
+```bash
+irondrop -d ./shared --enable-webdav true --listen 0.0.0.0
+```
 
 **Configuration Priority (highest to lowest):**
 1. Command line arguments
