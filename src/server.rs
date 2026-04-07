@@ -1496,6 +1496,7 @@ pub fn run_server(
     let mut router = Router::new();
     if cli_arc.username.is_some() && cli_arc.password.is_some() {
         debug!("Adding authentication middleware to router");
+        crate::templates::AUTH_ENABLED.store(true, std::sync::atomic::Ordering::SeqCst);
         router.add_middleware(Box::new(AuthMiddleware::new(
             cli_arc.username.clone(),
             cli_arc.password.clone(),

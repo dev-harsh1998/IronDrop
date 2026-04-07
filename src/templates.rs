@@ -6,6 +6,9 @@ use crate::error::AppError;
 use log::{debug, trace};
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
+
+pub static AUTH_ENABLED: AtomicBool = AtomicBool::new(false);
 
 // Embed templates at compile time
 // Base template
@@ -16,6 +19,7 @@ const DIRECTORY_CONTENT_HTML: &str = include_str!("../templates/directory/conten
 const ERROR_CONTENT_HTML: &str = include_str!("../templates/error/content.html");
 const UPLOAD_CONTENT_HTML: &str = include_str!("../templates/upload/content.html");
 const UPLOAD_SUCCESS_HTML: &str = include_str!("../templates/upload/success.html");
+const LOGOUT_CONTENT_HTML: &str = include_str!("../templates/common/logout.html");
 
 // CSS and JS assets
 const DIRECTORY_STYLES_CSS: &str = include_str!("../templates/directory/styles.css");
@@ -77,6 +81,7 @@ impl TemplateEngine {
         templates.insert("upload_success", UPLOAD_SUCCESS_HTML);
         templates.insert("upload_form", UPLOAD_FORM_HTML);
         templates.insert("monitor_content", MONITOR_CONTENT_HTML);
+        templates.insert("logout_content", LOGOUT_CONTENT_HTML);
 
         Self { templates }
     }
@@ -159,7 +164,25 @@ impl TemplateEngine {
         base_variables.insert("PAGE_TITLE".to_string(), page_title.to_string());
         base_variables.insert("PAGE_STYLES".to_string(), page_styles.to_string());
         base_variables.insert("PAGE_SCRIPTS".to_string(), page_scripts.to_string());
-        base_variables.insert("HEADER_ACTIONS".to_string(), header_actions.to_string());
+
+        let auth_enabled = AUTH_ENABLED.load(std::sync::atomic::Ordering::SeqCst);
+        let full_header_actions = if auth_enabled && content_template != "logout_content" {
+            format!(
+                r#"{}
+                <a href="/_irondrop/logout" onclick="event.preventDefault(); var xhr = new XMLHttpRequest(); xhr.open('GET', '/_irondrop/logout', true, 'logout', 'logout'); xhr.send(); xhr.onreadystatechange = function() {{ if (xhr.readyState == 4) window.location.href = '/_irondrop/logout'; }};" class="btn btn-light" id="logoutBtn" style="margin-left: 8px;" title="Logout">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    Logout
+                </a>"#,
+                header_actions
+            )
+        } else {
+            header_actions.to_string()
+        };
+        base_variables.insert("HEADER_ACTIONS".to_string(), full_header_actions);
         base_variables.insert("PAGE_CONTENT".to_string(), content);
         base_variables.insert("VERSION".to_string(), crate::VERSION.to_string());
 
@@ -558,6 +581,13 @@ impl TemplateEngine {
 
         // Use the new base template system
         self.render_directory_page(&variables)
+    }
+
+    /// Generate logout page HTML using base template system
+    pub fn render_logout_page(&self) -> Result<String, AppError> {
+        debug!("Rendering logout page");
+        let variables = HashMap::new();
+        self.render_page("logout_content", "Logged Out", "", "", "", &variables)
     }
     /// Generate error page HTML using base template system
     pub fn render_error_page(

@@ -125,6 +125,13 @@ pub fn register_internal_routes(
         "/_irondrop/cleanup-memory",
         Box::new(|_| handle_memory_cleanup_request()),
     );
+
+    // Logout endpoint
+    router.register_exact(
+        "GET",
+        "/_irondrop/logout",
+        Box::new(|_| handle_logout_request()),
+    );
 }
 
 pub fn create_health_check_response() -> Response {
@@ -861,4 +868,31 @@ pub fn handle_memory_cleanup_request() -> Result<Response, AppError> {
             })
         }
     }
+}
+
+/// Handle explicit logout requests for Basic Auth
+pub fn handle_logout_request() -> Result<Response, AppError> {
+    debug!("Handling logout request");
+
+    let engine = crate::templates::TemplateEngine::global();
+    let html = engine
+        .render_logout_page()
+        .unwrap_or_else(|_| "Logged out".to_string());
+
+    let mut headers = HashMap::new();
+    headers.insert(
+        "Content-Type".to_string(),
+        "text/html; charset=utf-8".to_string(),
+    );
+    headers.insert(
+        "WWW-Authenticate".to_string(),
+        r#"Basic realm="IronDrop""#.to_string(),
+    );
+
+    Ok(Response {
+        status_code: 401,
+        status_text: "Unauthorized".to_string(),
+        headers,
+        body: ResponseBody::Text(html),
+    })
 }
