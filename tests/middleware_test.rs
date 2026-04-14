@@ -175,11 +175,7 @@ fn test_auth_middleware_timing_attack_resistance() {
 
     // Timing difference should be minimal (within reasonable bounds)
     // This is a basic check - in practice, constant-time comparison should be used
-    let timing_diff = if duration1 > duration2 {
-        duration1 - duration2
-    } else {
-        duration2 - duration1
-    };
+    let timing_diff = duration1.abs_diff(duration2);
 
     // Allow up to 10ms difference (this is quite generous for testing)
     assert!(

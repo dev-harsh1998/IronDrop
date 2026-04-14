@@ -4,13 +4,13 @@ Version 2.7.0 - Test Suite Overview
 
 ## Overview
 
-IronDrop includes a comprehensive test suite with **272 automated tests** covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include expanded WebDAV RFC suites, hardened path handling, and stronger lock/precondition validation.
+IronDrop includes a comprehensive automated test suite covering functionality, security scenarios, performance validation, and concurrent operations. Recent improvements include expanded WebDAV RFC suites, hardened path handling, and concurrency regressions for async streaming.
 
 ## Test Architecture
 
 ### Test Infrastructure Components
 
-- **Custom HTTP Client**: Native Rust implementation for integration testing
+- **HTTP Test Helpers**: Raw TCP clients and lightweight request helpers for integration testing
 - **Mock File Systems**: Temporary directories and controlled file operations
 - **Concurrent Testing**: Multi-threaded test scenarios and race condition validation
 - **Security Validation**: Path traversal, injection, and authentication testing
@@ -21,20 +21,20 @@ IronDrop includes a comprehensive test suite with **272 automated tests** coveri
 
 | Category | Test Files | Test Count | Coverage |
 |----------|------------|------------|----------|
-| **Core Unit Tests** | `src/*.rs` unit modules | 48 | Core functionality, parser behavior, routing, upload/search internals |
-| **Integration/System Tests** | `tests/*.rs` (non-WebDAV) | 167 | Auth, config, uploads, monitoring, middleware, parser, utilities, resilience |
-| **WebDAV RFC/Edge Tests** | `tests/webdav*_test.rs` | 57 | RFC 4918 behavior, lock semantics, multistatus/error XML, tree operations |
+| **Core Unit Tests** | `src/*.rs` unit modules | – | Core functionality, parser behavior, routing, upload/search internals |
+| **Integration/System Tests** | `tests/*.rs` (non-WebDAV) | – | Auth, config, uploads, monitoring, middleware, parser, utilities, resilience |
+| **WebDAV RFC/Edge Tests** | `tests/webdav*_test.rs` | – | RFC 4918 behavior, lock semantics, multistatus/error XML, tree operations |
 
-**Total Tests: 272**
+Run `cargo test --all-features` for the authoritative count.
 
 ## Detailed Test Coverage
 
 ### Core Server & Unit Tests
 
-**Purpose**: Validates server internals, threadpool behavior, routing, and upload logic
+**Purpose**: Validates server internals, Tokio runtime behavior, routing, and upload logic
 
 **Key Test Areas**:
-- Thread pool initialization and panic behavior
+- Async streaming does not starve small requests under concurrency
 - Router path matching and method handling
 - Upload path resolution and limits
 - Config parsing and validation units
@@ -42,8 +42,7 @@ IronDrop includes a comprehensive test suite with **272 automated tests** coveri
 **Critical Tests**:
 ```rust
 #[test]
-#[should_panic(expected = "assertion failed: size > 0")]
-fn threadpool_zero_size_panics() // Deterministic panic text for zero-size pools
+fn test_large_downloads_do_not_starve_health_requests()
 ```
 
 ### Configuration System Tests (`config_test.rs`)

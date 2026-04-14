@@ -10,8 +10,6 @@
 //! 3. Vector capacity management
 //! 4. Periodic memory cleanup functionality
 
-use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[cfg(test)]
@@ -117,16 +115,6 @@ mod tests {
     #[test]
     fn test_memory_cleanup_endpoint() {
         use irondrop::handlers::handle_memory_cleanup_request;
-        use irondrop::http::Request;
-        use std::collections::HashMap;
-
-        // Create a mock POST request
-        let request = Request {
-            method: "POST".to_string(),
-            path: "/_irondrop/cleanup-memory".to_string(),
-            headers: HashMap::new(),
-            body: None,
-        };
 
         // Test the handler
         let response = handle_memory_cleanup_request();

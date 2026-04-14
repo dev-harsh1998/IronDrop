@@ -385,7 +385,7 @@ fn test_connection_timeout_handling() {
 
     let mut reader = std::io::BufReader::new(stream);
     let mut response = String::new();
-    let result = reader.read_to_string(&mut response);
+    let _result = reader.read_to_string(&mut response);
 
     // Connection should eventually close or timeout
     // This test ensures the server doesn't hang indefinitely

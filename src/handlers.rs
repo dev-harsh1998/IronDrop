@@ -468,7 +468,7 @@ pub fn handle_file_request(
         request.method, request.path
     );
     trace!("Base directory: {:?}, chunk size: {}", base_dir, chunk_size);
-    use crate::fs::{FileDetails, generate_directory_listing};
+    use crate::fs::generate_directory_listing;
     use crate::response::get_mime_type;
     use log::debug;
     use std::path::PathBuf;
@@ -616,12 +616,12 @@ pub fn handle_file_request(
 
         trace!("File extension validation passed");
 
-        let file_details = FileDetails::new(full_path.clone(), chunk_size)?;
+        let size = std::fs::metadata(&full_path)?.len();
         let mime_type = get_mime_type(&full_path);
 
         debug!(
             "File details - size: {} bytes, mime_type: {}",
-            file_details.size, mime_type
+            size, mime_type
         );
         trace!("Chunk size for streaming: {}", chunk_size);
         Ok(Response {
@@ -630,7 +630,7 @@ pub fn handle_file_request(
             headers: {
                 let mut map = HashMap::new();
                 map.insert("Content-Type".to_string(), mime_type.to_string());
-                map.insert("Content-Length".to_string(), file_details.size.to_string());
+                map.insert("Content-Length".to_string(), size.to_string());
                 map.insert("Accept-Ranges".to_string(), "bytes".to_string());
                 map.insert(
                     "Cache-Control".to_string(),
@@ -638,7 +638,11 @@ pub fn handle_file_request(
                 );
                 map
             },
-            body: ResponseBody::Stream(file_details),
+            body: ResponseBody::Stream(crate::http::StreamBody {
+                path: full_path.clone(),
+                size,
+                chunk_size,
+            }),
         })
     } else {
         Err(AppError::NotFound)

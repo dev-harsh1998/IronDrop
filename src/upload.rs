@@ -35,6 +35,7 @@ use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
 /// Memory threshold: files <= 2MB processed in memory, >2MB streamed to disk
@@ -42,6 +43,7 @@ const MEMORY_THRESHOLD: u64 = 2 * 1024 * 1024; // 2MB
 
 /// Temporary file prefix for atomic operations
 const TEMP_FILE_PREFIX: &str = ".irondrop_temp_";
+static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Buffer size for streaming operations
 const STREAM_BUFFER_SIZE: usize = 64 * 1024; // 64KB
@@ -475,14 +477,15 @@ impl DirectUploadHandler {
 
         // Create temporary file for atomic write
         let temp_filename = format!(
-            "{}{}_{}_{:x}.tmp",
+            "{}{}_{}_{:x}_{}.tmp",
             TEMP_FILE_PREFIX,
             std::process::id(),
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_nanos(),
-            data.len() // Use data length as part of unique identifier
+            data.len(),
+            TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed)
         );
         let temp_path = self.target_dir.join(&temp_filename);
 
@@ -585,14 +588,15 @@ impl DirectUploadHandler {
 
         // Create temporary file for atomic operation
         let temp_filename = format!(
-            "{}{}_{}_{:x}.tmp",
+            "{}{}_{}_{:x}_{}.tmp",
             TEMP_FILE_PREFIX,
             std::process::id(),
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_nanos(),
-            source_path.to_string_lossy().len() // Use path length as part of unique identifier
+            source_path.to_string_lossy().len(),
+            TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed)
         );
         let temp_path = self.target_dir.join(&temp_filename);
 

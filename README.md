@@ -25,8 +25,8 @@ IronDrop focuses on predictable behavior, simplicity, and low overhead. Use it t
 - Basic security features: rate limiting, optional Basic Auth, path safety checks
 - Native SSL/TLS support via `--ssl-cert` and `--ssl-key` (built-in HTTPS, no reverse proxy required)
 - Single binary; templates and assets are embedded
-- Core engine is dependency-free in critical paths: networking, search, and filesystem access are implemented in-house
-- Standard production dependencies are still used where practical (for example `clap`, `log`/`env_logger`, and `rustls`)
+- Core HTTP layer is implemented in-house (request parsing, routing, streaming) without an external HTTP framework
+- Tokio is used for the async runtime and networking; standard production dependencies are used where practical (for example `clap`, `log`/`env_logger`, `tokio`, and `rustls`/`tokio-rustls`)
 - Ultra-compact search index option for very large directory trees (tested up to ~10M entries)
 - WebDAV (RFC 4918 Class 1 + Class 2 core): `OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`
   - Enabled only when `--enable-webdav true` (or equivalent config setting) is provided
@@ -53,7 +53,7 @@ Current RFC scope limits:
 Designed to keep memory usage steady and to stream large files without buffering them in memory. The ultra-compact search mode reduces memory for very large directory trees.
 
 - Ultra-compact search: approximately ~110 MB of RAM for around 10 million paths; search latency depends on CPU, disk, and query specifics.
-- Dependency profile: networking/search/filesystem core paths are dependency-free, while operational dependencies such as `clap`, `log`/`env_logger`, and `rustls` are used as stable standard building blocks.
+- Dependency profile: the HTTP implementation is in-house; Tokio provides async scheduling and networking, and dependencies such as `clap`, `log`/`env_logger`, and `rustls`/`tokio-rustls` are used as stable standard building blocks.
 
 ## Security
 
@@ -220,7 +220,7 @@ IronDrop offers extensive customization through command-line arguments:
 | `--enable-webdav` | Enable WebDAV methods (`OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`) | `--enable-webdav true` |
 | `--username/--password` | Basic authentication | `--username admin --password secret` |
 | `-a, --allowed-extensions` | Restrict file types | `-a "*.pdf,*.doc,*.zip"` |
-| `-t, --threads` | Worker threads (default: 8) | `-t 16` |
+| `-t, --threads` | Tokio runtime worker threads (default: 8) | `-t 16` |
 | `--config-file` | Use INI configuration file | `--config-file prod.ini` |
 | `--ssl-cert` | SSL certificate file (PEM) for HTTPS | `--ssl-cert cert.pem` |
 | `--ssl-key` | SSL private key file (PEM) for HTTPS | `--ssl-key key.pem` |

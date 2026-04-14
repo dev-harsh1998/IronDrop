@@ -475,7 +475,7 @@ fn test_direct_upload_path_traversal_prevention() {
         let response = upload_handler.handle_upload(&request, None);
 
         // Should either reject the upload or sanitize the filename
-        if let Ok(response) = response {
+        if let Ok(_response) = response {
             // If upload succeeds, verify file is saved in upload directory only
             let files_in_upload_dir: Vec<_> = fs::read_dir(temp_dir.path())
                 .unwrap()
