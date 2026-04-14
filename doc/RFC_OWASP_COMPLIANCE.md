@@ -148,7 +148,7 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 - **Rate Limiting**: 120 requests/minute, 10 concurrent connections per IP (`src/server.rs:496`)
 - **Request Timeouts**: 30-second timeout for request processing (`src/http.rs:48`)
 - **Memory Protection**: Request body size limits (10GB max) and header size limits (8KB)
-- **Connection Pooling**: Thread pool limits prevent resource exhaustion
+- **Concurrency Control**: Async networking plus rate limiting and blocking isolation prevent resource exhaustion
 
 ### File Upload Security
 
@@ -162,7 +162,7 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 - **Information Disclosure Prevention**: Generic error messages to clients
 - **Proper HTTP Status Codes**: Accurate status codes for different error conditions
-- **Panic Recovery**: Thread-level panic recovery prevents server crashes (`src/server.rs:685-696`)
+- **Panic Recovery**: Request handling isolates panics to avoid crashing the server process
 - **Resource Cleanup**: Proper cleanup of temporary files and connections
 
 ## Security Architecture Summary

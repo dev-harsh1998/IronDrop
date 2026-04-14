@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-use irondrop::http::{ClientStream, Request};
+use irondrop::http::Request;
 use std::io::Write;
 use std::net::{TcpListener, TcpStream};
 use std::thread;
+use tokio::net::TcpStream as TokioTcpStream;
 
 fn serve_and_parse(request: &str) -> Result<Request, irondrop::error::AppError> {
     serve_and_parse_bytes(request.as_bytes())
@@ -23,11 +24,18 @@ fn serve_and_parse_bytes(request: &[u8]) -> Result<Request, irondrop::error::App
     });
 
     let client = TcpStream::connect(addr).unwrap();
-    let mut client_stream = ClientStream::Plain(client);
-    Request::from_stream(&mut client_stream).map(|r| {
-        handle.join().unwrap();
-        r
-    })
+    client.set_nonblocking(true).unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .enable_time()
+        .build()
+        .unwrap();
+    let result = rt.block_on(async move {
+        let mut client_stream = TokioTcpStream::from_std(client).unwrap();
+        Request::from_async_stream(&mut client_stream).await
+    });
+    handle.join().unwrap();
+    result
 }
 
 #[test]
@@ -282,8 +290,18 @@ fn test_chunked_body_split_across_tcp_frames() {
     });
 
     let client = TcpStream::connect(addr).unwrap();
-    let mut client_stream = ClientStream::Plain(client);
-    let parsed = Request::from_stream(&mut client_stream).expect("request should parse");
+    client.set_nonblocking(true).unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .enable_time()
+        .build()
+        .unwrap();
+    let parsed = rt
+        .block_on(async move {
+            let mut client_stream = TokioTcpStream::from_std(client).unwrap();
+            Request::from_async_stream(&mut client_stream).await
+        })
+        .expect("request should parse");
     handle.join().unwrap();
 
     match parsed.body {

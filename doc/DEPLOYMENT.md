@@ -311,10 +311,10 @@ WantedBy=multi-user.target
 ### TLS Details
 
 - **Protocol versions**: TLS 1.2 and TLS 1.3
-- **Implementation**: rustls (pure Rust, no OpenSSL dependency)
+- **Implementation**: rustls via `tokio-rustls` (pure Rust, no OpenSSL dependency)
 - **Certificate format**: PEM (both certificate and private key)
 - **Certificate chains**: Supported (include full chain in cert file)
-- **Performance**: TLS handshake runs on thread pool workers alongside request handling
+- **Performance**: TLS handshake is async on the Tokio runtime; filesystem-heavy request handling is isolated from Tokio worker threads
 
 ### Native TLS vs Reverse Proxy
 

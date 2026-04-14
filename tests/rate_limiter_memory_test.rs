@@ -121,7 +121,4 @@ fn test_memory_stats_integration() {
     // With minimal usage, pressure should not be detected
     // (unless system memory is already very high)
     println!("Memory pressure detected: {}", pressure_detected);
-
-    // Test should complete without panicking
-    assert!(true, "Memory pressure check completed successfully");
 }

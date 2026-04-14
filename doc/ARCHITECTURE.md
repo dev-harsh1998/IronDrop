@@ -2,20 +2,20 @@
 
 ## Overview
 
-IronDrop is a file server written in Rust. It uses only the standard library for networking and file I/O (no external HTTP framework). This document provides an overview of the system architecture, component interactions, and implementation details.
+IronDrop is a file server written in Rust. Its HTTP stack (request parsing, routing, streaming) is implemented in-house without an external HTTP framework, and it uses Tokio for the async runtime and networking. This document provides an overview of the system architecture, component interactions, and implementation details.
 
 ## System Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   CLI Parser    │───▶│   Server Init   │───▶│Custom Thread Pool│
+│   CLI Parser    │───▶│   Server Init   │───▶│  Tokio Runtime   │
 │   (cli.rs)      │    │   (main.rs)     │    │   (server.rs)   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
                                                         │
                                                         ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │ Template Engine │◀───│   HTTP Handler  │◀───│  Request Router │
-│ (templates.rs)  │    │  (response.rs)  │    │   (http.rs)     │
+│ (templates.rs)  │    │  (response.rs)  │    │  (router.rs)    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          ▼                       ▼                       ▼
@@ -47,15 +47,15 @@ IronDrop is a file server written in Rust. It uses only the standard library for
 - **`config/ini_parser.rs`**: Zero-dependency INI parser for configuration files
 
 ### 2. **HTTP Processing Layer**
-- **`server.rs`**: Custom thread pool implementation with rate limiting and connection management
-- **`http.rs`**: HTTP request parsing, routing, connection handling, and static asset serving
+- **`server.rs`**: Tokio runtime ownership, async accept loop, TLS via `tokio-rustls`, rate limiting, and statistics
+- **`http.rs`**: HTTP request parsing and response streaming
 - **`response.rs`**: HTTP response building, MIME type detection, and error page generation
 - **`router.rs`**: Simple HTTP router with exact and prefix path matching
 - **`handlers.rs`**: Internal route handlers for health checks, status, uploads, and monitoring
 - **`middleware.rs`**: Authentication middleware with Basic Auth support
 
 ### 3. **File Operations**
-- **`fs.rs`**: Directory listing generation, file details, and file system interactions
+- **`fs.rs`**: Directory listing generation and file system interactions
 - **`upload.rs`**: Direct upload handler with memory/disk streaming and atomic operations
 
 ### 4. **Search System**
@@ -79,7 +79,7 @@ IronDrop is a file server written in Rust. It uses only the standard library for
                                 │
                                 ▼
                      ┌─────────────────┐
-                     │  Rate Limiting  │───[Fail]───▶ 429 Too Many Requests
+                     │  Rate Limiting  │───[Fail]───▶ Connection rejected/closed
                      │     Check       │
                      └─────────────────┘
                                 │ [Pass]
@@ -416,7 +416,7 @@ Dedicated HTTP streaming tests verify correct behavior:
 ## Performance Characteristics
 
 ### Memory Usage
-- **Baseline**: ~3MB + (thread_count × 8KB stack)
+- **Baseline**: Baseline + Tokio runtime worker threads + template cache
 - **Template Cache**: In-memory storage for frequently accessed templates
 - **Upload Buffer**: HTTP streaming with automatic memory/disk switching
 - **Small Uploads (≤64MB)**: Direct memory processing for optimal performance
@@ -424,7 +424,8 @@ Dedicated HTTP streaming tests verify correct behavior:
 - **File Operations**: Configurable chunk sizes (default: 1KB)
 
 ### Concurrent Processing
-- **Thread Pool**: Custom implementation (default: 8 threads)
+- **Async Runtime**: Tokio runtime with configurable worker threads (`--threads`)
+- **Blocking Isolation**: Filesystem-heavy request handling runs on a blocking pool so network I/O stays responsive
 - **Upload Handling**: Supports multiple concurrent uploads
 - **Rate Limiting**: Per-IP tracking with automatic cleanup
 - **Connection Management**: Efficient file descriptor usage
@@ -441,7 +442,7 @@ Dedicated HTTP streaming tests verify correct behavior:
 
 ### Scalability Limits
 - **File Size**: Up to 10GB uploads supported
-- **Concurrent Users**: Limited by thread pool and system resources
+- **Concurrent Users**: Bounded primarily by OS file descriptors, disk bandwidth, and configured rate limits
 - **Directory Size**: Efficient handling of large directories
 - **Template Complexity**: Sub-millisecond variable interpolation
 
@@ -544,10 +545,10 @@ pub enum AppError {
 ## Deployment Considerations
 
 ### Single Binary Deployment
-- **Zero Dependencies**: Pure Rust implementation
+- **Single Binary**: Self-contained executable with embedded templates and assets
 - **Embedded Assets**: Templates compiled into binary
 - **Cross-Platform**: Supports Linux, macOS, and Windows
-- **Portable**: Self-contained executable with no external dependencies
+- **Portable**: No runtime services required; uses standard Rust crates (Tokio, rustls) for runtime functionality
 
 ### Production Hardening
 - **Security Defaults**: Safe defaults with explicit feature activation
@@ -558,7 +559,7 @@ pub enum AppError {
 ### Scalability Options
 - **Reverse Proxy**: Can be deployed behind nginx/Apache for additional features
 - **Load Balancing**: Multiple instances can serve the same content
-- **Resource Scaling**: Configurable thread pool and memory limits
+- **Resource Scaling**: Configurable Tokio runtime worker threads and rate limits
 - **Container Deployment**: Docker-friendly single binary
 
 ## Future Architecture Considerations
@@ -572,7 +573,7 @@ pub enum AppError {
 
 ### Performance Optimizations
 1. **HTTP/2 Support**: Enhanced protocol capabilities
-2. **Async I/O**: Tokio integration for improved concurrency
+2. **Async Expansion**: Further async conversion of filesystem-heavy operations where beneficial
 3. **Compression**: Built-in gzip/brotli compression
 4. **CDN Integration**: Edge caching and global distribution
 5. **Database Caching**: Redis integration for session management

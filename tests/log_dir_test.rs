@@ -43,7 +43,7 @@ fn create_test_ini_with_log_dir(log_dir: &str) -> tempfile::NamedTempFile {
     let mut file = tempfile::NamedTempFile::new().unwrap();
     writeln!(file, "[server]").unwrap();
     writeln!(file, "port = 8080").unwrap();
-    writeln!(file, "").unwrap();
+    writeln!(file).unwrap();
     writeln!(file, "[logging]").unwrap();
     writeln!(file, "log_dir = {}", log_dir).unwrap();
     file.flush().unwrap();

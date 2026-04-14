@@ -5,9 +5,8 @@ use crate::error::AppError;
 use crate::templates::TemplateEngine;
 use crate::utils::is_hidden_file;
 use log::{debug, trace};
-use std::fs::{self, File};
-use std::io;
-use std::path::{Path, PathBuf};
+use std::fs;
+use std::path::Path;
 use std::time::SystemTime;
 
 /// Enhanced directory listing using modular templates - dark mode only
@@ -171,41 +170,5 @@ fn format_timestamp(timestamp: u64) -> String {
         let month = (day_of_year / 30) + 1;
         let day = (day_of_year % 30) + 1;
         format!("{:04}-{:02}-{:02}", year, month.min(12), day.min(31))
-    }
-}
-
-/// Holds details about a file to be streamed.
-pub struct FileDetails {
-    pub path: PathBuf,
-    pub file: File,
-    pub size: u64,
-    pub chunk_size: usize,
-}
-
-impl FileDetails {
-    pub fn new(path: PathBuf, chunk_size: usize) -> Result<Self, io::Error> {
-        debug!("Opening file for streaming: {}", path.display());
-        trace!("Chunk size: {} bytes", chunk_size);
-
-        let file = File::open(&path)?;
-        let metadata = file.metadata()?;
-        let size = metadata.len();
-
-        debug!(
-            "File opened successfully: {} bytes, chunk size: {}",
-            size, chunk_size
-        );
-        trace!(
-            "File metadata - size: {}, is_file: {}",
-            size,
-            metadata.is_file()
-        );
-
-        Ok(FileDetails {
-            path,
-            file,
-            size,
-            chunk_size,
-        })
     }
 }

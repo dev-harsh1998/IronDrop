@@ -288,14 +288,15 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - **Thread-Safe Operations** – Concurrent search operations with background indexing
 
 ### ⚡ **Performance & Architecture**
-- **Custom Thread Pool** – Native implementation without external dependencies for optimal performance
+- **Tokio Async Runtime** – Async accept loop and cooperative scheduling for high concurrency and responsive streaming
+- **Blocking Isolation** – Filesystem-heavy handlers run in a blocking context while network I/O stays async
 - **Comprehensive Error Handling** – Professional error pages with consistent theming and user-friendly messages
 - **Request Timeout Protection** – Prevents resource exhaustion with configurable timeouts
 - **Rich Logging** – Each request is tagged with unique IDs and logged at multiple verbosity levels
 
-### 🛠️ **Zero External Dependencies**
-- **Pure Rust Implementation** – Networking, HTTP parsing, and template rendering using only Rust's standard library
-- **Custom HTTP Client** – Native testing infrastructure without external HTTP libraries
+### 🛠️ **Minimal Framework Dependencies**
+- **No External HTTP Framework** – HTTP parsing, routing, and streaming are implemented in-house
+- **Tokio-Based Networking** – Tokio provides async networking and task scheduling; TLS uses `rustls` via `tokio-rustls`
 - **Native Template Engine** – Variable interpolation and rendering without template crates
 - **Built-in MIME Detection** – File type recognition without external MIME libraries
 
@@ -440,7 +441,7 @@ Planned extensions (open to contribution):
 | `--listen`           | `-l`  | Bind address                       | `127.0.0.1`     |
 | `--port`             | `-p`  | TCP port                           | `8080`          |
 | `--allowed-extensions` | `-a`| Comma-separated glob patterns      | `*.zip,*.txt`   |
-| `--threads`          | `-t`  | Thread-pool size                   | `8`             |
+| `--threads`          | `-t`  | Tokio runtime worker threads       | `8`             |
 | `--chunk-size`       | `-c`  | File read buffer in bytes          | `1024`          |
 | `--username`         | –     | Basic-auth user                    | none            |
 | `--password`         | –     | Basic-auth password                | none            |
@@ -456,7 +457,7 @@ Planned extensions (open to contribution):
 |----------|---------|----------|
 | **Public File Share** | `irondrop -d /srv/files -p 3000 -l 0.0.0.0` | Professional UI, rate limiting, health monitoring |
 | **Document Repository** | `irondrop -d ./docs -a "*.pdf,*.png,*.jpg"` | Filtered downloads, file type indicators |
-| **High-Performance Server** | `irondrop -d ./big -t 16 -c 8192` | Custom thread pool, optimized streaming |
+| **High-Performance Server** | `irondrop -d ./big -t 16 -c 8192` | Higher concurrency, optimized streaming |
 | **Secure Corporate Share** | `irondrop -d ./private --username alice --password s3cret` | Authentication, audit logging, professional design |
 | **Development Server** | `irondrop -d . -v --detailed-logging` | Debug logging, template development, hot reload |
 | **Production Monitoring** | `irondrop -d /data -l 0.0.0.0` + health checks at `/_health` | Statistics, uptime monitoring, rate limiting |
@@ -506,20 +507,20 @@ IronDrop provides secure, configurable file upload capabilities:
 
 ## 🏗️ Architecture Overview
 
-The codebase features a **modular template architecture** with clear separation of concerns. Core modules include `server.rs` for the custom thread-pool listener, `http.rs` for request parsing and static asset serving, `upload.rs` for secure file upload handling, `multipart.rs` for RFC-compliant multipart parsing, `search.rs` and `ultra_compact_search.rs` for the dual-mode search system, `templates.rs` for the native template engine, `fs.rs` for directory operations, and `response.rs` for file streaming and error handling. The `templates/` directory contains organized HTML/CSS/JS assets for directory listing, uploads, and search interfaces.
+The codebase features a **modular template architecture** with clear separation of concerns. Core modules include `server.rs` for Tokio runtime ownership, async accept, and TLS, `http.rs` for request parsing and response streaming, `upload.rs` for secure file upload handling, `multipart.rs` for RFC-compliant multipart parsing, `search.rs` for the search subsystem, `templates.rs` for the native template engine, `fs.rs` for directory operations, and `response.rs` for response types and helpers. The `templates/` directory contains organized HTML/CSS/JS assets for directory listing, uploads, and search interfaces.
 
 ### System Architecture Flow
 
 ```
     +-------------------+       +------------------+       +-------------------+
-    |   CLI Parser      | ----> |   Server Init    | ----> |Custom Thread Pool |
+    |   CLI Parser      | ----> |   Server Init    | ----> |  Tokio Runtime    |
     |   (cli.rs)        |       |   (main.rs)      |       |   (server.rs)     |
     +-------------------+       +------------------+       +-------------------+
                                                                       |
                                                                       v
     +-------------------+       +------------------+       +-------------------+
     | Template Engine   | <---- |   HTTP Handler   | <---- |  Request Router   |
-    | (templates.rs)    |       |  (response.rs)   |       |   (http.rs)       |
+    | (templates.rs)    |       |  (response.rs)   |       |   (router.rs)     |
     +-------------------+       +------------------+       +-------------------+
              |                           |                           |
              v                           v                           v
@@ -548,7 +549,7 @@ The codebase features a **modular template architecture** with clear separation 
                                         |
                                         v
                              +---------------------+
-                             |   Rate Limiting     |  --[Fail]--> 429 Too Many Requests
+                             |   Rate Limiting     |  --[Fail]--> Connection rejected/closed
                              |      Check          |
                              +---------------------+
                                         | [Pass]
@@ -603,11 +604,12 @@ src/
 ├── main.rs          # Entry point
 ├── lib.rs           # Logger + CLI bootstrap
 ├── cli.rs           # Command-line definitions
-├── server.rs        # Custom thread pool + rate limiting + statistics
-├── http.rs          # HTTP parsing, routing & static asset serving
+├── server.rs        # Tokio runtime ownership, async accept, TLS, rate limiting, statistics
+├── http.rs          # HTTP parsing + response streaming
+├── router.rs        # Routing and middleware pipeline
 ├── templates.rs     # Native template engine with variable interpolation
 ├── fs.rs            # Directory operations + template-based listing
-├── response.rs      # File streaming + template-based error pages
+├── response.rs      # Response types + template-based error pages
 ├── upload.rs        # File upload handling + multipart processing
 ├── multipart.rs     # Multipart form data parsing
 ├── error.rs         # Custom error enum
@@ -629,8 +631,8 @@ templates/
     └── script.js    # Error page enhancements
 
 tests/
-├── comprehensive_test.rs  # 13 comprehensive tests with custom HTTP client
-└── integration_test.rs    # 6 integration tests for core functionality
+├── integration_test.rs    # Integration tests for core functionality
+└── async_runtime_starvation_test.rs # Regression test for high-concurrency streaming
 
 assets/
 ├── error_400.dat   # Legacy error assets (now template-based)
@@ -853,8 +855,8 @@ Don't know where to start? Here are some **beginner-friendly test contributions:
 ## 📈 Performance Characteristics
 
 ### Runtime Performance
-- **Memory Usage**: ~3MB baseline + (thread_count × 8KB stack) + template cache + upload buffer memory
-- **Concurrent Connections**: Custom thread pool (default: 8) + rate limiting protection
+- **Memory Usage**: Baseline + Tokio runtime worker threads + template cache; large transfers stream without buffering full files in memory
+- **Concurrent Connections**: Async networking; primarily bounded by OS file descriptors and rate limiting rather than a fixed worker thread pool
 - **File Streaming**: Configurable chunk size (default: 1KB) with range request support
 - **Template Rendering**: Sub-millisecond variable interpolation with built-in caching
 - **Large Upload Handling**: Supports unlimited file sizes with constant memory usage (~7MB)
@@ -871,7 +873,7 @@ Don't know where to start? Here are some **beginner-friendly test contributions:
 
 ### Upload Performance
 - **Upload Processing**: Sub-millisecond file validation and atomic writing
-- **Concurrent Uploads**: Integrated with existing thread pool and rate limiting
+- **Concurrent Uploads**: Async request-body streaming with filesystem work isolated from Tokio worker threads; rate limiting still applies
 - **Resource Management**: Dynamic upload directory detection and configurable size limits
 
 ### Security & Monitoring Overhead
@@ -1095,10 +1097,10 @@ We welcome contributions! Here's how to get started:
 - **Cross-Platform**: Runs on Linux, macOS, and Windows
 
 ### **For Developers**
-- **Pure Rust**: No external dependencies, everything built from scratch
-- **Comprehensive Tests**: 199 tests across 16 files ensure reliability and stability
+- **No External HTTP Framework**: HTTP parsing, routing, and streaming are implemented in-house
+- **Comprehensive Tests**: Broad test coverage across unit and integration tests
 - **Clean Architecture**: Well-documented, modular codebase
-- **Performance Focus**: Custom thread pool and optimized file streaming
+- **Performance Focus**: Tokio async runtime, optimized file streaming, and memory-conscious search
 
 ### **For DevOps Teams**
 - **Single Binary**: Easy deployment with no runtime dependencies

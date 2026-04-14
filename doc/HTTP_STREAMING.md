@@ -220,7 +220,7 @@ irondrop --directory /path/to/uploads
 
 ### Temporary File Security
 
-1. **Unique naming**: Process ID and timestamp ensure unique filenames
+1. **Unique naming**: Process ID, timestamp, and a monotonic counter ensure unique filenames
 2. **Secure location**: Temporary files created in upload directory
 3. **Automatic cleanup**: Files removed immediately after processing
 4. **Error cleanup**: Files removed even if processing fails
@@ -230,7 +230,7 @@ irondrop --directory /path/to/uploads
 1. **Size limits**: Existing upload size limits apply to both variants
 2. **Memory bounds**: Large uploads don't consume system memory
 3. **Disk space**: Temporary files are cleaned up immediately
-4. **Concurrent limits**: Thread pool limits prevent resource exhaustion
+4. **Concurrent limits**: Rate limiting and blocking isolation prevent resource exhaustion under concurrency
 
 ## Migration Guide
 
@@ -247,8 +247,9 @@ match &request.body {
     Some(RequestBody::Memory(data)) => {
         // Handle memory-based body
     }
-    Some(RequestBody::File(path)) => {
+    Some(RequestBody::File { path, size }) => {
         // Handle file-based body
+        let _ = size;
     }
     None => {
         // Handle missing body

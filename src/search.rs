@@ -1438,44 +1438,88 @@ pub fn initialize_search(base_dir: PathBuf) {
         *global_index = Some(concurrent_index.clone());
     }
 
-    // Perform initial index build in background
-    let init_index = concurrent_index.clone();
-    thread::spawn(move || {
-        if let Err(e) = init_index.update_if_needed(true) {
-            warn!("Failed to build initial ultra-low memory index: {e:?}");
-        }
-    });
-
-    // Spawn background thread to periodically update the index with memory management
-    thread::spawn(move || {
-        let mut cleanup_counter = 0;
-        loop {
-            thread::sleep(Duration::from_secs(60)); // Update every minute
-
-            if let Err(e) = concurrent_index.update_if_needed(false) {
-                warn!("Failed to update ultra-low memory index: {e:?}");
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.spawn({
+            let init_index = concurrent_index.clone();
+            async move {
+                let res =
+                    tokio::task::spawn_blocking(move || init_index.update_if_needed(true)).await;
+                match res {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => warn!("Failed to build initial ultra-low memory index: {e:?}"),
+                    Err(e) => warn!("Failed to build initial ultra-low memory index: {e:?}"),
+                }
             }
+        });
 
-            // Perform more aggressive memory cleanup every hour during long runs
-            cleanup_counter += 1;
-            if cleanup_counter >= 60 {
-                // 60 minutes = 1 hour
-                cleanup_counter = 0;
+        handle.spawn({
+            let concurrent_index = concurrent_index.clone();
+            async move {
+                let mut cleanup_counter = 0u32;
+                let mut interval = tokio::time::interval(Duration::from_secs(60));
+                loop {
+                    interval.tick().await;
 
-                // Force memory cleanup
-                if let Ok(mut index_guard) = concurrent_index.index.write() {
-                    index_guard.perform_memory_cleanup();
+                    let idx = concurrent_index.clone();
+                    let res =
+                        tokio::task::spawn_blocking(move || idx.update_if_needed(false)).await;
+                    match res {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => warn!("Failed to update ultra-low memory index: {e:?}"),
+                        Err(e) => warn!("Failed to update ultra-low memory index: {e:?}"),
+                    }
+
+                    cleanup_counter += 1;
+                    if cleanup_counter >= 60 {
+                        cleanup_counter = 0;
+
+                        if let Ok(mut index_guard) = concurrent_index.index.write() {
+                            index_guard.perform_memory_cleanup();
+                        }
+
+                        if let Ok(mut cache) = concurrent_index.search_cache.try_lock() {
+                            cache.shrink_if_needed(true);
+                        }
+
+                        debug!("Completed hourly memory cleanup cycle");
+                    }
+                }
+            }
+        });
+    } else {
+        let init_index = concurrent_index.clone();
+        thread::spawn(move || {
+            if let Err(e) = init_index.update_if_needed(true) {
+                warn!("Failed to build initial ultra-low memory index: {e:?}");
+            }
+        });
+
+        thread::spawn(move || {
+            let mut cleanup_counter = 0;
+            loop {
+                thread::sleep(Duration::from_secs(60));
+
+                if let Err(e) = concurrent_index.update_if_needed(false) {
+                    warn!("Failed to update ultra-low memory index: {e:?}");
                 }
 
-                // Force cache shrinking
-                if let Ok(mut cache) = concurrent_index.search_cache.try_lock() {
-                    cache.shrink_if_needed(true); // Force aggressive shrinking
-                }
+                cleanup_counter += 1;
+                if cleanup_counter >= 60 {
+                    cleanup_counter = 0;
 
-                debug!("Completed hourly memory cleanup cycle");
+                    if let Ok(mut index_guard) = concurrent_index.index.write() {
+                        index_guard.perform_memory_cleanup();
+                    }
+
+                    if let Ok(mut cache) = concurrent_index.search_cache.try_lock() {
+                        cache.shrink_if_needed(true);
+                    }
+
+                    debug!("Completed hourly memory cleanup cycle");
+                }
             }
-        }
-    });
+        });
+    }
 
     info!("Ultra-low memory search subsystem initialized - targeting <100MB for 10M entries");
 }

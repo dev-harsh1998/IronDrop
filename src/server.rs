@@ -4,20 +4,18 @@ use crate::cli::Cli;
 use crate::config::Config;
 use crate::error::AppError;
 use crate::handlers::register_internal_routes;
-use crate::http::handle_client;
 use crate::middleware::AuthMiddleware;
 use crate::router::Router;
 use glob::Pattern;
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace, warn};
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr, TcpListener};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex, mpsc};
-use std::thread;
 use std::time::{Duration, Instant};
 
 use rustls::ServerConfig;
 use std::io::BufReader;
+use tokio::net::TcpStream as TokioTcpStream;
 
 #[cfg(target_os = "linux")]
 use std::fs;
@@ -30,7 +28,6 @@ pub struct RateLimiter {
     connections: Arc<Mutex<HashMap<IpAddr, ConnectionInfo>>>,
     max_requests_per_minute: u32,
     max_concurrent_per_ip: u32,
-    cleanup_running: Arc<AtomicBool>,
     max_connections_per_ip: u32,
 }
 
@@ -45,17 +42,12 @@ struct ConnectionInfo {
 
 impl RateLimiter {
     pub fn new(max_requests_per_minute: u32, max_concurrent_per_ip: u32) -> Self {
-        let rate_limiter = Self {
+        Self {
             connections: Arc::new(Mutex::new(HashMap::new())),
             max_requests_per_minute,
             max_concurrent_per_ip,
-            cleanup_running: Arc::new(AtomicBool::new(false)),
             max_connections_per_ip: 1000, // Limit stored connections per IP
-        };
-
-        // Start automatic cleanup timer
-        rate_limiter.start_cleanup_timer();
-        rate_limiter
+        }
     }
 
     pub fn check_rate_limit(&self, ip: IpAddr) -> bool {
@@ -170,49 +162,6 @@ impl RateLimiter {
             }
         } else {
             trace!("No old entries to clean up");
-        }
-    }
-
-    /// Start automatic cleanup timer that runs every 60 seconds
-    fn start_cleanup_timer(&self) {
-        if self
-            .cleanup_running
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-        {
-            let connections = Arc::clone(&self.connections);
-            let cleanup_running = Arc::clone(&self.cleanup_running);
-
-            thread::spawn(move || {
-                while cleanup_running.load(Ordering::SeqCst) {
-                    thread::sleep(Duration::from_secs(60));
-
-                    if let Ok(mut connections) = connections.lock() {
-                        let now = Instant::now();
-                        let initial_count = connections.len();
-
-                        trace!(
-                            "Auto-cleanup checking {} rate limiter entries",
-                            initial_count
-                        );
-
-                        // Clean up entries older than 2 minutes
-                        connections.retain(|_, info| {
-                            now.duration_since(info.last_activity) < Duration::from_secs(120)
-                        });
-
-                        let cleaned_count = initial_count - connections.len();
-                        if cleaned_count > 0 {
-                            debug!(
-                                "Auto-cleanup removed {} rate limiter entries",
-                                cleaned_count
-                            );
-                        } else {
-                            trace!("Auto-cleanup: no entries to remove");
-                        }
-                    }
-                }
-            });
         }
     }
 
@@ -1059,217 +1008,6 @@ pub struct UploadStats {
     pub success_rate: f64,
 }
 
-/// Simple native thread pool implementation
-pub struct ThreadPool {
-    workers: Vec<Worker>,
-    sender: Option<mpsc::Sender<Job>>,
-}
-
-type Job = Box<dyn FnOnce() + Send + 'static>;
-
-impl ThreadPool {
-    pub fn new(size: usize) -> ThreadPool {
-        assert!(size > 0);
-
-        let (sender, receiver) = mpsc::channel();
-        let receiver = Arc::new(Mutex::new(receiver));
-        let mut workers = Vec::with_capacity(size);
-
-        for id in 0..size {
-            workers.push(Worker::new(id, Arc::clone(&receiver)));
-        }
-
-        ThreadPool {
-            workers,
-            sender: Some(sender),
-        }
-    }
-
-    pub fn execute<F>(&self, f: F)
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        let job = Box::new(f);
-
-        if let Some(ref sender) = self.sender
-            && sender.send(job).is_err()
-        {
-            warn!("Failed to send job to thread pool");
-        }
-    }
-}
-
-impl Drop for ThreadPool {
-    fn drop(&mut self) {
-        drop(self.sender.take());
-
-        for worker in &mut self.workers {
-            if let Some(thread) = worker.thread.take()
-                && thread.join().is_err()
-            {
-                warn!("Worker thread {} panicked", worker.id);
-            }
-        }
-    }
-}
-
-struct Worker {
-    id: usize,
-    thread: Option<thread::JoinHandle<()>>,
-}
-
-impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Worker {
-        let thread = thread::spawn(move || {
-            loop {
-                let message = receiver.lock().unwrap().recv();
-
-                match message {
-                    Ok(job) => {
-                        job();
-                    }
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-        });
-
-        Worker {
-            id,
-            thread: Some(thread),
-        }
-    }
-}
-
-#[cfg(test)]
-mod threadpool_tests {
-    use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Barrier, mpsc};
-    use std::thread;
-    use std::time::{Duration, Instant};
-
-    #[test]
-    fn threadpool_executes_single_job() {
-        let pool = ThreadPool::new(2);
-        let (tx, rx) = mpsc::channel();
-
-        pool.execute(move || {
-            tx.send("done").unwrap();
-        });
-
-        let result = rx.recv_timeout(Duration::from_secs(1));
-        assert!(result.is_ok(), "expected job execution within 1s");
-        assert_eq!(result.unwrap(), "done");
-    }
-
-    #[test]
-    fn threadpool_executes_many_jobs() {
-        let pool = ThreadPool::new(4);
-        let (tx, rx) = mpsc::channel();
-        let total_jobs = 50;
-
-        for _ in 0..total_jobs {
-            let tx_clone = tx.clone();
-            pool.execute(move || {
-                tx_clone.send(1_u8).unwrap();
-            });
-        }
-
-        let mut received = 0;
-        while received < total_jobs {
-            rx.recv_timeout(Duration::from_secs(3))
-                .expect("timed out waiting for jobs");
-            received += 1;
-        }
-
-        assert_eq!(received, total_jobs);
-    }
-
-    #[test]
-    fn threadpool_runs_tasks_concurrently_with_barrier() {
-        let worker_count = 4;
-        let pool = ThreadPool::new(worker_count);
-        let barrier = Arc::new(Barrier::new(worker_count));
-        let started = Arc::new(AtomicUsize::new(0));
-        let (tx, rx) = mpsc::channel();
-
-        for _ in 0..worker_count {
-            let b = barrier.clone();
-            let s = started.clone();
-            let txc = tx.clone();
-            pool.execute(move || {
-                s.fetch_add(1, Ordering::SeqCst);
-                b.wait();
-                txc.send(()).unwrap();
-            });
-        }
-
-        let start = Instant::now();
-        // All barrier tasks should complete promptly; sequential execution would deadlock
-        for _ in 0..worker_count {
-            rx.recv_timeout(Duration::from_secs(2))
-                .expect("barrier tasks did not complete");
-        }
-        let elapsed = start.elapsed();
-
-        assert_eq!(started.load(Ordering::SeqCst), worker_count);
-        assert!(elapsed < Duration::from_secs(2));
-    }
-
-    #[test]
-    #[should_panic(expected = "assertion failed: size > 0")]
-    fn threadpool_zero_size_panics() {
-        let _pool = ThreadPool::new(0);
-    }
-
-    #[test]
-    fn threadpool_shutdown_waits_for_workers() {
-        let messages = 6;
-        let (tx, rx) = mpsc::channel();
-
-        {
-            let pool = ThreadPool::new(3);
-            for _ in 0..messages {
-                let tx_clone = tx.clone();
-                pool.execute(move || {
-                    thread::sleep(Duration::from_millis(50));
-                    tx_clone.send(()).unwrap();
-                });
-            }
-            // pool dropped here, should wait for all workers to finish
-        }
-
-        let mut received = 0;
-        while received < messages {
-            rx.recv_timeout(Duration::from_secs(2))
-                .expect("did not receive all messages after shutdown");
-            received += 1;
-        }
-        assert_eq!(received, messages);
-    }
-
-    #[test]
-    fn threadpool_handles_worker_panic_gracefully() {
-        let pool = ThreadPool::new(1);
-        let (tx, rx) = mpsc::channel();
-
-        pool.execute(|| {
-            panic!("intentional panic in worker job");
-        });
-
-        pool.execute(move || {
-            tx.send(42_u8).unwrap();
-        });
-
-        drop(pool);
-
-        let res = rx.recv_timeout(Duration::from_millis(200));
-        assert!(res.is_err(), "unexpected job execution after worker panic");
-    }
-}
-
 /// Load TLS certificates from a PEM file
 fn load_tls_certs(
     path: &std::path::Path,
@@ -1383,6 +1121,23 @@ pub fn run_server(
     shutdown_rx: Option<mpsc::Receiver<()>>,
     addr_tx: Option<mpsc::Sender<SocketAddr>>,
 ) -> Result<(), AppError> {
+    let worker_threads = cli.threads.unwrap_or(8);
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_io()
+        .enable_time()
+        .worker_threads(worker_threads)
+        .max_blocking_threads(worker_threads.saturating_mul(32).max(256))
+        .build()
+        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+
+    runtime.block_on(run_server_async(cli, shutdown_rx, addr_tx))
+}
+
+async fn run_server_async(
+    cli: Cli,
+    shutdown_rx: Option<mpsc::Receiver<()>>,
+    addr_tx: Option<mpsc::Sender<SocketAddr>>,
+) -> Result<(), AppError> {
     debug!(
         "Starting server with configuration: verbose={:?}, detailed_logging={:?}",
         cli.verbose, cli.detailed_logging
@@ -1397,8 +1152,6 @@ pub fn run_server(
         ));
     }
 
-    // Initialize the search subsystem with caching and indexing
-    debug!("Initializing search subsystem");
     crate::search::initialize_search(base_dir.as_ref().clone());
 
     let allowed_extensions = Arc::new(
@@ -1409,46 +1162,34 @@ pub fn run_server(
             .map(|ext| Pattern::new(ext.trim()))
             .collect::<Result<Vec<Pattern>, _>>()?,
     );
-    trace!("Allowed extensions: {} patterns", allowed_extensions.len());
 
     let bind_address = format!(
         "{}:{}",
         cli.listen.as_ref().unwrap_or(&"127.0.0.1".to_string()),
         cli.port.unwrap_or(8080)
     );
-    debug!("Binding server to address: {}", bind_address);
-    let listener = TcpListener::bind(&bind_address)?;
-    let local_addr = listener.local_addr()?;
-    listener.set_nonblocking(true)?;
-    debug!("Server bound successfully to: {}", local_addr);
 
-    // Set up TLS configuration if SSL cert and key are provided
+    let listener = tokio::net::TcpListener::bind(&bind_address).await?;
+    let local_addr = listener.local_addr()?;
+
     let tls_config: Option<Arc<ServerConfig>> =
         if let (Some(cert_path), Some(key_path)) = (&cli.ssl_cert, &cli.ssl_key) {
-            info!(
-                "🔒 Setting up TLS with cert: {}, key: {}",
-                cert_path.display(),
-                key_path.display()
-            );
             Some(build_tls_config(cert_path, key_path)?)
         } else {
             None
         };
-    let is_https = tls_config.is_some();
+    let tls_acceptor = tls_config
+        .as_ref()
+        .map(|cfg| tokio_rustls::TlsAcceptor::from(cfg.clone()));
+    let is_https = tls_acceptor.is_some();
 
-    // Initialize security and monitoring systems
     let webdav_enabled = cli.enable_webdav.unwrap_or(false);
     let (rate_limit_per_minute, concurrent_per_ip) = if webdav_enabled {
         (3500, 128)
     } else {
         (120, 10)
     };
-    debug!(
-        "Initializing rate limiter: {} req/min, {} concurrent per IP",
-        rate_limit_per_minute, concurrent_per_ip
-    );
     let rate_limiter = Arc::new(RateLimiter::new(rate_limit_per_minute, concurrent_per_ip));
-    debug!("Initializing server statistics");
     let stats = Arc::new(ServerStats::new());
 
     if let Some(tx) = addr_tx
@@ -1467,42 +1208,20 @@ pub fn run_server(
         base_dir.display(),
         allowed_extensions
     );
-    if is_https {
-        info!("🔒 TLS/SSL: Enabled");
-    }
-    info!(
-        "⚡ Security: Rate limiting enabled ({} req/min, {} concurrent per IP)",
-        rate_limit_per_minute, concurrent_per_ip
-    );
-    info!("📊 Monitoring: Statistics collection enabled");
-    info!(
-        "🧩 WebDAV: {}",
-        if cli.enable_webdav.unwrap_or(false) {
-            "Enabled"
-        } else {
-            "Disabled"
-        }
-    );
 
-    let thread_count = cli.threads.unwrap_or(8);
-    debug!("Creating thread pool with {} threads", thread_count);
-    let pool = ThreadPool::new(thread_count);
     let username = Arc::new(cli.username.clone());
     let password = Arc::new(cli.password.clone());
+    let chunk_size = cli.chunk_size.unwrap_or(1024);
     let cli_arc = Arc::new(cli);
 
-    // Build shared internal router once (with middleware)
-    debug!("Building internal router with middleware");
     let mut router = Router::new();
     if cli_arc.username.is_some() && cli_arc.password.is_some() {
-        debug!("Adding authentication middleware to router");
         crate::templates::AUTH_ENABLED.store(true, std::sync::atomic::Ordering::SeqCst);
         router.add_middleware(Box::new(AuthMiddleware::new(
             cli_arc.username.clone(),
             cli_arc.password.clone(),
         )));
     }
-    debug!("Registering internal routes");
     register_internal_routes(
         &mut router,
         Some(cli_arc.clone()),
@@ -1511,294 +1230,181 @@ pub fn run_server(
     );
     let shared_router = Arc::new(router);
 
-    // Note: Rate limiter now has automatic cleanup timer (every 60 seconds)
-    // This replaces the old 5-minute cleanup task
-
-    // Start background stats reporting with memory pressure monitoring
-    debug!("Starting background statistics reporting thread");
-    let stats_reporter = stats.clone();
-    let rate_limiter_monitor = rate_limiter.clone();
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_secs(300)); // Report every 5 minutes
-            trace!("Background stats reporting cycle starting");
-            let (total, successful, errors, bytes, uptime) = stats_reporter.get_stats();
-            let upload_stats = stats_reporter.get_upload_stats();
-            let (current_memory, peak_memory, memory_available) = stats_reporter.get_memory_usage();
-
-            // Check for memory pressure and trigger cleanup if needed
-            let memory_pressure = stats_reporter.check_memory_pressure(Some(&rate_limiter_monitor));
-
-            info!(
-                "📊 Request Stats: {} total ({} successful, {} errors), {:.2} MB served, uptime: {}s",
-                total,
-                successful,
-                errors,
-                bytes as f64 / 1024.0 / 1024.0,
-                uptime.as_secs()
-            );
-
-            if memory_available {
-                let current_mb = current_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
-                let peak_mb = peak_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
-                let pressure_indicator = if memory_pressure {
-                    " ⚠️ PRESSURE"
-                } else {
-                    ""
-                };
-                info!(
-                    "🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak{pressure_indicator}"
-                );
-
-                // Report rate limiter memory usage
-                let (limiter_entries, limiter_memory) = rate_limiter_monitor.get_memory_stats();
-                if limiter_entries > 0 {
-                    info!(
-                        "🔒 Rate Limiter: {} IP entries, ~{:.2} KB memory",
-                        limiter_entries,
-                        limiter_memory as f64 / 1024.0
-                    );
-                }
-            } else {
-                debug!("🧠 Memory Stats: unavailable");
-            }
-
-            if upload_stats.total_uploads > 0 {
-                info!(
-                    "📤 Upload Stats: {} uploads ({:.1}% success), {} files, {:.2} MB uploaded, avg: {:.2} MB/file, {:.0}ms/upload, {} concurrent",
-                    upload_stats.total_uploads,
-                    upload_stats.success_rate,
-                    upload_stats.files_uploaded,
-                    upload_stats.upload_bytes as f64 / 1024.0 / 1024.0,
-                    upload_stats.average_upload_size as f64 / 1024.0 / 1024.0,
-                    upload_stats.average_processing_time,
-                    upload_stats.concurrent_uploads
-                );
+    tokio::spawn({
+        let rate_limiter = rate_limiter.clone();
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                rate_limiter.cleanup_old_entries();
             }
         }
     });
 
-    debug!("Entering main server loop");
-    'server_loop: loop {
-        if let Some(ref rx) = shutdown_rx
-            && rx.try_recv().is_ok()
-        {
-            info!("🛑 Shutdown signal received. Shutting down gracefully.");
-            break 'server_loop;
-        }
+    tokio::spawn({
+        let stats_reporter = stats.clone();
+        let rate_limiter_monitor = rate_limiter.clone();
+        async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                let (total, successful, errors, bytes, uptime) = stats_reporter.get_stats();
+                let upload_stats = stats_reporter.get_upload_stats();
+                let (current_memory, peak_memory, memory_available) =
+                    stats_reporter.get_memory_usage();
+                let memory_pressure =
+                    stats_reporter.check_memory_pressure(Some(&rate_limiter_monitor));
 
-        match listener.accept() {
-            Ok((stream, peer_addr)) => {
-                let client_ip = peer_addr.ip();
-                trace!("Accepted connection from: {}", peer_addr);
-
-                // Check rate limits
-                if !rate_limiter.check_rate_limit(client_ip) {
-                    warn!("🚫 Connection from {client_ip} rejected due to rate limiting");
-                    drop(stream); // Close connection immediately
-                    continue;
-                }
-                trace!("Rate limit check passed for: {}", client_ip);
-
-                // Ensure the accepted stream is in blocking mode
-                if let Err(e) = stream.set_nonblocking(false) {
-                    error!("Failed to set stream to blocking mode: {e}");
-                    rate_limiter.release_connection(client_ip);
-                    continue;
-                }
-                trace!("Stream set to blocking mode for: {}", client_ip);
-
-                let (
-                    base_dir,
-                    allowed_extensions,
-                    username,
-                    password,
-                    chunk_size,
-                    rate_limiter,
-                    stats,
-                    cli_ref,
-                    router,
-                    tls_config_clone,
-                ) = (
-                    base_dir.clone(),
-                    allowed_extensions.clone(),
-                    username.clone(),
-                    password.clone(),
-                    cli_arc.chunk_size.unwrap_or(1024),
-                    rate_limiter.clone(),
-                    stats.clone(),
-                    cli_arc.clone(),
-                    shared_router.clone(),
-                    tls_config.clone(),
+                info!(
+                    "📊 Request Stats: {} total ({} successful, {} errors), {:.2} MB served, uptime: {}s",
+                    total,
+                    successful,
+                    errors,
+                    bytes as f64 / 1024.0 / 1024.0,
+                    uptime.as_secs()
                 );
 
-                trace!("Submitting client {} to thread pool", client_ip);
-                pool.execute(move || {
-                    trace!("Thread pool worker starting for client: {}", client_ip);
-                    let start_time = Instant::now();
-
-                    // Wrap stream with TLS if configured
-                    let client_stream = if let Some(ref tls_cfg) = tls_config_clone {
-                        match rustls::ServerConnection::new(Arc::clone(tls_cfg)) {
-                            Ok(conn) => {
-                                let tls_stream = rustls::StreamOwned::new(conn, stream);
-                                crate::http::ClientStream::Tls(Box::new(tls_stream))
-                            }
-                            Err(e) => {
-                                error!("TLS handshake setup failed for {}: {}", client_ip, e);
-                                rate_limiter.release_connection(client_ip);
-                                return;
-                            }
-                        }
+                if memory_available {
+                    let current_mb = current_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
+                    let peak_mb = peak_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
+                    let pressure_indicator = if memory_pressure {
+                        " ⚠️ PRESSURE"
                     } else {
-                        crate::http::ClientStream::Plain(stream)
+                        ""
                     };
-
-                    let result = handle_client_with_stats(
-                        client_stream,
-                        peer_addr,
-                        &base_dir,
-                        &allowed_extensions,
-                        &username,
-                        &password,
-                        chunk_size,
-                        &stats,
-                        Some(cli_ref.as_ref()),
-                        &router,
+                    info!(
+                        "🧠 Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak{pressure_indicator}"
                     );
+                }
 
-                    let processing_time = start_time.elapsed();
-                    trace!(
-                        "Client {} processing completed in {:?}",
-                        client_ip, processing_time
+                if upload_stats.total_uploads > 0 {
+                    info!(
+                        "📤 Upload Stats: {} uploads ({:.1}% success), {} files, {:.2} MB uploaded, avg: {:.2} MB/file, {:.0}ms/upload, {} concurrent",
+                        upload_stats.total_uploads,
+                        upload_stats.success_rate,
+                        upload_stats.files_uploaded,
+                        upload_stats.upload_bytes as f64 / 1024.0 / 1024.0,
+                        upload_stats.average_upload_size as f64 / 1024.0 / 1024.0,
+                        upload_stats.average_processing_time,
+                        upload_stats.concurrent_uploads
                     );
-
-                    // Release rate limit connection
-                    rate_limiter.release_connection(client_ip);
-
-                    // Log any errors
-                    if let Err(e) = result {
-                        warn!("⚠️  Client handling error: {e}");
-                    } else {
-                        trace!("Client {} handled successfully", client_ip);
-                    }
-                });
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                // No connections available, sleep briefly
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            Err(e) => {
-                error!("❌ Error accepting connection: {e}");
+                }
             }
         }
-    }
+    });
 
-    // Final stats report
-    let (total, successful, errors, bytes, uptime) = stats.get_stats();
-    let upload_stats = stats.get_upload_stats();
-    let (current_memory, peak_memory, memory_available) = stats.get_memory_usage();
+    let mut shutdown_task = shutdown_rx.map(|rx| {
+        tokio::task::spawn_blocking(move || {
+            let _ = rx.recv();
+        })
+    });
 
-    info!(
-        "📊 Final Request Stats: {} total ({} successful, {} errors), {:.2} MB served, uptime: {}s",
-        total,
-        successful,
-        errors,
-        bytes as f64 / 1024.0 / 1024.0,
-        uptime.as_secs()
-    );
-
-    if memory_available {
-        let current_mb = current_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
-        let peak_mb = peak_memory.unwrap_or(0) as f64 / 1024.0 / 1024.0;
-        info!("🧠 Final Memory Stats: {current_mb:.2} MB current, {peak_mb:.2} MB peak");
-    } else {
-        info!("🧠 Final Memory Stats: unavailable");
-    }
-
-    if upload_stats.total_uploads > 0 {
-        info!(
-            "📤 Final Upload Stats: {} uploads ({:.1}% success), {} files, {:.2} MB uploaded, largest: {:.2} MB",
-            upload_stats.total_uploads,
-            upload_stats.success_rate,
-            upload_stats.files_uploaded,
-            upload_stats.upload_bytes as f64 / 1024.0 / 1024.0,
-            upload_stats.largest_upload as f64 / 1024.0 / 1024.0
-        );
+    loop {
+        if let Some(ref mut shutdown_task) = shutdown_task {
+            tokio::select! {
+                _ = shutdown_task => {
+                    break;
+                }
+                res = listener.accept() => {
+                    let (stream, peer_addr) = res?;
+                    handle_connection(
+                        stream,
+                        peer_addr,
+                        base_dir.clone(),
+                        allowed_extensions.clone(),
+                        username.clone(),
+                        password.clone(),
+                        chunk_size,
+                        rate_limiter.clone(),
+                        stats.clone(),
+                        cli_arc.clone(),
+                        shared_router.clone(),
+                        tls_acceptor.clone(),
+                    );
+                }
+            }
+        } else {
+            let (stream, peer_addr) = listener.accept().await?;
+            handle_connection(
+                stream,
+                peer_addr,
+                base_dir.clone(),
+                allowed_extensions.clone(),
+                username.clone(),
+                password.clone(),
+                chunk_size,
+                rate_limiter.clone(),
+                stats.clone(),
+                cli_arc.clone(),
+                shared_router.clone(),
+                tls_acceptor.clone(),
+            );
+        }
     }
 
     info!("✅ Server shut down gracefully.");
     Ok(())
 }
 
-/// Enhanced client handler with statistics tracking
 #[allow(clippy::too_many_arguments)]
-fn handle_client_with_stats(
-    stream: crate::http::ClientStream,
+fn handle_connection(
+    stream: TokioTcpStream,
     peer_addr: SocketAddr,
-    base_dir: &Arc<std::path::PathBuf>,
-    allowed_extensions: &Arc<Vec<glob::Pattern>>,
-    username: &Arc<Option<String>>,
-    password: &Arc<Option<String>>,
+    base_dir: Arc<std::path::PathBuf>,
+    allowed_extensions: Arc<Vec<glob::Pattern>>,
+    username: Arc<Option<String>>,
+    password: Arc<Option<String>>,
     chunk_size: usize,
-    stats: &ServerStats,
-    cli_config: Option<&crate::cli::Cli>,
-    router: &Arc<crate::router::Router>,
-) -> Result<(), AppError> {
+    rate_limiter: Arc<RateLimiter>,
+    stats: Arc<ServerStats>,
+    cli_config: Arc<Cli>,
+    router: Arc<Router>,
+    tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
+) {
     let client_ip = peer_addr.ip();
-    trace!("Starting client handler for: {}", client_ip);
-
-    let start = Instant::now();
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        trace!("Calling handle_client for: {}", client_ip);
-        handle_client(
-            stream,
-            base_dir,
-            allowed_extensions,
-            username,
-            password,
-            chunk_size,
-            cli_config,
-            Some(stats),
-            router,
-        );
-    }));
-
-    let success = result.is_ok();
-    let processing_time = start.elapsed();
-
-    trace!(
-        "Client {} processing result: success={}, time={:?}",
-        client_ip, success, processing_time
-    );
-
-    // On panic, record failure (normal success/failure & bytes recorded in handle_client)
-    if !success {
-        error!("Client {} handler panicked, recording failure", client_ip);
-        stats.record_request(false, 0);
+    if !rate_limiter.check_rate_limit(client_ip) {
+        return;
     }
 
-    if processing_time > Duration::from_millis(1000) {
-        warn!(
-            "⏱️  Slow request from {}: {}ms",
-            client_ip,
-            processing_time.as_millis()
-        );
-    } else if processing_time > Duration::from_millis(100) {
-        debug!(
-            "Request from {} took {}ms",
-            client_ip,
-            processing_time.as_millis()
-        );
-    }
+    tokio::spawn(async move {
+        let result = if let Some(acceptor) = tls_acceptor {
+            match acceptor.accept(stream).await {
+                Ok(tls_stream) => {
+                    crate::http::handle_client_async(
+                        tls_stream,
+                        peer_addr,
+                        base_dir,
+                        allowed_extensions,
+                        username,
+                        password,
+                        chunk_size,
+                        Some(cli_config),
+                        Some(stats.clone()),
+                        router,
+                    )
+                    .await;
+                    Ok(())
+                }
+                Err(_) => Err(()),
+            }
+        } else {
+            crate::http::handle_client_async(
+                stream,
+                peer_addr,
+                base_dir,
+                allowed_extensions,
+                username,
+                password,
+                chunk_size,
+                Some(cli_config),
+                Some(stats.clone()),
+                router,
+            )
+            .await;
+            Ok(())
+        };
 
-    if result.is_err() {
-        error!("Client {} handler panicked with error", client_ip);
-        return Err(AppError::InternalServerError(
-            "Client handler panicked".to_string(),
-        ));
-    }
-
-    trace!("Client {} handler completed successfully", client_ip);
-    Ok(())
+        rate_limiter.release_connection(client_ip);
+        let _ = result;
+    });
 }

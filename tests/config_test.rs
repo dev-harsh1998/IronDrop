@@ -191,7 +191,7 @@ verbose = false
     assert_eq!(config.listen, "192.168.1.1");
     assert_eq!(config.port, 8888);
     assert_eq!(config.threads, 4);
-    assert_eq!(config.verbose, true);
+    assert!(config.verbose);
 }
 
 #[test]
@@ -237,7 +237,7 @@ max_upload_size = 1GB
 
     assert_eq!(config.port, 5555);
     assert_eq!(config.threads, 4);
-    assert_eq!(config.enable_upload, true);
+    assert!(config.enable_upload);
     assert_eq!(config.max_upload_size, 1024 * 1024 * 1024); // 1GB in bytes
 }
 
@@ -272,13 +272,13 @@ fn test_config_defaults() {
     assert_eq!(config.port, 8080);
     assert_eq!(config.threads, 8);
     assert_eq!(config.chunk_size, 1024);
-    assert_eq!(config.enable_upload, false);
+    assert!(!config.enable_upload);
     assert_eq!(config.max_upload_size, 10240 * 1024 * 1024); // 10GB in bytes
     assert_eq!(config.username, None);
     assert_eq!(config.password, None);
     assert_eq!(config.allowed_extensions, ["*.zip", "*.txt"]);
-    assert_eq!(config.verbose, false);
-    assert_eq!(config.detailed_logging, false);
+    assert!(!config.verbose);
+    assert!(!config.detailed_logging);
 }
 
 #[test]
@@ -377,7 +377,7 @@ directory = {}
 
     let config = Config::load(&cli).expect("Failed to load config");
 
-    assert_eq!(config.enable_upload, true);
+    assert!(config.enable_upload);
     assert_eq!(config.max_upload_size, 500 * 1024 * 1024); // 500MB in bytes
 }
 
@@ -697,7 +697,7 @@ fn test_config_malformed_ini_syntax() {
             ssl_key: None,
         };
 
-        let result = Config::load(&cli);
+        let _result = Config::load(&cli);
 
         // Should either handle gracefully or return appropriate error
         // This test ensures no panic occurs
