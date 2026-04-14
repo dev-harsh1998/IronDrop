@@ -15,7 +15,7 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 **Implementation Location**: `src/http.rs`
 
-- **HTTP/1.1 Protocol Support**: Complete request/response parsing with version validation (`src/http.rs:68-71`)
+- **HTTP/1.1 Protocol Support**: Complete request/response parsing with version validation (see `src/http.rs`)
 - **Status Code Compliance**: Proper HTTP status codes implementation:
   - 200 OK, 400 Bad Request, 403 Forbidden, 404 Not Found
   - 405 Method Not Allowed, 413 Payload Too Large, 500 Internal Server Error
@@ -27,18 +27,18 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 **Implementation Location**: `src/http.rs`
 
-- **Header Parsing**: Case-insensitive header processing with multiple value support (`src/http.rs:84-92`)
-- **Request Line Validation**: Proper HTTP request line parsing and validation (`src/http.rs:57-71`)
-- **Connection Management**: Connection timeout handling and resource cleanup (`src/http.rs:48`)
+- **Header Parsing**: Case-insensitive header processing with multiple value support (see `src/http.rs`)
+- **Request Line Validation**: Proper HTTP request line parsing and validation (see `src/http.rs`)
+- **Connection Management**: Connection timeout handling and resource cleanup (see `src/http.rs`)
 - **Message Framing**: Proper handling of request/response boundaries
 
 ### RFC 7578 (Multipart Form Data)
 
 **Implementation Location**: `src/multipart.rs`
 
-- **Compliant Parser**: Full RFC 7578 compliant multipart/form-data parser (`src/multipart.rs:1-4`)
-- **Boundary Validation**: RFC 2046 compliant boundary validation (`src/multipart.rs:1098-1106`)
-- **Content-Disposition**: Proper Content-Disposition header parsing (`src/multipart.rs:244-315`)
+- **Compliant Parser**: Multipart/form-data parser (see `src/multipart.rs`)
+- **Boundary Validation**: RFC 2046 compliant boundary validation (see `src/multipart.rs`)
+- **Content-Disposition**: Proper Content-Disposition header parsing (see `src/multipart.rs`)
 - **Binary Safety**: Binary-safe content handling without UTF-8 assumptions
 - **Security Limits**: Configurable limits for parts, sizes, and headers
 
@@ -46,16 +46,16 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 **Implementation Location**: `src/http.rs`
 
-- **Base64 Encoding**: Proper Base64 credential encoding/decoding (`src/http.rs:681-695`)
-- **Authorization Header**: Correct Authorization header parsing (`src/http.rs:670-696`)
+- **Base64 Encoding**: Proper Base64 credential encoding/decoding (see `src/http.rs`)
+- **Authorization Header**: Correct Authorization header parsing (see `src/http.rs`)
 - **Credential Validation**: Secure credential comparison without timing attacks
 
 ### RFC 3986 (URI Generic Syntax)
 
 **Implementation Location**: `src/http.rs`
 
-- **URL Decoding**: Percent-encoded path decoding (`src/http.rs:265-297`)
-- **Path Normalization**: Safe path normalization preventing traversal attacks (`src/http.rs:347-364`)
+- **URL Decoding**: Percent-encoded path decoding (see `src/http.rs`)
+- **Path Normalization**: Safe path normalization preventing traversal attacks (see `src/http.rs` and `src/utils.rs`)
 - **URI Component Handling**: Proper handling of path, query, and fragment components
 
 ## OWASP Security Principles Implementation
@@ -64,18 +64,18 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 **Status**: Implemented
 
-- **Path Traversal Protection**: Canonical path validation (`src/cli.rs:100-118`, `src/http.rs:610-612`)
-- **System Directory Blacklisting**: Prevents access to system directories (`src/cli.rs:134-158`)
-- **File Extension Validation**: Configurable allowed extensions (`src/upload.rs:534-558`)
-- **Authentication Enforcement**: Optional but properly implemented Basic Auth (`src/http.rs:551-559`)
+- **Path Traversal Protection**: Canonical path validation (see `src/cli.rs`, `src/http.rs`, and `src/utils.rs`)
+- **System Directory Blacklisting**: Prevents access to system directories (see `src/cli.rs`)
+- **File Extension Validation**: Configurable allowed extensions (see `src/upload.rs`)
+- **Authentication Enforcement**: Optional but properly implemented Basic Auth (see `src/middleware.rs` and template auth toggles)
 
 ### A02:2021 - Cryptographic Failures Prevention
 
 **Status**: Implemented
 
-- **Secure Filename Handling**: Filename sanitization preventing injection (`src/multipart.rs:325-361`)
+- **Secure Filename Handling**: Filename sanitization preventing injection (see `src/multipart.rs`)
 - **No Credential Storage**: Credentials only validated at runtime, never stored
-- **Atomic File Operations**: Race condition prevention (`src/upload.rs:591-640`)
+- **Atomic File Operations**: Race condition prevention (see `src/upload.rs`)
 
 ### A03:2021 - Injection Prevention
 
@@ -91,15 +91,15 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 - **Defense in Depth**: Multiple validation layers throughout the application
 - **Fail-Safe Defaults**: Secure default configurations
-- **Rate Limiting**: Built-in DoS protection (`src/server.rs:12-85`)
+- **Rate Limiting**: Built-in DoS protection (see `src/server.rs`)
 
 ### A05:2021 - Security Misconfiguration Prevention
 
 **Status**: Implemented
 
-- **Upload Size Validation**: Bounds checking preventing resource exhaustion (`src/cli.rs:71-88`)
-- **Request Limits**: Maximum request body and header size limits (`src/http.rs:15-19`)
-- **Directory Permissions**: Write permission validation (`src/cli.rs:186-199`)
+- **Upload Size Validation**: Bounds checking preventing resource exhaustion (see `src/cli.rs`)
+- **Request Limits**: Maximum request body and header size limits (see `src/http.rs`)
+- **Directory Permissions**: Write permission validation (see `src/cli.rs`)
 
 ### A06:2021 - Vulnerable Components Prevention
 
@@ -121,7 +121,7 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 **Status**: ✅ **IMPLEMENTED**
 
-- **Atomic Operations**: File operations use temporary files with atomic rename (`src/upload.rs:591-640`)
+- **Atomic Operations**: File operations use temporary files with atomic rename (see `src/upload.rs`)
 - **Unique Temporary Files**: Prevents race conditions and conflicts
 - **Complete Read/Write Cycles**: Ensures file integrity
 
@@ -131,7 +131,7 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 - **Comprehensive Logging**: Security events logged throughout (`log::info`, `log::warn`, `log::error`)
 - **Rate Limiting Events**: Failed attempts and rate limit violations logged
-- **Statistics Tracking**: Request and upload statistics for monitoring (`src/server.rs:106-320`)
+- **Statistics Tracking**: Request and upload statistics for monitoring (see `src/server.rs`)
 - **Error Logging**: All security-relevant errors are logged
 
 ### A10:2021 - Server-Side Request Forgery Prevention
@@ -145,8 +145,8 @@ This document provides a comprehensive analysis of the RFC standards and OWASP s
 
 ### DoS Protection
 
-- **Rate Limiting**: 120 requests/minute, 10 concurrent connections per IP (`src/server.rs:496`)
-- **Request Timeouts**: 30-second timeout for request processing (`src/http.rs:48`)
+- **Rate Limiting**: Per-IP request and concurrent connection limits (see `src/server.rs`)
+- **Request Timeouts**: Read timeouts to prevent slowloris-style resource exhaustion (see `src/http.rs`)
 - **Memory Protection**: Request body size limits (10GB max) and header size limits (8KB)
 - **Concurrency Control**: Async networking plus rate limiting and blocking isolation prevent resource exhaustion
 

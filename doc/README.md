@@ -37,15 +37,15 @@ Known scope limits:
 **Contents:**
 - System architecture diagrams and component relationships
 - Request processing flow and data paths
-- Module-by-module code organization (19 Rust source files)
+- Module-by-module code organization (see `src/`)
 - Ultra-compact search system architecture and memory optimization
 - Security architecture and defense-in-depth implementation
 - Performance characteristics and scalability considerations
 - Template system design and asset pipeline
-- Testing architecture with 199 comprehensive tests across 16 test files
+- Testing architecture (see TESTING_DOCUMENTATION.md; run `cargo test --all-features`)
 
 **Key Sections:**
-- Core module breakdown with line counts and responsibilities
+- Core module breakdown and responsibilities
 - HTTP request processing pipeline with security checkpoints
 - Dual-mode search engine implementation and ultra-compact optimization
 - Template engine implementation and static asset serving
@@ -107,7 +107,7 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 **Purpose**: Comprehensive testing suite documentation and validation procedures
 
 **Contents:**
-- **Complete Test Coverage**: 199 tests across 16 test files covering all functionality
+- **Complete Test Coverage**: Run `cargo test --all-features` for the authoritative suite and totals
 - **Test Categories**: Core server, integration, edge cases, memory optimization, performance, stress testing, streaming
 - **Security Testing**: Path traversal prevention, input validation, authentication mechanisms
 - **Performance Benchmarks**: Memory efficiency targets, upload speed thresholds, stress test metrics
@@ -136,7 +136,6 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 - Client-side validation and error handling
 
 **Implementation Status**: ✅ **Production Ready** (v2.7.0)
-- Complete upload system with 29 comprehensive tests
 - Professional UI matching IronDrop's design language
 - Integrated with template engine and security systems
 - Supports unlimited file uploads with direct streaming architecture
@@ -173,9 +172,8 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 **Implementation Status**: ✅ **Production Ready** (v2.7.0)
 - RFC 7578 compliance with robust boundary detection and streaming support
 - Advanced streaming implementation for memory-efficient large file processing
-- 7+ dedicated test cases covering edge cases and streaming scenarios
 - Integrated with upload handler and HTTP processing with automatic mode selection
-- Zero external dependencies with pure Rust implementation
+- No external HTTP framework required; implemented in-house with standard Rust crates used where practical
 - Prevents memory exhaustion for multi-gigabyte file uploads
 
 ### 🌊 [HTTP Layer Streaming Documentation](./HTTP_STREAMING.md) ⭐
@@ -264,8 +262,8 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 ### 🔐 **Advanced Security & Monitoring**
 - **Rate Limiting** – DoS protection with configurable requests per minute and concurrent connections per IP
 - **Server Statistics** – Real-time monitoring of requests, bytes served, uptime, and performance metrics
-- **Health Check Endpoints** – Built-in `/_health` and `/_status` endpoints for monitoring
-- **Unified Monitoring Dashboard** – NEW `/monitor` endpoint with live HTML dashboard and JSON API (`/monitor?json=1`) exposing request, download and upload metrics
+- **Health Check Endpoints** – `/_irondrop/health` and `/_irondrop/status` (legacy compatibility: `/_health`)
+- **Unified Monitoring Dashboard** – `/monitor` (legacy) and `/_irondrop/monitor` (canonical) with JSON via `?json=1`
 - **Path-Traversal Protection** – Canonicalises every request path and rejects any attempt that escapes the served directory
 - **Optional Basic Authentication** – Username and password can be supplied via CLI flags
 
@@ -314,6 +312,18 @@ Native zero-dependency template engine: variables, conditionals, embedded assets
 
 ## 🛠️ Installation
 
+### Install from crates.io
+
+```bash
+cargo install irondrop
+```
+
+### Install latest from Git
+
+```bash
+cargo install --git https://github.com/dev-harsh1998/IronDrop.git
+```
+
 ### Build from Source
 
 ```bash
@@ -361,16 +371,16 @@ Open a browser at [http://127.0.0.1:8080](http://127.0.0.1:8080) and you will se
 ## 🎉 What's New in v2.7.0
 
 ### 📤 **Complete File Upload System**
-IronDrop v2.5 introduces a **production-ready file upload system** with enterprise-grade features:
+IronDrop v2.7.0 includes a **production-ready file upload system** with enterprise-grade features:
 
 - **🔒 Enhanced Security**: Comprehensive input validation, boundary verification, and filename sanitization
 - **⚡ Performance**: Handles unlimited file sizes with constant memory usage and concurrent processing
 - **🎨 Professional UI**: Integrated upload interface accessible at `/upload` with real-time feedback
 - **🛡️ Robust Validation**: Multi-layer security including extension filtering, size limits, and malformed data rejection
-- **🧪 Battle-Tested**: 199 tests across 16 test files covering edge cases, security scenarios, and performance stress testing
+- **🧪 Battle-Tested**: Covered by the project’s automated test suite (run `cargo test --all-features`)
 
 ### 🔍 **Advanced Search System** (New in v2.5)
-IronDrop v2.5 introduces a **dual-mode search engine** optimized for directories of any size:
+IronDrop includes a **dual-mode search engine** optimized for directories of any size:
 
 - **🚀 Ultra-Low Memory**: <100MB for 10M+ files using 11-byte entries and hierarchical storage
 - **⚡ Lightning Fast**: Real-time search with 300ms debouncing and LRU caching
@@ -381,19 +391,21 @@ IronDrop v2.5 introduces a **dual-mode search engine** optimized for directories
 ### 📊 **Integrated Monitoring Dashboard** (Added in v2.5)
 The new `/monitor` endpoint provides both an HTML dashboard and a JSON API for tooling integration. It auto-updates in the browser and can be scraped by observability agents.
 
-Example JSON (`GET /monitor?json=1`):
+Example JSON (`GET /_irondrop/monitor?json=1`, legacy: `/monitor?json=1`):
 
 ```json
 {
-   "requests": {
-      "total": 42,
-      "successful": 40,
-      "errors": 2,
-      "bytes_served": 1048576,
-      "uptime_secs": 360
-   },
+   "requests": { "total": 42, "successful": 40, "errors": 2 },
    "downloads": {
       "bytes_served": 1048576
+   },
+   "uptime_secs": 360,
+   "memory": {
+      "available": true,
+      "current_bytes": 33554432,
+      "peak_bytes": 67108864,
+      "current_mb": 32.0,
+      "peak_mb": 64.0
    },
    "uploads": {
       "total_uploads": 5,
@@ -404,7 +416,7 @@ Example JSON (`GET /monitor?json=1`):
       "average_upload_size": 748982,
       "largest_upload": 2097152,
       "concurrent_uploads": 0,
-      "average_processing_time": 152.4,
+      "average_processing_ms": 152.4,
       "success_rate": 100.0
    }
 }
@@ -460,7 +472,7 @@ Planned extensions (open to contribution):
 | **High-Performance Server** | `irondrop -d ./big -t 16 -c 8192` | Higher concurrency, optimized streaming |
 | **Secure Corporate Share** | `irondrop -d ./private --username alice --password s3cret` | Authentication, audit logging, professional design |
 | **Development Server** | `irondrop -d . -v --detailed-logging` | Debug logging, template development, hot reload |
-| **Production Monitoring** | `irondrop -d /data -l 0.0.0.0` + health checks at `/_health` | Statistics, uptime monitoring, rate limiting |
+| **Production Monitoring** | `irondrop -d /data -l 0.0.0.0` + health checks at `/_irondrop/health` | Statistics, uptime monitoring, rate limiting |
 | **Monitoring Dashboard** | `irondrop -d .` then visit `/monitor` | Live HTML + JSON metrics |
 | **Secure Upload Server** | `irondrop -d ./shared --enable-upload --max-upload-size 5120 -a "*.txt,*.pdf,*.jpg"` | Controlled file uploads up to 5GB, extension filtering |
 | **Corporate File Share** | `irondrop -d /data --enable-upload --upload-dir /data/uploads --username admin` | Authenticated uploads, custom upload directory |
@@ -642,9 +654,9 @@ assets/
 
 **Architecture Highlights:**
 - **Modular Templates**: Organized separation of HTML/CSS/JS with native rendering
-- **Zero Dependencies**: Pure Rust implementation without external HTTP or template libraries
+- **No External HTTP Framework**: HTTP parsing, routing, and streaming are implemented in-house
 - **Professional UI**: Corporate-grade blackish-grey design with glassmorphism effects
-- **Comprehensive Testing**: 19 total tests including custom HTTP client for static assets
+- **Comprehensive Testing**: See TESTING_DOCUMENTATION.md for suite organization and how to run it
 
 Every module is documented and formatted with `cargo fmt` and `clippy -- -D warnings` to keep technical debt at zero.
 
@@ -654,48 +666,15 @@ Every module is documented and formatted with `cargo fmt` and `clippy -- -D warn
 
 ### Comprehensive Test Suite
 
-The project includes **199 comprehensive tests across 16 test files** covering all aspects of functionality, with complete upload system validation:
-
 ```bash
-# Run all tests (covers upload, download, security, concurrency)
-cargo test
+# Run all tests (covers upload, download, security, concurrency, WebDAV)
+cargo test --all-features
 
 # Run with detailed output
-cargo test -- --nocapture
-
-# Run specific test suites
-cargo test comprehensive_test    # Core server functionality (19 tests)
-cargo test integration_test      # Authentication & security (6 tests)  
-cargo test upload_integration_test # Upload functionality (29 tests)
-cargo test debug_upload_test     # Multipart parser (7 tests)
+cargo test --all-features -- --nocapture
 ```
 
-### Test Architecture
-
-**Custom HTTP Client**: Tests use a native HTTP client implementation (zero external dependencies) that directly connects via `TcpStream` to verify:
-
-- **Bidirectional File Operations**: Upload and download functionality with unlimited size support
-- **Multipart Processing**: RFC-compliant parsing with boundary detection and validation
-- **Template System**: Modular HTML/CSS/JS serving for both download and upload interfaces
-- **Security Validation**: Input sanitization, boundary verification, extension filtering
-- **Concurrency Handling**: Multiple simultaneous uploads with thread safety
-- **Error Scenarios**: Malformed data rejection, resource exhaustion protection
-- **Authentication**: Secure upload/download with basic auth integration
-- **HTTP Compliance**: Headers, status codes, and protocol adherence across all endpoints
-
-### Test Coverage
-
-| Test Category | Count | Description |
-|---------------|-------|-------------|
-| **Upload System** | 29 | Single/multi-file uploads, unlimited size support, concurrency, validation |
-| **Core Server** | 19 | Directory listing, error pages, security, authentication |
-| **Multipart Parser** | 7 | Boundary detection, content extraction, validation |
-| **Security** | 12+ | Authentication, rate limiting, path traversal, input validation |
-| **File Operations** | 15+ | Downloads, uploads, MIME detection, atomic operations |
-| **Monitoring** | 8+ | Health checks, statistics, performance tracking |
-| **UI & Templates** | 10+ | Upload/download interfaces, error pages, responsive design |
-
-Tests start the server on random ports and issue real HTTP requests to verify both functionality and integration.
+See TESTING_DOCUMENTATION.md for test categories, patterns, and the current inventory.
 
 ---
 
@@ -915,11 +894,11 @@ Don't know where to start? Here are some **beginner-friendly test contributions:
 - **Request Logging**: Every request tagged with unique IDs for comprehensive auditing
 - **Performance Tracking**: Slow request detection and logging for security analysis
 - **Statistics Collection**: Real-time monitoring of request patterns and error rates
-- **Health Endpoints**: Built-in `/_health` and `/_status` for infrastructure monitoring
+- **Health Endpoints**: `/_irondrop/health` and `/_irondrop/status` (legacy compatibility: `/_health`)
 
 ### Zero-Trust Architecture
-- **No External Dependencies**: Eliminates third-party security vulnerabilities
-- **Native Implementation**: All security features implemented in pure Rust
+- **No External HTTP Framework**: Minimizes the web-framework dependency surface area
+- **Native Implementation**: Security features are implemented in Rust; standard crates are still used (Tokio, rustls, etc.)
 - **Template Security**: Variable interpolation with HTML escaping and URL encoding
 - **Memory Safety**: Rust's ownership model prevents buffer overflows and memory leaks
 
@@ -982,60 +961,37 @@ The modular template system allows easy customization:
 
 If you're looking to understand the codebase, integrate IronDrop, or contribute to development:
 
-- **📖 [Complete Documentation Suite](./doc/)** - Comprehensive technical documentation
-- **🏗️ [Architecture Guide](./doc/ARCHITECTURE.md)** - System design, component breakdown, and code organization
-- **🔌 [API Reference](./doc/API_REFERENCE.md)** - Complete REST API specification with examples
-- **🔍 [Search Feature Guide](./doc/SEARCH_FEATURE.md)** - Dual-mode search engine implementation and usage
-- **🚀 [Deployment Guide](./doc/DEPLOYMENT.md)** - Production deployment with Docker, systemd, and reverse proxy
+- **📖 [Complete Documentation Suite](./)** - Comprehensive technical documentation
+- **🏗️ [Architecture Guide](./ARCHITECTURE.md)** - System design, component breakdown, and code organization
+- **🔌 [API Reference](./API_REFERENCE.md)** - Complete REST API specification with examples
+- **🔍 [Search Feature Guide](./SEARCH_FEATURE.md)** - Dual-mode search engine implementation and usage
+- **🚀 [Deployment Guide](./DEPLOYMENT.md)** - Production deployment with Docker, systemd, and reverse proxy
 
 ### 🛡️ **For Security & DevOps Teams**
 
 Production deployment and security implementation details:
 
-- **🔒 [Security Implementation](./doc/SECURITY_FIXES.md)** - OWASP vulnerability fixes and security controls
-- **🚀 [Production Deployment](./doc/DEPLOYMENT.md)** - systemd, Docker, monitoring, and security hardening
-- **📊 [System Monitoring](./doc/API_REFERENCE.md#health-and-monitoring)** - Health endpoints and operational metrics
+- **🔒 [Security Implementation](./SECURITY_FIXES.md)** - OWASP vulnerability fixes and security controls
+- **🚀 [Production Deployment](./DEPLOYMENT.md)** - systemd, Docker, monitoring, and security hardening
+- **📊 [System Monitoring](./API_REFERENCE.md#health-and-monitoring)** - Health endpoints and operational metrics
 
 ### 🎨 **For Frontend Developers**
 
 UI system and template integration:
 
-- **📤 [Upload UI System](./doc/UPLOAD_INTEGRATION.md)** - Modern drag-and-drop interface implementation
-- **🎨 [Template System](./doc/ARCHITECTURE.md#template-system-architecture)** - Professional blackish-grey UI with modular architecture
-- **🔧 [API Integration](./doc/API_REFERENCE.md#client-integration-examples)** - JavaScript, cURL, and Python examples
+- **📤 [Upload UI System](./UPLOAD_INTEGRATION.md)** - Modern drag-and-drop interface implementation
+- **🎨 [Template System](./ARCHITECTURE.md#template-system-architecture)** - Professional blackish-grey UI with modular architecture
+- **🔧 [API Integration](./API_REFERENCE.md#client-integration-examples)** - JavaScript, cURL, and Python examples
 
 ### 🧪 **Testing & Quality Assurance**
 
-IronDrop includes **199 comprehensive tests across 16 test files** covering:
-
-- **Core Server Tests** (19 tests): HTTP handling, directory listing, authentication
-- **Upload System Tests** (29 tests): File uploads, validation, concurrent handling
-- **Security Tests** (12+ tests): Path traversal protection, input validation
-- **Multipart Parser Tests** (7 tests): RFC 7578 compliance and edge cases
-- **Integration Tests** (30+ tests): End-to-end functionality and performance
-
 ```bash
-# Run all tests
-cargo test
-
-# Run with detailed output
-cargo test -- --nocapture
-
-# Run specific test suites
-cargo test comprehensive_test    # Core functionality
-cargo test upload_integration    # Upload system
-cargo test multipart_test       # Multipart parser
+cargo test --all-features
 ```
 
 ### 📈 **Project Statistics**
 
-| Metric | Count | Description |
-|--------|--------|-------------|
-| **Source Files** | 15 | Rust modules with clear separation of concerns |
-| **Lines of Code** | 3000+ | Production-ready implementation |
-| **Template Files** | 10 | Professional UI with HTML/CSS/JS separation |
-| **Test Cases** | 189 across 16 files | Comprehensive coverage including security tests |
-| **Documentation Pages** | 10 | Complete technical documentation suite |
+See the repository directories (`src/`, `templates/`, `tests/`, `doc/`) for the current inventory.
 
 ---
 
@@ -1112,7 +1068,7 @@ We welcome contributions! Here's how to get started:
 
 ## 📞 Support & Community
 
-- **📖 Documentation**: Start with [./doc/README.md](./doc/README.md) for complete guides
+- **📖 Documentation**: Start with [README.md](./README.md) for complete guides
 - **🐛 Issues**: Report bugs and request features via GitHub Issues
 - **💬 Discussions**: GitHub Discussions for questions and community support
 - **🔒 Security**: Responsible disclosure via GitHub Security Advisory
@@ -1129,6 +1085,6 @@ IronDrop is distributed under the **MIT** license; see `LICENSE` for details.
 
 *Made with 🦀 in Bengaluru*
 
-**[⭐ Star us on GitHub](https://github.com/dev-harsh1998/IronDrop) • [📖 Read the Docs](./doc/) • [🚀 Get Started](#-quick-start)**
+**[⭐ Star us on GitHub](https://github.com/dev-harsh1998/IronDrop) • [📖 Read the Docs](./) • [🚀 Get Started](#-quick-start)**
 
 </div>

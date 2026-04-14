@@ -186,7 +186,7 @@ fn test_demonstrate_memory_savings() // Compares memory usage vs alternatives
 
 ## Running Tests
 
-### Basic Test Execution (current totals: 272 tests: 48 unit + 224 integration/system)
+### Basic Test Execution
 
 ```bash
 # Run all tests
@@ -400,7 +400,7 @@ fn test_new_feature() {
 - All 15 direct upload tests now pass, including concurrent upload scenarios
 
 **Test Suite Stability**
-- Achieved 100% test pass rate across all 272 tests
+- Run `cargo test --all-features` for the authoritative suite and totals
 - Enhanced test reliability under concurrent execution
 - Improved error handling and edge case coverage
 - Added comprehensive validation for boundary conditions

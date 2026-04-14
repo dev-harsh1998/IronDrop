@@ -63,42 +63,16 @@ Includes native SSL/TLS (HTTPS), rate limiting, optional Basic Auth, basic input
 
 Getting started with IronDrop is simple.
 
-### From Source
+### From crates.io
 
 ```bash
-# Clone the repository
-git clone https://github.com/dev-harsh1998/IronDrop.git
-cd IronDrop
-
-# Build the release binary
-cargo build --release
-
-# The executable will be in ./target/release/irondrop
+cargo install irondrop
 ```
 
-### System-Wide Installation (Recommended)
-
-To use IronDrop from anywhere on your system, install it to a directory in your PATH:
+### Latest from Git
 
 ```bash
-# Linux/macOS - Install to /usr/local/bin (requires sudo)
-sudo cp ./target/release/irondrop /usr/local/bin/
-
-# Alternative: Install to ~/.local/bin (no sudo required)
-mkdir -p ~/.local/bin
-cp ./target/release/irondrop ~/.local/bin/
-# Add ~/.local/bin to PATH if not already:
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc  # or ~/.zshrc
-source ~/.bashrc  # or restart terminal
-
-# Windows (PowerShell as Administrator)
-# Create program directory
-New-Item -ItemType Directory -Force -Path "C:\Program Files\IronDrop"
-# Copy executable
-Copy-Item ".\target\release\irondrop.exe" "C:\Program Files\IronDrop\"
-# Add to system PATH (requires restart or new terminal)
-$env:PATH += ";C:\Program Files\IronDrop"
-[Environment]::SetEnvironmentVariable("PATH", $env:PATH, [EnvironmentVariableTarget]::Machine)
+cargo install --git https://github.com/dev-harsh1998/IronDrop.git
 ```
 
 **Verify Installation:**
@@ -114,21 +88,18 @@ irondrop -d ~/Documents --listen 0.0.0.0
 
 ### Quick start
 
-**Step 1:** Download or build IronDrop
+**Step 1:** Install IronDrop
 ```bash
-# Build from source (requires Rust)
-git clone https://github.com/dev-harsh1998/IronDrop.git
-cd IronDrop
-cargo build --release
+cargo install irondrop
 ```
 
 **Step 2:** Start sharing files immediately
 ```bash
 # Share your current directory (safest - local access only)
-./target/release/irondrop -d .
+irondrop -d .
 
 # Share with your network (accessible to other devices)
-./target/release/irondrop -d . --listen 0.0.0.0
+irondrop -d . --listen 0.0.0.0
 ```
 
 **Step 3:** Open your browser and visit `http://localhost:8080`

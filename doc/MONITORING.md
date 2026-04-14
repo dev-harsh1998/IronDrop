@@ -1,33 +1,33 @@
-# IronDrop Monitoring Guide (v2.7.0)
+# IronDrop Monitoring Guide
 
 This guide documents the built-in monitoring capabilities introduced with the `/monitor` endpoint and supporting health APIs.
 
 ## Overview
 
-IronDrop exposes lightweight operational telemetry without external dependencies:
+IronDrop exposes lightweight operational telemetry without requiring an external monitoring stack:
 
 | Endpoint | Format | Purpose |
 |----------|--------|---------|
 | `/monitor` | HTML | Human dashboard for live stats |
 | `/_irondrop/monitor?json=1` | JSON | Machine-readable metrics for scripting / scraping |
-| `/_health` | JSON | Minimal liveness probe (OK / version / uptime) |
-| `/_status` | JSON | Extended status (configuration + cumulative counters) |
+| `/_irondrop/health` | JSON | Liveness probe (status / service / version / timestamp / features) (legacy: `/_health`) |
+| `/_irondrop/status` | JSON | Status payload (currently same as health) |
 
 ## Data Model
 
-`/_irondrop/monitor?json=1` returns three top-level sections:
+`/_irondrop/monitor?json=1` returns these top-level keys:
 
 ```json
 {
-  "requests": {
-    "total": 42,
-    "successful": 40,
-    "errors": 2,
-    "bytes_served": 1048576,
-    "uptime_secs": 360
-  },
-  "downloads": {
-    "bytes_served": 1048576
+  "requests": { "total": 42, "successful": 40, "errors": 2 },
+  "downloads": { "bytes_served": 1048576 },
+  "uptime_secs": 360,
+  "memory": {
+    "available": true,
+    "current_bytes": 33554432,
+    "peak_bytes": 67108864,
+    "current_mb": 32.0,
+    "peak_mb": 64.0
   },
   "uploads": {
     "total_uploads": 5,
@@ -38,7 +38,7 @@ IronDrop exposes lightweight operational telemetry without external dependencies
     "average_upload_size": 748982,
     "largest_upload": 2097152,
     "concurrent_uploads": 0,
-    "average_processing_time": 152.4,
+    "average_processing_ms": 152.4,
     "success_rate": 100.0
   }
 }
@@ -47,10 +47,10 @@ IronDrop exposes lightweight operational telemetry without external dependencies
 ### Field Semantics
 - `requests.total` – All handled requests (success + error) since start.
 - `requests.successful` / `errors` – Outcome classification.
-- `requests.bytes_served` / `downloads.bytes_served` – Cumulative body bytes sent (excludes HTTP headers) across all responses.
-- `requests.uptime_secs` – Elapsed seconds since the first server start instant.
+- `downloads.bytes_served` – Cumulative body bytes sent (excludes HTTP headers).
+- `uptime_secs` – Elapsed seconds since the server started.
 - `uploads.*` – Aggregated upload subsystem metrics (only updated when uploads enabled).
-- `average_processing_time` – Rolling average (last 100 uploads) in milliseconds.
+- `average_processing_ms` – Rolling average (last 100 uploads) in milliseconds.
 - `success_rate` – Percentage of successful uploads over total uploads (0 if none yet).
 - `concurrent_uploads` – Point-in-time counter incremented on start and decremented on completion.
 
@@ -69,7 +69,7 @@ curl -s http://localhost:8080/_irondrop/monitor?json=1 | jq '.requests.bytes_ser
 
 ### Basic Health Probe (Kubernetes / Docker)
 ```bash
-curl -f http://localhost:8080/_health > /dev/null || echo "Unhealthy"
+curl -f http://localhost:8080/_irondrop/health > /dev/null || echo "Unhealthy"
 ```
 
 ### Shell Alert When Upload Failures Detected
