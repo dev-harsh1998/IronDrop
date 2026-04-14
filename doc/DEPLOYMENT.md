@@ -25,7 +25,7 @@ irondrop -d /srv/files --listen 0.0.0.0 --port 8080
 
 ```bash
 # Test server health
-curl http://localhost:8080/_health
+curl http://localhost:8080/_irondrop/health
 
 # Test file listing
 curl http://localhost:8080/
@@ -194,7 +194,7 @@ WORKDIR /srv
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/_health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/_irondrop/health || exit 1
 
 CMD ["irondrop", "--directory", "/srv/files", "--listen", "0.0.0.0", "--port", "8080"]
 ```
@@ -226,7 +226,7 @@ services:
       --detailed-logging
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/_health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/_irondrop/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -490,6 +490,9 @@ server {
         Allow from all
     </Proxy>
 
+    ProxyPass /_irondrop/health http://127.0.0.1:8080/_irondrop/health
+    ProxyPassReverse /_irondrop/health http://127.0.0.1:8080/_irondrop/health
+
     ProxyPass /_health http://127.0.0.1:8080/_health
     ProxyPassReverse /_health http://127.0.0.1:8080/_health
 
@@ -507,7 +510,7 @@ server {
 #!/bin/bash
 # /usr/local/bin/check-irondrop.sh
 
-HEALTH_URL="http://localhost:8080/_health"
+HEALTH_URL="http://localhost:8080/_irondrop/health"
 EXPECTED_STATUS="healthy"
 
 response=$(curl -s -f "$HEALTH_URL" | jq -r '.status' 2>/dev/null)

@@ -1,4 +1,4 @@
-# IronDrop API Reference v2.7.0
+# IronDrop API Reference
 
 ## Overview
 
@@ -31,18 +31,13 @@ User-Agent: <client-identifier>
 #### Response Headers
 ```http
 # Standard headers
-Server: IronDrop/2.7.0
+Server: irondrop/<version>
 Content-Type: <mime-type>
 Content-Length: <content-length>
-Connection: keep-alive
-
-# Security headers
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
+Connection: close
 
 # Caching headers (for static assets)
 Cache-Control: public, max-age=3600
-ETag: "<etag-value>"
 ```
 
 ## Endpoints
@@ -193,7 +188,7 @@ Content-Type: text/html; charset=utf-8
 #### `POST /_irondrop/upload`
 Uploads files using direct binary streaming for optimal performance and unlimited file size support.
 
-**Direct Upload Features (v2.7.0):**
+**Direct Upload Features:**
 - **Direct Binary Streaming**: No multipart parsing overhead
 - **Automatic Mode Selection**: Small uploads (≤64MB) processed in memory, large uploads (>64MB) streamed to disk
 - **Constant Memory Usage**: ~7MB RAM usage regardless of file size
@@ -420,43 +415,17 @@ Basic health check endpoint.
 ```json
 {
   "status": "healthy",
-  "version": "2.7.0",
-  "uptime_seconds": 3600,
-  "timestamp": "2024-01-01T12:00:00Z"
+  "service": "irondrop",
+  "version": "<current>",
+  "timestamp": 1700000000,
+  "features": ["rate_limiting", "statistics", "native_mime_detection"]
 }
 ```
 
 #### `GET /_irondrop/status`
-Detailed server status and statistics.
+Status endpoint.
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "version": "2.5.1",
-  "uptime_seconds": 3600,
-  "timestamp": "2024-01-01T12:00:00Z",
-  "statistics": {
-    "requests_served": 15420,
-    "bytes_served": 1073741824,
-    "errors_encountered": 12,
-    "active_connections": 3,
-    "rate_limit_hits": 5
-  },
-  "configuration": {
-    "threads": 8,
-    "chunk_size": 1024,
-    "upload_enabled": true,
-    "max_upload_size": 10737418240,
-    "rate_limit": 120
-  },
-  "system": {
-    "memory_usage_mb": 3.2,
-    "cpu_usage_percent": 2.1,
-    "disk_space_available": true
-  }
-}
-```
+Currently this returns the same payload as `/_irondrop/health`.
 
 #### `GET /_irondrop/monitor`
 HTML monitoring dashboard (human-friendly) that auto-refreshes via JavaScript to show live server statistics. Provides request counts, bytes served (downloads), and upload metrics (counts, bytes, success rate, concurrency, average processing time).
@@ -472,21 +441,23 @@ Content-Type: text/html; charset=utf-8
 </html>
 ```
 
-#### `GET /_irondrop/_irondrop/monitor?json=1`
+#### `GET /_irondrop/monitor?json=1`
 Machine-readable JSON stats for integration with external monitoring / scripting.
 
 **Response (JSON):**
 ```json
 {
-  "requests": {
-    "total": 42,
-    "successful": 40,
-    "errors": 2,
-    "bytes_served": 1048576,
-    "uptime_secs": 360
-  },
+  "requests": { "total": 42, "successful": 40, "errors": 2 },
   "downloads": {
     "bytes_served": 1048576
+  },
+  "uptime_secs": 360,
+  "memory": {
+    "available": true,
+    "current_bytes": 33554432,
+    "peak_bytes": 67108864,
+    "current_mb": 32.0,
+    "peak_mb": 64.0
   },
   "uploads": {
     "total_uploads": 5,
@@ -497,7 +468,7 @@ Machine-readable JSON stats for integration with external monitoring / scripting
     "average_upload_size": 748982,
     "largest_upload": 2097152,
     "concurrent_uploads": 0,
-    "average_processing_time": 152.4,
+    "average_processing_ms": 152.4,
     "success_rate": 100.0
   }
 }
@@ -505,58 +476,10 @@ Machine-readable JSON stats for integration with external monitoring / scripting
 
 **Notes:**
 - `bytes_served` counts only response body bytes (excludes headers).
-- `average_processing_time` is the rolling average (last 100 uploads).
+- `average_processing_ms` is the rolling average (last 100 uploads).
 - All counters are cumulative since server start.
 
 **Planned Extensions (future versions):** active connections, per-endpoint metrics, Prometheus format.
-
-### 6. API Information
-
-#### `GET /_api`
-API information and capabilities.
-
-**Response:**
-```json
-{
-  "name": "IronDrop",
-  "version": "2.5.1",
-  "description": "Lightweight file server with upload capabilities",
-  "endpoints": {
-    "directory_listing": {
-      "method": "GET",
-      "path": "/[path]",
-      "description": "List directory contents or download files",
-      "parameters": ["format", "sort", "order"],
-      "formats": ["html", "json"]
-    },
-    "file_upload": {
-      "method": "POST",
-      "path": "/upload",
-      "description": "Upload files to server",
-      "content_type": "multipart/form-data",
-      "max_size": 10737418240,
-      "enabled": true
-    },
-    "health_check": {
-      "method": "GET",
-      "path": "/_irondrop/health",
-      "description": "Basic health check"
-    },
-    "status": {
-      "method": "GET",
-      "path": "/_irondrop/status",
-      "description": "Detailed server status"
-    }
-  },
-  "features": {
-    "uploads": true,
-    "authentication": false,
-    "rate_limiting": true,
-    "range_requests": true,
-    "static_assets": true
-  }
-}
-```
 
 ## Authentication
 
@@ -587,34 +510,11 @@ Content-Type: text/html
 
 ## Rate Limiting
 
-IronDrop implements rate limiting to prevent abuse:
+IronDrop implements rate limiting to prevent abuse. Rate limiting is enforced before request handling; when a client exceeds limits, the connection may be rejected/closed.
 
 ### Default Limits
 - **Requests per minute**: 120 (configurable)
 - **Concurrent connections per IP**: 10 (configurable)
-
-### Rate Limit Headers
-```http
-X-RateLimit-Limit: 120
-X-RateLimit-Remaining: 115
-X-RateLimit-Reset: 1704110400
-```
-
-### Rate Limit Exceeded
-```http
-HTTP/1.1 429 Too Many Requests
-Retry-After: 60
-X-RateLimit-Limit: 120
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1704110400
-
-{
-  "status": "error",
-  "error": "TooManyRequests",
-  "message": "Rate limit exceeded. Please try again later.",
-  "retry_after": 60
-}
-```
 
 ## Error Handling
 
@@ -632,24 +532,10 @@ X-RateLimit-Reset: 1704110400
 | 413 | Payload Too Large | Upload size exceeds limit |
 | 415 | Unsupported Media Type | File type not allowed |
 | 416 | Range Not Satisfiable | Invalid range request |
-| 429 | Too Many Requests | Rate limit exceeded |
 | 500 | Internal Server Error | Server error |
 
 ### Error Response Format
-
-**JSON Error Response:**
-```json
-{
-  "status": "error",
-  "error": "ErrorType",
-  "message": "Human-readable error description",
-  "details": {
-    "additional": "error-specific information"
-  },
-  "request_id": "req_abc123",
-  "timestamp": "2024-01-01T12:00:00Z"
-}
-```
+Errors are returned as HTML pages for browser-facing endpoints. JSON is returned only by JSON endpoints (for example `/_irondrop/health` and `/_irondrop/monitor?json=1`).
 
 **HTML Error Response:**
 ```html
@@ -724,7 +610,7 @@ if (searchData.status === 'success') {
 ```javascript
 // Monitor server health
 const health = await fetch('/_irondrop/health').then(r => r.json());
-console.log(`Server uptime: ${health.uptime_seconds}s`);
+console.log(`Server status: ${health.status} (${health.version})`);
 ```
 
 ### cURL Examples
@@ -806,7 +692,7 @@ if data['status'] == 'success':
 ## Security Considerations
 
 ### Best Practices
-1. **Always use HTTPS in production** (place behind reverse proxy)
+1. **Use HTTPS in production** (enable built-in TLS or deploy behind a reverse proxy)
 2. **Enable authentication** for sensitive directories
 3. **Configure appropriate file extension filters**
 4. **Monitor rate limiting logs** for abuse detection
@@ -815,10 +701,7 @@ if data['status'] == 'success':
 7. **Use strong passwords** for Basic Authentication
 
 ### Security Headers
-IronDrop automatically includes security headers:
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY`
-- Proper `Content-Type` headers for all responses
+IronDrop sets appropriate `Content-Type` headers for responses. Additional security headers should be handled by your reverse proxy if required.
 
 ### Input Validation
 All inputs are validated:
@@ -827,4 +710,4 @@ All inputs are validated:
 - File names for path traversal attempts
 - HTTP headers for malformed content
 
-This API reference covers all functionality available in IronDrop v2.7.0 and provides comprehensive examples for client integration.
+This API reference covers the current public HTTP surface area and provides examples for client integration.

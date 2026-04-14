@@ -124,62 +124,38 @@ IronDrop is a file server written in Rust. Its HTTP stack (request parsing, rout
 
 ```
 src/
-├── main.rs              # Entry point (6 lines)
-├── lib.rs               # Library initialization (56 lines)
-├── cli.rs               # CLI interface with validation (200+ lines)
-├── config/              # Configuration system
-│   ├── mod.rs           # Config struct and loading logic
-│   └── ini_parser.rs    # Zero-dependency INI parser
-├── server.rs            # Thread pool + rate limiting (400+ lines)
-├── http.rs              # HTTP parsing + connection handling (600+ lines)
-├── router.rs            # HTTP routing system (100+ lines)
-├── handlers.rs          # Internal route handlers (200+ lines)
-├── middleware.rs        # Authentication middleware (100+ lines)
-├── templates.rs         # Template engine with embedded assets (300+ lines)
-├── fs.rs                # File system operations (200+ lines)
-├── response.rs          # Response building + MIME detection (400+ lines)
-├── upload.rs            # Direct upload handler with streaming (500+ lines)
-├── search.rs            # Ultra-compact search engine (400+ lines)
-├── error.rs             # Comprehensive error types (100+ lines)
-└── utils.rs             # Utility functions for paths and encoding
+├── main.rs
+├── lib.rs
+├── cli.rs
+├── config/
+│   ├── mod.rs
+│   └── ini_parser.rs
+├── server.rs            # Tokio runtime, async accept, TLS, rate limiting, stats
+├── http.rs              # HTTP parsing + async response streaming
+├── router.rs            # Routing and middleware pipeline
+├── handlers.rs          # Internal route handlers
+├── middleware.rs        # Authentication middleware
+├── templates.rs         # Template engine with embedded assets
+├── fs.rs                # File system operations and directory listing
+├── response.rs          # Response types and error response helpers
+├── upload.rs            # Upload handling + validation
+├── multipart.rs         # Multipart form parsing
+├── search.rs            # Search subsystem (index + fallback search)
+├── ultra_compact_search.rs
+├── webdav.rs
+├── ultra_memory_test.rs
+├── error.rs
+└── utils.rs
 
 templates/
-├── directory/           # Directory listing UI
-│   ├── index.html       # HTML structure with search
-│   ├── styles.css       # Professional dark theme
-│   └── script.js        # Interactive browsing + search
-├── upload/              # Upload interface
-│   ├── page.html        # Standalone upload page
-│   ├── form.html        # Reusable upload component
-│   ├── styles.css       # Upload UI styling
-│   └── script.js        # Direct binary upload logic
-├── error/               # Error pages
-│   ├── page.html        # Error page template
-│   └── styles.css       # Error page styling
-└── monitor/             # Monitoring dashboard
-    ├── page.html        # Dashboard template
-    ├── styles.css       # Dashboard styling
-    └── script.js        # Real-time metrics updates
-└── error/               # Error pages
-    ├── page.html        # Error page structure
-    ├── styles.css       # Error styling
-    └── script.js        # Error page enhancements
+├── common/
+├── directory/
+├── upload/
+├── error/
+└── monitor/
 
 tests/
-├── integration_test.rs     # Core server tests (19 tests)
-├── integration_test.rs       # Auth + security tests (6 tests)
-├── edge_case_test.rs         # Upload edge cases (10 tests)
-├── memory_optimization_test.rs # Memory efficiency (6 tests)
-├── performance_test.rs       # Upload performance (5 tests)
-├── stress_test.rs           # Stress testing (4 tests)
-├── multipart_test.rs        # Multipart parser tests (7 tests)
-├── ultra_compact_test.rs    # Search engine tests (4 tests)
-├── template_embedding_test.rs # Template system tests (3 tests)
-├── test_upload.sh           # End-to-end upload testing
-├── test_1gb_upload.sh       # Large file upload testing
-└── test_executable_portability.sh # Portability validation
-
-Total: 199 tests across 16 test files
+└── Integration, upload, monitoring, and WebDAV RFC suites (see `tests/` directory)
 ```
 
 ## Search System Architecture
@@ -309,10 +285,9 @@ HTTP Request → Content-Length Check → Size Threshold Comparison
 ### Security and Resource Protection
 
 #### Temporary File Management
-- **Secure Creation**: Uses `tempfile::NamedTempFile` for secure temporary file creation
-- **Automatic Cleanup**: Files automatically deleted when `RequestBody` is dropped
-- **Error Recovery**: Cleanup guaranteed even during error conditions
-- **Permission Control**: Temporary files created with restricted permissions
+- **Creation**: Large request bodies may be streamed to a temporary file in the system temp directory
+- **Unique Naming**: Filenames include process ID, timestamp, and a monotonic counter to avoid collisions
+- **Cleanup**: Temporary request-body files are removed after request processing completes (best-effort cleanup on errors)
 
 #### Resource Limits
 - **Memory Protection**: Prevents memory exhaustion from large uploads
@@ -322,26 +297,7 @@ HTTP Request → Content-Length Check → Size Threshold Comparison
 
 ### Integration with Upload System
 
-The HTTP streaming layer integrates seamlessly with the existing upload infrastructure:
-
-```rust
-impl UploadHandler {
-    pub fn handle_upload(&self, request_body: RequestBody) -> Result<(), AppError> {
-        match request_body {
-            RequestBody::Memory(data) => {
-                // Fast path for small uploads
-                let cursor = Cursor::new(data);
-                self.process_multipart(cursor)
-            }
-            RequestBody::File(path) => {
-                // Streaming path for large uploads
-                let file = File::open(path)?;
-                self.process_multipart(file)
-            }
-        }
-    }
-}
-```
+The HTTP streaming layer integrates with uploads by representing request bodies as either in-memory buffers or a temporary file on disk (`RequestBody::Memory` / `RequestBody::File { path, size }`). This keeps large uploads bounded in RAM while preserving the same handler behavior.
 
 ### Monitoring and Observability
 
@@ -354,24 +310,11 @@ The streaming system provides comprehensive monitoring capabilities:
 
 ### Configuration Options
 
-```rust
-pub struct StreamingConfig {
-    pub memory_threshold: usize,      // Default: 64MB
-    pub chunk_size: usize,           // Default: 64KB
-    pub temp_dir: Option<PathBuf>,   // Default: system temp
-    pub max_concurrent: usize,       // Default: 10
-}
-```
+See HTTP_STREAMING.md and CONFIGURATION_SYSTEM.md for the current configuration surface (upload size limits, chunk size, and upload directory).
 
 ### Testing Infrastructure
 
-Dedicated HTTP streaming tests verify correct behavior:
-
-- **`http_streaming_test.rs`**: Comprehensive streaming functionality tests
-- **Size Threshold Testing**: Verify correct mode selection
-- **Resource Cleanup Testing**: Ensure temporary files are properly cleaned up
-- **Error Condition Testing**: Validate error recovery and resource cleanup
-- **Performance Testing**: Measure streaming performance across size ranges
+The test suite verifies correct mode selection (memory vs disk), cleanup behavior, and concurrency regressions under streaming load.
 
 ## Security Architecture
 
@@ -393,7 +336,7 @@ Dedicated HTTP streaming tests verify correct behavior:
    - Request timeouts to prevent resource exhaustion
    - Memory-efficient streaming for large file operations
    - Disk space checking before upload operations
-   - Thread pool management with configurable limits
+   - Tokio runtime worker threads and blocking-task isolation with configurable limits
 
 4. **Audit and Monitoring Layer**
    - Comprehensive request logging with unique IDs
@@ -480,17 +423,11 @@ Static Asset Request → Asset Router → Direct File Serving → CSS/JS Respons
 - **Performance Tests**: Load and stress testing scenarios
 
 ### Test Coverage by Component
-| Test File | Component Coverage | Test Count |
-|-----------|-------------------|------------|
-| `integration_test.rs` | Core server functionality | 19 |
-| `integration_test.rs` | Authentication and security | 6 |
-| `upload_integration_test.rs` | Upload system | 29 |
-| `multipart_test.rs` | Multipart parser | 7 |
-| `debug_upload_test.rs` | Edge cases and debugging | Variable |
-| Others | Template system, HTTP handling | 40+ |
+
+See TESTING_DOCUMENTATION.md and the `tests/` directory for the current test inventory and categories.
 
 ### Custom Test Infrastructure
-- **Native HTTP Client**: Pure Rust implementation for testing
+- **HTTP Clients**: Tests use a mix of raw TCP streams and lightweight HTTP clients
 - **Mock File Systems**: Temporary directories and file operations
 - **Concurrent Testing**: Multi-threaded test scenarios
 - **Security Validation**: Path traversal and injection testing
@@ -498,23 +435,8 @@ Static Asset Request → Asset Router → Direct File Serving → CSS/JS Respons
 ## Configuration System
 
 ### CLI Configuration
-```rust
-pub struct Cli {
-    directory: PathBuf,           // Required: directory to serve
-    listen: String,               // Default: "127.0.0.1"
-    port: u16,                    // Default: 8080
-    allowed_extensions: String,    // Default: "*.zip,*.txt"
-    threads: usize,               // Default: 8
-    chunk_size: usize,            // Default: 1024
-    verbose: bool,                // Default: false
-    detailed_logging: bool,       // Default: false
-    username: Option<String>,     // Optional: basic auth
-    password: Option<String>,     // Optional: basic auth
-    enable_upload: bool,          // Default: false
-    max_upload_size: u32,         // Default: 10240 (10GB)
-    upload_dir: Option<PathBuf>,  // Optional: custom upload dir
-}
-```
+
+The CLI surface (flags, defaults, and config precedence) is documented in CONFIGURATION_SYSTEM.md and the top-level README.md.
 
 ### Validation Pipeline
 1. **Parse-time Validation**: Clap value parsers and constraints
