@@ -156,6 +156,42 @@ fn test_successful_authentication() {
 }
 
 #[test]
+fn test_logout_button_present_when_auth_enabled() {
+    let server = setup_test_server(Some("user".to_string()), Some("pass".to_string()));
+    let client = Client::new();
+
+    let res = client
+        .get(format!("http://{}/", server.addr))
+        .basic_auth("user", Some("pass"))
+        .send()
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.text().unwrap();
+    assert!(body.contains("id=\"logoutBtn\""));
+    assert!(body.contains("/_irondrop/logout"));
+    assert!(body.contains("xhr.open('GET', '/_irondrop/logout'"));
+}
+
+#[test]
+fn test_logout_endpoint_forces_unauthorized_and_suppresses_logout_button() {
+    let server = setup_test_server(Some("user".to_string()), Some("pass".to_string()));
+    let client = Client::new();
+
+    let res = client
+        .get(format!("http://{}/_irondrop/logout", server.addr))
+        .basic_auth("user", Some("pass"))
+        .send()
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    assert!(res.headers().contains_key("www-authenticate"));
+    let content_type = res.headers().get("content-type").unwrap().to_str().unwrap();
+    assert!(content_type.contains("text/html"));
+    let body = res.text().unwrap();
+    assert!(body.contains("Logged Out"));
+    assert!(!body.contains("id=\"logoutBtn\""));
+}
+
+#[test]
 fn test_error_responses() {
     let server = setup_test_server(None, None);
     let client = Client::new();
