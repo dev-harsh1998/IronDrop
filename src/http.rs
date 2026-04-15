@@ -8,9 +8,9 @@ use crate::router::Router;
 use log::{debug, error, info, trace};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Maximum size for request body (10GB) to prevent memory exhaustion attacks
@@ -326,9 +326,11 @@ pub async fn handle_client_async<S>(
 
     match response_result {
         Ok(response) => {
-            info!(
-                "{} {} {} -> {}",
-                log_prefix, request_method, request_path, response.status_code
+            log_request_line(
+                &log_prefix,
+                &request_method,
+                &request_path,
+                response.status_code,
             );
             match send_response_async(&mut stream, response, &log_prefix).await {
                 Ok(body_bytes) => {
@@ -386,6 +388,35 @@ fn is_macos_finder_noise_path(path: &str) -> bool {
         }
     }
     false
+}
+
+fn log_request_line(log_prefix: &str, method: &str, path: &str, status_code: u16) {
+    let path_only = path.split('?').next().unwrap_or(path);
+    if is_monitor_path(path_only) {
+        monitor_request_log_rate_limited(method, status_code);
+        return;
+    }
+    info!("{log_prefix} {method} {path} -> {status_code}");
+}
+
+fn is_monitor_path(path: &str) -> bool {
+    path == "/monitor" || path.starts_with("/_irondrop/monitor")
+}
+
+fn monitor_request_log_rate_limited(method: &str, status_code: u16) {
+    static STATE: OnceLock<Mutex<(Instant, u64)>> = OnceLock::new();
+    let state = STATE.get_or_init(|| Mutex::new((Instant::now() - Duration::from_secs(3600), 0)));
+    if let Ok(mut st) = state.lock() {
+        st.1 += 1;
+        if st.0.elapsed() >= Duration::from_secs(45) {
+            info!(
+                "Monitor requests: method={method} status={status_code} count_since_last_log={}",
+                st.1
+            );
+            st.0 = Instant::now();
+            st.1 = 0;
+        }
+    }
 }
 
 async fn send_error_response_async<S>(stream: &mut S, error: AppError, log_prefix: &str)
