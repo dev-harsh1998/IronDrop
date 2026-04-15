@@ -1,4 +1,4 @@
-# IronDrop Architecture Documentation v2.7.0
+# IronDrop Architecture Documentation v2.7.1
 
 ## Overview
 
@@ -233,7 +233,7 @@ Request → Cache Check → Hit: Return Cached Results
 ## HTTP Layer Streaming Architecture
 
 ### Overview
-IronDrop v2.7.0 provides advanced HTTP layer streaming for efficient handling of large file uploads. The system automatically switches between memory-based and disk-based processing based on content size, providing optimal performance and resource utilization.
+IronDrop v2.7.1 provides advanced HTTP layer streaming for efficient handling of large file uploads. The system automatically switches between memory-based and disk-based processing based on content size, providing optimal performance and resource utilization.
 
 ### RequestBody Architecture
 
@@ -500,4 +500,4 @@ pub enum AppError {
 4. **CDN Integration**: Edge caching and global distribution
 5. **Database Caching**: Redis integration for session management
 
-This architecture documentation reflects the current state of IronDrop v2.7.0 and serves as a foundation for understanding the system's design principles, implementation details, and operational characteristics.
+This architecture documentation reflects the current state of IronDrop v2.7.1 and serves as a foundation for understanding the system's design principles, implementation details, and operational characteristics.
