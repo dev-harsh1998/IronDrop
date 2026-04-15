@@ -22,6 +22,7 @@ pub struct Config {
     pub enable_upload: bool,
     pub max_upload_size: u64,
     pub enable_webdav: bool,
+    pub disable_rate_limit: bool,
 
     // Security settings
     pub username: Option<String>,
@@ -63,6 +64,8 @@ impl Config {
 
         // Build configuration with precedence
         log::debug!("Building final configuration with precedence rules");
+        let enable_webdav = Self::get_enable_webdav(&ini, cli);
+        let disable_rate_limit = Self::get_disable_rate_limit(&ini, cli, enable_webdav);
         let config = Self {
             listen: Self::get_listen(&ini, cli),
             port: Self::get_port(&ini, cli),
@@ -72,7 +75,8 @@ impl Config {
 
             enable_upload: Self::get_enable_upload(&ini, cli),
             max_upload_size: Self::get_max_upload_size(&ini, cli),
-            enable_webdav: Self::get_enable_webdav(&ini, cli),
+            enable_webdav,
+            disable_rate_limit,
 
             username: Self::get_username(&ini, cli),
             password: Self::get_password(&ini, cli),
@@ -259,6 +263,23 @@ impl Config {
         false
     }
 
+    fn get_disable_rate_limit(ini: &IniConfig, cli: &Cli, webdav_enabled: bool) -> bool {
+        let requested = if let Some(disable) = cli.disable_rate_limit {
+            disable
+        } else {
+            ini.get_bool("webdav", "disable_rate_limit")
+                .unwrap_or_default()
+        };
+
+        if requested && !webdav_enabled {
+            log::warn!(
+                "Ignoring disable_rate_limit because WebDAV is disabled. Enable WebDAV for this flag to take effect."
+            );
+            return false;
+        }
+        requested
+    }
+
     fn get_username(ini: &IniConfig, cli: &Cli) -> Option<String> {
         // CLI argument
         if let Some(ref username) = cli.username {
@@ -359,6 +380,14 @@ impl Config {
         }
         log::info!("  WebDAV Enabled: {}", self.enable_webdav);
         log::info!(
+            "  WebDAV Rate Limiting: {}",
+            if self.disable_rate_limit {
+                "Disabled"
+            } else {
+                "Enabled"
+            }
+        );
+        log::info!(
             "  Authentication: {}",
             if self.username.is_some() {
                 "Enabled"
@@ -400,6 +429,7 @@ mod tests {
             enable_upload: None,
             max_upload_size: None,
             enable_webdav: None,
+            disable_rate_limit: None,
             config_file: None,
             log_dir: None,
             ssl_cert: None,
@@ -423,6 +453,7 @@ mod tests {
         assert!(!config.enable_upload);
         assert_eq!(config.max_upload_size, u64::MAX); // No limit with direct streaming
         assert!(!config.enable_webdav);
+        assert!(!config.disable_rate_limit);
         assert_eq!(config.username, None);
         assert_eq!(config.password, None);
         assert_eq!(config.allowed_extensions, vec!["*.zip", "*.txt"]);
@@ -448,6 +479,7 @@ max_upload_size = 5GB
 
 [webdav]
 enable_webdav = true
+disable_rate_limit = true
 
 [auth]
 username = testuser
@@ -476,6 +508,7 @@ detailed = false
         assert!(config.enable_upload);
         assert_eq!(config.max_upload_size, 5 * 1024 * 1024 * 1024);
         assert!(config.enable_webdav);
+        assert!(config.disable_rate_limit);
         assert_eq!(config.username, Some("testuser".to_string()));
         assert_eq!(config.password, Some("testpass".to_string()));
         assert_eq!(config.allowed_extensions, vec!["*.pdf", "*.doc"]);
@@ -554,6 +587,7 @@ enable_webdav = true
         assert!(config.enable_upload);
         assert_eq!(config.max_upload_size, 2 * 1024 * 1024 * 1024);
         assert!(config.enable_webdav);
+        assert!(!config.disable_rate_limit);
     }
 
     #[test]
@@ -626,5 +660,43 @@ directory = /some/other/path
 
         // Directory should always come from CLI
         assert_eq!(config.directory, temp_dir.path());
+    }
+
+    #[test]
+    fn test_disable_rate_limit_effective_when_webdav_enabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_file = temp_dir.path().join("test.ini");
+        let ini_content = r"
+[webdav]
+enable_webdav = true
+disable_rate_limit = true
+";
+        fs::write(&config_file, ini_content).unwrap();
+
+        let mut cli = create_test_cli(temp_dir.path().to_path_buf());
+        cli.config_file = Some(config_file.to_string_lossy().to_string());
+
+        let config = Config::load(&cli).unwrap();
+        assert!(config.enable_webdav);
+        assert!(config.disable_rate_limit);
+    }
+
+    #[test]
+    fn test_disable_rate_limit_ignored_when_webdav_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_file = temp_dir.path().join("test.ini");
+        let ini_content = r"
+[webdav]
+enable_webdav = false
+disable_rate_limit = true
+";
+        fs::write(&config_file, ini_content).unwrap();
+
+        let mut cli = create_test_cli(temp_dir.path().to_path_buf());
+        cli.config_file = Some(config_file.to_string_lossy().to_string());
+
+        let config = Config::load(&cli).unwrap();
+        assert!(!config.enable_webdav);
+        assert!(!config.disable_rate_limit);
     }
 }

@@ -31,11 +31,12 @@ If none exist, startup proceeds with defaults + CLI overrides.
 | Flag | Description |
 |------|-------------|
 | `--config-file <path>` | Explicit path to an INI configuration file. Errors if not found. |
+| `--disable-rate-limit <bool>` | Disable rate limiting, effective only when WebDAV is enabled. |
 | `--ssl-cert <path>` | Path to PEM certificate file for HTTPS. Requires `--ssl-key`. |
 | `--ssl-key <path>` | Path to PEM private key file for HTTPS. Requires `--ssl-cert`. |
 
 ### INI Format Features
-* Sections (`[server]`, `[upload]`, `[auth]`, `[logging]`, `[security]`, `[ssl]`)
+* Sections (`[server]`, `[upload]`, `[webdav]`, `[auth]`, `[logging]`, `[security]`, `[ssl]`)
 * Comments starting with `#` or `;`
 * Key = value pairs (whitespace tolerant)
 * Inline comments after values (`key = value  # note`)
@@ -55,6 +56,10 @@ directory = /data/files     # (Not used for precedence; directory always comes f
 enabled = true              # bool (true/false/yes/no/on/off/1/0)
 max_size = 5GB              # File size parser (B, KB, MB, GB, TB; decimals allowed: 1.5GB)
 directory = /data/uploads   # Optional override for upload target
+
+[webdav]
+enable_webdav = false       # bool
+disable_rate_limit = false  # bool (ignored unless enable_webdav = true)
 
 [auth]
 username = alice
@@ -103,6 +108,10 @@ port = 9090
 [upload]
 enabled = true
 max_size = 2.5GB
+
+[webdav]
+enable_webdav = true
+disable_rate_limit = false
 
 [auth]
 username = demo

@@ -31,6 +31,7 @@ fn create_test_cli_with_log_dir(log_dir: Option<PathBuf>) -> Cli {
         enable_upload: Some(false),
         max_upload_size: None,
         enable_webdav: Some(false),
+        disable_rate_limit: Some(false),
         config_file: None,
         log_dir,
         ssl_cert: None,
