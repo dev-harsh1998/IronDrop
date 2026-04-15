@@ -226,3 +226,37 @@ fn test_move_finder_temp_source_creates_missing_destination_parent() {
     assert!(!server.root.join(".AU.PCOUC").exists());
     assert!(server.root.join("missing/parent/.AU.PCOUC").exists());
 }
+
+#[test]
+fn test_move_into_missing_sb_container_creates_parent() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("TaiwanStuff")).unwrap();
+        let mut src = File::create(root.join("TaiwanStuff").join("a.txt")).unwrap();
+        write!(src, "x").unwrap();
+    });
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"MOVE").unwrap(),
+            format!("http://{}/TaiwanStuff/", server.addr),
+        )
+        .header(
+            "Destination",
+            format!(
+                "http://{}/TaiwanStuff.sb-1234-AbCdEf/TaiwanStuff/",
+                server.addr
+            ),
+        )
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert!(!server.root.join("TaiwanStuff").exists());
+    assert!(
+        server
+            .root
+            .join("TaiwanStuff.sb-1234-AbCdEf/TaiwanStuff")
+            .exists()
+    );
+}
