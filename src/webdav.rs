@@ -555,6 +555,12 @@ fn handle_copy_or_move(
         request.headers.get("host").map(String::as_str),
     )?;
     let destination = resolve_request_path(base_dir, &destination_request_path)?;
+    debug!(
+        "WebDAV {} destination_request_path={} destination={}",
+        if is_move { "MOVE" } else { "COPY" },
+        destination_request_path,
+        destination.display()
+    );
     if let Some(response) = lock_precondition_response(request, &destination) {
         debug!(
             "WebDAV {} blocked by destination lock destination={} status={}",
@@ -575,7 +581,7 @@ fn handle_copy_or_move(
         return Ok(status_response(409, "Conflict"));
     };
     if !parent.exists() || !parent.is_dir() {
-        if is_move && is_finder_archive_temp_path(&source) {
+        if is_move && is_finder_archive_related_move(&source, &destination_request_path) {
             debug!(
                 "WebDAV MOVE creating missing destination parent for Finder temp source={} destination_parent={}",
                 source.display(),
@@ -1637,6 +1643,22 @@ fn is_finder_archive_temp_path(path: &Path) -> bool {
         return false;
     };
     name.starts_with(".AU.") || name.starts_with(".ArchiveServiceTemp")
+}
+
+fn is_finder_archive_related_move(source: &Path, destination_request_path: &str) -> bool {
+    if is_finder_archive_temp_path(source) {
+        return true;
+    }
+    if destination_request_path.contains(".sb-") {
+        return true;
+    }
+    if destination_request_path.contains("/.AU.")
+        || destination_request_path.contains("/.ArchiveServiceTemp")
+    {
+        return true;
+    }
+    destination_request_path.contains("AUHelperService")
+        || destination_request_path.contains("A%20Document%20Being%20Saved%20By%20AUHelperService")
 }
 
 fn resolve_request_path_without_canonicalize(
