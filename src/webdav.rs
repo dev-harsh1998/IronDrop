@@ -108,6 +108,12 @@ fn handle_propfind(
 ) -> Result<Response, AppError> {
     let depth = parse_depth_header(&request.headers)?;
     let mode = parse_propfind_mode(request)?;
+    if crate::utils::is_macos_finder_noise_path(&request.path) {
+        let fast_path = resolve_request_path_without_canonicalize(base_dir, &request.path)?;
+        if !fast_path.exists() {
+            return Ok(status_response(404, "Not Found"));
+        }
+    }
     let target_path = resolve_request_path(base_dir, &request.path)?;
 
     if !target_path.exists() {
@@ -569,7 +575,16 @@ fn handle_copy_or_move(
         return Ok(status_response(409, "Conflict"));
     };
     if !parent.exists() || !parent.is_dir() {
-        return Ok(status_response(409, "Conflict"));
+        if is_move && is_finder_archive_temp_path(&source) {
+            debug!(
+                "WebDAV MOVE creating missing destination parent for Finder temp source={} destination_parent={}",
+                source.display(),
+                parent.display()
+            );
+            std::fs::create_dir_all(parent)?;
+        } else {
+            return Ok(status_response(409, "Conflict"));
+        }
     }
 
     let overwrite = request
@@ -1615,6 +1630,27 @@ fn status_response(status_code: u16, status_text: &str) -> Response {
         headers,
         body: ResponseBody::Text(String::new()),
     }
+}
+
+fn is_finder_archive_temp_path(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    name.starts_with(".AU.") || name.starts_with(".ArchiveServiceTemp")
+}
+
+fn resolve_request_path_without_canonicalize(
+    base_dir: &Path,
+    request_path: &str,
+) -> Result<PathBuf, AppError> {
+    let path_only = request_path.split('?').next().unwrap_or(request_path);
+    let requested_path = PathBuf::from(path_only.strip_prefix('/').unwrap_or(path_only));
+    let safe_path = normalize_relative_path(&requested_path)?;
+    let full_path = base_dir.join(safe_path);
+    if !full_path.starts_with(base_dir) {
+        return Err(AppError::Forbidden);
+    }
+    Ok(full_path)
 }
 
 fn resolve_request_path(base_dir: &Path, request_path: &str) -> Result<PathBuf, AppError> {
