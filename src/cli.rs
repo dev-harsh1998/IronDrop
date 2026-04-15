@@ -68,6 +68,10 @@ pub struct Cli {
     #[arg(long)]
     pub enable_webdav: Option<bool>,
 
+    /// Disable request rate limiting. Effective only when WebDAV is enabled.
+    #[arg(long)]
+    pub disable_rate_limit: Option<bool>,
+
     /// Configuration file path - Specify a custom configuration file (INI format). If not provided, looks for irondrop.ini in current directory or ~/.config/irondrop/config.ini 🛠️
     #[arg(long, value_parser = validate_config_file)]
     pub config_file: Option<String>,
@@ -222,6 +226,7 @@ mod tests {
             enable_upload: Some(false),
             max_upload_size: Some(100),
             enable_webdav: Some(false),
+            disable_rate_limit: Some(false),
             config_file: None,
             log_dir: None,
             ssl_cert: None,
@@ -260,6 +265,7 @@ mod tests {
             enable_upload: Some(true),
             max_upload_size: Some(100),
             enable_webdav: Some(false),
+            disable_rate_limit: Some(false),
             config_file: None,
             log_dir: None,
             ssl_cert: None,

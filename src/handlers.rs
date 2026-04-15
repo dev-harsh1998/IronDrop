@@ -572,6 +572,8 @@ pub fn handle_file_request(
             enable_upload: cli.enable_upload.unwrap_or(false),
             max_upload_size: cli.max_upload_size_bytes(),
             enable_webdav: cli.enable_webdav.unwrap_or(false),
+            disable_rate_limit: cli.enable_webdav.unwrap_or(false)
+                && cli.disable_rate_limit.unwrap_or(false),
             username: cli.username.clone(),
             password: cli.password.clone(),
             allowed_extensions: cli

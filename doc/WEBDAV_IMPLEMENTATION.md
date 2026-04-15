@@ -38,7 +38,9 @@ WebDAV methods are only processed when WebDAV is enabled in config/CLI. If disab
 Configuration controls:
 
 - CLI: `--enable-webdav true|false`
+- CLI: `--disable-rate-limit true|false` (effective only when WebDAV is enabled)
 - INI: `[webdav] enable_webdav = true|false` (also accepted under `[server]`)
+- INI: `[webdav] disable_rate_limit = true|false` (ignored when WebDAV is disabled)
 
 ## 3) Core request flow
 
@@ -139,7 +141,7 @@ If a client reports odd behavior, check in this order:
 
 1. WebDAV flag enabled (`--enable-webdav` / INI)
 2. auth result (401s in log)
-3. rate-limiter behavior (burst-heavy clients can be throttled)
+3. rate-limiter behavior (burst-heavy clients can be throttled unless WebDAV `disable_rate_limit` is enabled)
 4. lock token flow (`LOCK`/`If`/`UNLOCK`)
 5. method/status pair in logs (`PROPFIND -> 207`, `LOCK -> 201`, etc.)
 

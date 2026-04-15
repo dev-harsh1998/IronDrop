@@ -1107,6 +1107,7 @@ pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
         enable_upload: Some(config.enable_upload),
         max_upload_size: Some(config.max_upload_size / (1024 * 1024)), // Convert bytes back to MB
         enable_webdav: Some(config.enable_webdav),
+        disable_rate_limit: Some(config.disable_rate_limit),
         config_file: None, // Not needed for server execution
         log_dir: config.log_dir,
         ssl_cert: config.ssl_cert,
@@ -1184,6 +1185,16 @@ async fn run_server_async(
     let is_https = tls_acceptor.is_some();
 
     let webdav_enabled = cli.enable_webdav.unwrap_or(false);
+    let disable_rate_limit_requested = cli.disable_rate_limit.unwrap_or(false);
+    let rate_limit_disabled = webdav_enabled && disable_rate_limit_requested;
+    if disable_rate_limit_requested && !webdav_enabled {
+        warn!(
+            "Ignoring --disable-rate-limit because WebDAV is disabled. Enable WebDAV for it to take effect."
+        );
+    }
+    if rate_limit_disabled {
+        info!("WebDAV rate limiting is disabled by configuration.");
+    }
     let (rate_limit_per_minute, concurrent_per_ip) = if webdav_enabled {
         (3500, 128)
     } else {
@@ -1316,6 +1327,7 @@ async fn run_server_async(
                         password.clone(),
                         chunk_size,
                         rate_limiter.clone(),
+                        rate_limit_disabled,
                         stats.clone(),
                         cli_arc.clone(),
                         shared_router.clone(),
@@ -1334,6 +1346,7 @@ async fn run_server_async(
                 password.clone(),
                 chunk_size,
                 rate_limiter.clone(),
+                rate_limit_disabled,
                 stats.clone(),
                 cli_arc.clone(),
                 shared_router.clone(),
@@ -1356,13 +1369,14 @@ fn handle_connection(
     password: Arc<Option<String>>,
     chunk_size: usize,
     rate_limiter: Arc<RateLimiter>,
+    rate_limit_disabled: bool,
     stats: Arc<ServerStats>,
     cli_config: Arc<Cli>,
     router: Arc<Router>,
     tls_acceptor: Option<tokio_rustls::TlsAcceptor>,
 ) {
     let client_ip = peer_addr.ip();
-    if !rate_limiter.check_rate_limit(client_ip) {
+    if !rate_limit_disabled && !rate_limiter.check_rate_limit(client_ip) {
         return;
     }
 
@@ -1404,7 +1418,9 @@ fn handle_connection(
             Ok(())
         };
 
-        rate_limiter.release_connection(client_ip);
+        if !rate_limit_disabled {
+            rate_limiter.release_connection(client_ip);
+        }
         let _ = result;
     });
 }

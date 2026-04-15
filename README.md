@@ -189,6 +189,7 @@ IronDrop offers extensive customization through command-line arguments:
 | `-p, --port` | Port number (default: 8080) | `-p 3000` |
 | `--enable-upload` | Enable file uploads | `--enable-upload true` |
 | `--enable-webdav` | Enable WebDAV methods (`OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`) | `--enable-webdav true` |
+| `--disable-rate-limit` | Disable rate limiting **only when WebDAV is enabled** | `--enable-webdav true --disable-rate-limit true` |
 | `--username/--password` | Basic authentication | `--username admin --password secret` |
 | `-a, --allowed-extensions` | Restrict file types | `-a "*.pdf,*.doc,*.zip"` |
 | `-t, --threads` | Tokio runtime worker threads (default: 8) | `-t 16` |
@@ -216,7 +217,10 @@ WebDAV can also be enabled in config:
 ```ini
 [webdav]
 enable_webdav = true
+disable_rate_limit = false
 ```
+
+Note: `disable_rate_limit` is ignored unless WebDAV is enabled.
 
 Quick CLI example:
 

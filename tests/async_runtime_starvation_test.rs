@@ -40,6 +40,7 @@ fn start_server(dir: std::path::PathBuf, threads: usize) -> TestServer {
         enable_upload: Some(false),
         max_upload_size: Some(10240),
         enable_webdav: Some(false),
+        disable_rate_limit: Some(false),
         config_file: None,
         log_dir: None,
         ssl_cert: None,

@@ -23,6 +23,7 @@ fn create_test_cli(upload_dir: PathBuf) -> Cli {
         enable_upload: Some(true),
         max_upload_size: Some(100), // 100MB
         enable_webdav: Some(false),
+        disable_rate_limit: Some(false),
         config_file: None,
         log_dir: None,
         ssl_cert: None,
