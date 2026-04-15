@@ -9,7 +9,9 @@
 use crate::error::AppError;
 use crate::http::Request;
 use base64::Engine;
-use log::{debug, trace};
+use log::{trace, warn};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 /// Middleware trait – middlewares can inspect a request before it reaches a handler.
 /// Returning `Ok(())` continues the chain; returning `Err(AppError)` aborts processing.
@@ -47,14 +49,17 @@ impl AuthMiddleware {
             return true; // auth disabled
         };
 
-        debug!("Authentication required - checking credentials");
-
         let Some(header) = auth_header else {
-            debug!("No Authorization header provided");
+            auth_failure_rate_limited("missing authorization header");
             return false;
         };
 
-        constant_time_eq_bytes(header.as_bytes(), expected)
+        if constant_time_eq_bytes(header.as_bytes(), expected) {
+            true
+        } else {
+            auth_failure_rate_limited("invalid credentials");
+            false
+        }
     }
 }
 
@@ -79,4 +84,22 @@ fn constant_time_eq_bytes(a: &[u8], b: &[u8]) -> bool {
         diff |= x ^ y;
     }
     diff == 0
+}
+
+fn auth_failure_rate_limited(reason: &'static str) {
+    static STATE: OnceLock<Mutex<(Instant, u64)>> = OnceLock::new();
+    let state = STATE.get_or_init(|| Mutex::new((Instant::now() - Duration::from_secs(3600), 0)));
+    if let Ok(mut st) = state.lock() {
+        st.1 += 1;
+        if st.0.elapsed() >= Duration::from_secs(20) {
+            warn!(
+                "Authentication failed ({reason}). failures_since_last_log={}",
+                st.1
+            );
+            st.0 = Instant::now();
+            st.1 = 0;
+        }
+    } else {
+        warn!("Authentication failed ({reason}).");
+    }
 }
