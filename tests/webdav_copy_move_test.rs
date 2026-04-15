@@ -200,3 +200,29 @@ fn test_copy_path_only_destination_is_bad_request() {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
+
+#[test]
+fn test_move_finder_temp_source_creates_missing_destination_parent() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join(".AU.PCOUC")).unwrap();
+        let mut src = File::create(root.join(".AU.PCOUC").join("a.txt")).unwrap();
+        write!(src, "tmp").unwrap();
+    });
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"MOVE").unwrap(),
+            format!("http://{}/.AU.PCOUC/", server.addr),
+        )
+        .header(
+            "Destination",
+            format!("http://{}/missing/parent/.AU.PCOUC/", server.addr),
+        )
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    assert!(!server.root.join(".AU.PCOUC").exists());
+    assert!(server.root.join("missing/parent/.AU.PCOUC").exists());
+}

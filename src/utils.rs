@@ -201,3 +201,36 @@ fn normalize_path(path: &Path) -> Result<PathBuf, AppError> {
 pub fn is_hidden_file(filename: &str) -> bool {
     filename.starts_with("._") || filename.starts_with(".") || filename == ".DS_Store"
 }
+
+pub fn is_macos_finder_noise_path(path: &str) -> bool {
+    let path_only = path.split('?').next().unwrap_or(path);
+    for component in path_only.split('/') {
+        if component.is_empty() {
+            continue;
+        }
+        if component == ".DS_Store" || component.starts_with("._") {
+            return true;
+        }
+        if component.starts_with(".AU.") || component.starts_with(".ArchiveServiceTemp") {
+            return true;
+        }
+        if matches!(
+            component,
+            ".AppleDouble"
+                | ".DocumentRevisions-V100"
+                | ".Spotlight-V100"
+                | ".Trashes"
+                | ".TemporaryItems"
+                | ".fseventsd"
+                | ".metadata_never_index"
+                | ".metadata_never_index_unless_rootfs"
+                | ".metadata_direct_scope_only"
+                | ".ql_disablethumbnails"
+                | ".ql_disablecache"
+                | ".hidden"
+        ) {
+            return true;
+        }
+    }
+    false
+}

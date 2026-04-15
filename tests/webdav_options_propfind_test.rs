@@ -163,6 +163,23 @@ fn test_propfind_depth_zero_on_file_returns_multistatus() {
 }
 
 #[test]
+fn test_propfind_finder_probe_missing_returns_not_found_fast() {
+    let server = setup_test_server_with_tree_and_webdav(|_root| {}, true);
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"PROPFIND").unwrap(),
+            format!("http://{}/._missing", server.addr),
+        )
+        .header("Depth", "0")
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[test]
 fn test_propfind_depth_one_on_collection_includes_children() {
     let server = setup_test_server_with_tree(|root| {
         create_dir_all(root.join("dav").join("nested")).unwrap();

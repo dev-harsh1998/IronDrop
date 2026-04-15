@@ -330,3 +330,75 @@ fn test_monitor_ignores_macos_metadata_propfind_noise_from_error_counter() {
     let errors2 = extract_errors(&after);
     assert_eq!(errors2, errors1);
 }
+
+#[test]
+fn test_monitor_ignores_archive_service_temp_propfind_noise_from_error_counter() {
+    let dir = tempdir().unwrap();
+
+    let cli = Cli {
+        directory: dir.path().to_path_buf(),
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(0),
+        allowed_extensions: Some("*".to_string()),
+        threads: Some(4),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
+        username: None,
+        password: None,
+        enable_upload: Some(false),
+        max_upload_size: Some(10240),
+        enable_webdav: Some(true),
+        disable_rate_limit: Some(false),
+        config_file: None,
+        log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
+    };
+
+    let (shutdown_tx, shutdown_rx) = mpsc::channel();
+    let (addr_tx, addr_rx) = mpsc::channel();
+    let handle = thread::spawn(move || {
+        if let Err(e) = run_server(cli, Some(shutdown_rx), Some(addr_tx)) {
+            eprintln!("Server thread failed: {e}");
+        }
+    });
+    let addr = addr_rx.recv().unwrap();
+    let server = TestServer {
+        addr,
+        shutdown_tx,
+        handle: Some(handle),
+        _temp_dir: dir,
+    };
+
+    let client = Client::new();
+    let baseline = client
+        .get(format!("http://{}/_irondrop/monitor?json=1", server.addr))
+        .send()
+        .unwrap()
+        .text()
+        .unwrap();
+    let errors1 = extract_errors(&baseline);
+
+    let resp = client
+        .request(
+            Method::from_bytes(b"PROPFIND").unwrap(),
+            format!(
+                "http://{}/.ArchiveServiceTemp.sb-12345-AbCdEf/Contents",
+                server.addr
+            ),
+        )
+        .header("Depth", "0")
+        .send()
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+    let after = client
+        .get(format!("http://{}/_irondrop/monitor?json=1", server.addr))
+        .send()
+        .unwrap()
+        .text()
+        .unwrap();
+    let errors2 = extract_errors(&after);
+    assert_eq!(errors2, errors1);
+}

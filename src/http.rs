@@ -348,7 +348,7 @@ pub async fn handle_client_async<S>(
         Err(e) => {
             let ignore_error_for_stats = matches!(e, AppError::NotFound)
                 && request_method == "PROPFIND"
-                && is_macos_finder_noise_path(&request_path);
+                && crate::utils::is_macos_finder_noise_path(&request_path);
             send_error_response_async(&mut stream, e, &log_prefix).await;
             if let Some(stats) = stats {
                 stats.record_request(ignore_error_for_stats, 0);
@@ -359,35 +359,6 @@ pub async fn handle_client_async<S>(
     if let Some(path) = cleanup_path {
         let _ = tokio::fs::remove_file(path).await;
     }
-}
-
-fn is_macos_finder_noise_path(path: &str) -> bool {
-    for component in path.split('/') {
-        if component.is_empty() {
-            continue;
-        }
-        if component == ".DS_Store" || component.starts_with("._") {
-            return true;
-        }
-        if matches!(
-            component,
-            ".AppleDouble"
-                | ".DocumentRevisions-V100"
-                | ".Spotlight-V100"
-                | ".Trashes"
-                | ".TemporaryItems"
-                | ".fseventsd"
-                | ".metadata_never_index"
-                | ".metadata_never_index_unless_rootfs"
-                | ".metadata_direct_scope_only"
-                | ".ql_disablethumbnails"
-                | ".ql_disablecache"
-                | ".hidden"
-        ) {
-            return true;
-        }
-    }
-    false
 }
 
 fn log_request_line(log_prefix: &str, method: &str, path: &str, status_code: u16) {
