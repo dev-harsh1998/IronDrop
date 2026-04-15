@@ -125,4 +125,4 @@ done
 Monitoring schema may evolve with additive fields. Consumers should ignore unknown keys. Breaking changes (renames/removals) will bump minor version >= 2.x.
 
 ---
-*Monitoring Guide for IronDrop v2.7.0*
+*Monitoring Guide for IronDrop v2.7.1*

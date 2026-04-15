@@ -1,6 +1,6 @@
-# IronDrop Template & UI System Documentation (v2.7.0)
+# IronDrop Template & UI System Documentation (v2.7.1)
 
-**Status**: Production ready (v2.7.0)
+**Status**: Production ready (v2.7.1)
 
 **Audience**: Backend & Frontend Developers, UI/UX Engineers, Integrators
 
@@ -340,6 +340,6 @@ let err_html = engine.render_error_page(404, "Not Found", get_error_description(
 
 ---
 
-*This document is part of the IronDrop v2.7.0 documentation suite and will evolve with future template system enhancements.*
+*This document is part of the IronDrop v2.7.1 documentation suite and will evolve with future template system enhancements.*
 
 Return to documentation index: [./README.md](./README.md)
