@@ -67,13 +67,13 @@ const DAV_NAMESPACE: &str = "DAV:";
 pub fn handle_webdav_request(
     request: &Request,
     base_dir: &Path,
-    allowed_extensions: &[glob::Pattern],
+    _allowed_extensions: &[glob::Pattern],
 ) -> Result<Response, AppError> {
     match request.method.as_str() {
         "OPTIONS" => Ok(build_options_response()),
-        "PROPFIND" => handle_propfind(request, base_dir, allowed_extensions),
+        "PROPFIND" => handle_propfind(request, base_dir),
         "MKCOL" => handle_mkcol(request, base_dir),
-        "PUT" => handle_put(request, base_dir, allowed_extensions),
+        "PUT" => handle_put(request, base_dir),
         "DELETE" => handle_delete(request, base_dir),
         "COPY" => handle_copy_or_move(request, base_dir, false),
         "MOVE" => handle_copy_or_move(request, base_dir, true),
@@ -101,11 +101,7 @@ fn build_options_response() -> Response {
     }
 }
 
-fn handle_propfind(
-    request: &Request,
-    base_dir: &Path,
-    allowed_extensions: &[glob::Pattern],
-) -> Result<Response, AppError> {
+fn handle_propfind(request: &Request, base_dir: &Path) -> Result<Response, AppError> {
     let depth = parse_depth_header(&request.headers)?;
     let mode = parse_propfind_mode(request)?;
     if crate::utils::is_macos_finder_noise_path(&request.path) {
@@ -120,14 +116,6 @@ fn handle_propfind(
         return Err(AppError::NotFound);
     }
 
-    if target_path.is_file()
-        && !allowed_extensions
-            .iter()
-            .any(|pattern| pattern.matches_path(&target_path))
-    {
-        return Err(AppError::Forbidden);
-    }
-
     if depth == DavDepth::Infinity && target_path.is_dir() {
         return Ok(propfind_finite_depth_error_response());
     }
@@ -137,13 +125,6 @@ fn handle_propfind(
         for entry in std::fs::read_dir(&target_path)? {
             let entry = entry?;
             let entry_path = entry.path();
-            if entry_path.is_file()
-                && !allowed_extensions
-                    .iter()
-                    .any(|pattern| pattern.matches_path(&entry_path))
-            {
-                continue;
-            }
             resources.push(entry_path);
         }
     }
@@ -411,11 +392,7 @@ fn handle_mkcol(request: &Request, base_dir: &Path) -> Result<Response, AppError
     Ok(status_response(201, "Created"))
 }
 
-fn handle_put(
-    request: &Request,
-    base_dir: &Path,
-    allowed_extensions: &[glob::Pattern],
-) -> Result<Response, AppError> {
+fn handle_put(request: &Request, base_dir: &Path) -> Result<Response, AppError> {
     let _op_guard = op_guard()
         .lock()
         .map_err(|_| AppError::InternalServerError("dav operation guard poisoned".to_string()))?;
@@ -441,13 +418,6 @@ fn handle_put(
     }
     if target_path.exists() && target_path.is_dir() {
         return Ok(status_response(405, "Method Not Allowed"));
-    }
-
-    if !allowed_extensions
-        .iter()
-        .any(|pattern| pattern.matches_path(&target_path))
-    {
-        return Err(AppError::Forbidden);
     }
 
     let existed = target_path.exists();
