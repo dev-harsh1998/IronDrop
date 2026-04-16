@@ -70,6 +70,61 @@ where
     }
 }
 
+fn setup_test_server_with_tree_webdav_and_extensions<F>(
+    populate: F,
+    enable_webdav: bool,
+    allowed_extensions: &str,
+) -> TestServer
+where
+    F: FnOnce(&std::path::Path),
+{
+    let dir = tempdir().unwrap();
+    populate(dir.path());
+
+    let file_path = dir.path().join("test.txt");
+    let mut file = File::create(&file_path).unwrap();
+    writeln!(file, "hello from test file").unwrap();
+
+    let cli = Cli {
+        directory: dir.path().to_path_buf(),
+        listen: Some("127.0.0.1".to_string()),
+        port: Some(0),
+        allowed_extensions: Some(allowed_extensions.to_string()),
+        threads: Some(4),
+        chunk_size: Some(1024),
+        verbose: Some(false),
+        detailed_logging: Some(false),
+        username: None,
+        password: None,
+        enable_upload: Some(false),
+        max_upload_size: Some(10240),
+        enable_webdav: Some(enable_webdav),
+        disable_rate_limit: Some(false),
+        config_file: None,
+        log_dir: None,
+        ssl_cert: None,
+        ssl_key: None,
+    };
+
+    let (shutdown_tx, shutdown_rx) = mpsc::channel();
+    let (addr_tx, addr_rx) = mpsc::channel();
+
+    let server_handle = thread::spawn(move || {
+        if let Err(e) = run_server(cli, Some(shutdown_rx), Some(addr_tx)) {
+            eprintln!("Server thread failed: {e}");
+        }
+    });
+
+    let server_addr = addr_rx.recv().unwrap();
+
+    TestServer {
+        addr: server_addr,
+        shutdown_tx,
+        handle: Some(server_handle),
+        _temp_dir: dir,
+    }
+}
+
 fn setup_test_server_with_tree<F>(populate: F) -> TestServer
 where
     F: FnOnce(&std::path::Path),
@@ -227,4 +282,74 @@ fn test_propfind_infinite_depth_rejected_with_finite_depth_precondition() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     let body = response.text().unwrap();
     assert!(body.contains("propfind-finite-depth"));
+}
+
+#[test]
+fn test_propfind_includes_extensionless_files_even_when_download_filter_is_star_dot_star() {
+    let server = setup_test_server_with_tree_webdav_and_extensions(
+        |root| {
+            create_dir_all(root.join("dav")).unwrap();
+            let mut extless = File::create(root.join("dav").join("call_001")).unwrap();
+            writeln!(extless, "voice log").unwrap();
+            let mut dotted = File::create(root.join("dav").join("call_001.txt")).unwrap();
+            writeln!(dotted, "voice log txt").unwrap();
+        },
+        true,
+        "*.*",
+    );
+    let client = Client::new();
+    let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>"#;
+
+    let response = client
+        .request(
+            Method::from_bytes(b"PROPFIND").unwrap(),
+            format!("http://{}/dav/", server.addr),
+        )
+        .header("Depth", "1")
+        .header("Content-Type", "application/xml")
+        .body(body.to_string())
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 207);
+    let xml = response.text().unwrap();
+    assert!(xml.contains("<D:href>/dav/call_001</D:href>"));
+    assert!(xml.contains("<D:href>/dav/call_001.txt</D:href>"));
+}
+
+#[test]
+fn test_put_allows_extensionless_files_even_when_download_filter_is_star_dot_star() {
+    let server = setup_test_server_with_tree_webdav_and_extensions(
+        |root| {
+            create_dir_all(root.join("dav")).unwrap();
+        },
+        true,
+        "*.*",
+    );
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"PUT").unwrap(),
+            format!("http://{}/dav/upload_no_ext", server.addr),
+        )
+        .body("uploaded via webdav".to_string())
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let propfind = client
+        .request(
+            Method::from_bytes(b"PROPFIND").unwrap(),
+            format!("http://{}/dav/upload_no_ext", server.addr),
+        )
+        .header("Depth", "0")
+        .header("Content-Type", "application/xml")
+        .body(r#"<?xml version="1.0" encoding="utf-8"?><D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>"#)
+        .send()
+        .unwrap();
+
+    assert_eq!(propfind.status().as_u16(), 207);
 }
