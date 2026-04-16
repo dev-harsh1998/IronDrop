@@ -376,7 +376,11 @@ fn is_monitor_path(path: &str) -> bool {
 
 fn monitor_request_log_rate_limited(method: &str, status_code: u16) {
     static STATE: OnceLock<Mutex<(Instant, u64)>> = OnceLock::new();
-    let state = STATE.get_or_init(|| Mutex::new((Instant::now() - Duration::from_secs(3600), 0)));
+    let state = STATE.get_or_init(|| {
+        let now = Instant::now();
+        let initial = now.checked_sub(Duration::from_secs(3600)).unwrap_or(now);
+        Mutex::new((initial, 0))
+    });
     if let Ok(mut st) = state.lock() {
         st.1 += 1;
         if st.0.elapsed() >= Duration::from_secs(45) {
