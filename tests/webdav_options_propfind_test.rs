@@ -154,14 +154,33 @@ fn test_options_advertises_webdav_v1_capability() {
     assert_eq!(response.status(), StatusCode::OK);
     let dav = response.headers().get("dav").unwrap().to_str().unwrap();
     assert!(dav.contains('1'));
+    assert!(dav.contains('2'));
+
+    let ms_author_via = response
+        .headers()
+        .get("ms-author-via")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(ms_author_via, "DAV");
 
     let allow = response.headers().get("allow").unwrap().to_str().unwrap();
-    assert!(allow.contains("PROPFIND"));
-    assert!(allow.contains("MKCOL"));
-    assert!(allow.contains("PUT"));
-    assert!(allow.contains("DELETE"));
-    assert!(allow.contains("COPY"));
-    assert!(allow.contains("MOVE"));
+    for method in [
+        "OPTIONS",
+        "GET",
+        "HEAD",
+        "PROPFIND",
+        "PROPPATCH",
+        "MKCOL",
+        "PUT",
+        "DELETE",
+        "COPY",
+        "MOVE",
+        "LOCK",
+        "UNLOCK",
+    ] {
+        assert!(allow.contains(method), "Allow header missing {method}");
+    }
 }
 
 #[test]
@@ -264,8 +283,12 @@ fn test_propfind_depth_one_on_collection_includes_children() {
 }
 
 #[test]
-fn test_propfind_infinite_depth_rejected_with_finite_depth_precondition() {
-    let server = setup_test_server_with_tree(|_| {});
+fn test_propfind_infinite_depth_includes_recursive_descendants() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("dir").join("nested").join("deeper")).unwrap();
+        let mut f = File::create(root.join("dir").join("nested").join("item.txt")).unwrap();
+        writeln!(f, "child").unwrap();
+    });
     let client = Client::new();
 
     let response = client
@@ -279,9 +302,31 @@ fn test_propfind_infinite_depth_rejected_with_finite_depth_precondition() {
         .send()
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status().as_u16(), 207);
     let body = response.text().unwrap();
-    assert!(body.contains("propfind-finite-depth"));
+    assert!(body.contains("<D:href>/dir/</D:href>"));
+    assert!(body.contains("<D:href>/dir/nested/</D:href>"));
+    assert!(body.contains("<D:href>/dir/nested/item.txt</D:href>"));
+    assert!(body.contains("<D:href>/dir/nested/deeper/</D:href>"));
+}
+
+#[test]
+fn test_propfind_invalid_depth_is_bad_request() {
+    let server = setup_test_server_with_tree(|_| {});
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"PROPFIND").unwrap(),
+            format!("http://{}/test.txt", server.addr),
+        )
+        .header("Depth", "2")
+        .header("Content-Type", "application/xml")
+        .body(r#"<?xml version="1.0" encoding="utf-8"?><D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>"#)
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[test]
