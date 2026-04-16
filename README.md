@@ -38,7 +38,7 @@ IronDrop includes an RFC 4918-focused implementation. The WebDAV core engine is 
 - Supported methods: `OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`
 - WebDAV is feature-gated and disabled by default; enable explicitly with `--enable-webdav true`
 - Capability headers: `DAV: 1,2`, `Allow`, `MS-Author-Via`
-- `PROPFIND`: `allprop`, `propname`, named `prop`, per-property `propstat` grouping (`200`/`404`), and finite-depth refusal (`403` + `propfind-finite-depth`)
+- `PROPFIND`: `allprop`, `propname`, named `prop`, per-property `propstat` grouping (`200`/`404`), with `Depth: 0`, `1`, and recursive `infinity`
 - `PROPPATCH`: dead-property `set`/`remove` with `207 Multi-Status` results
 - Locking: exclusive write locks, lock refresh, `If` header token evaluation (including `Not` conditions), and token-gated write preconditions
 - Tree operations: lock-aware `DELETE` multistatus behavior (`207` with `423`/`424` where applicable)

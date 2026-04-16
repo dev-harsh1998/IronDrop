@@ -3,7 +3,6 @@
 use irondrop::cli::Cli;
 use irondrop::server::run_server;
 use reqwest::Method;
-use reqwest::StatusCode;
 use reqwest::blocking::Client;
 use std::fs::{File, create_dir_all};
 use std::io::Write;
@@ -138,9 +137,10 @@ fn test_propfind_named_unknown_property_returns_404_propstat() {
 }
 
 #[test]
-fn test_propfind_depth_infinity_on_collection_is_finite_depth_error() {
+fn test_propfind_depth_infinity_on_collection_includes_recursive_descendants() {
     let server = setup_test_server_with_tree(|root| {
         create_dir_all(root.join("dir").join("nested")).unwrap();
+        create_dir_all(root.join("dir").join("nested").join("leaf")).unwrap();
         let mut file = File::create(root.join("dir").join("nested").join("x.txt")).unwrap();
         writeln!(file, "x").unwrap();
     });
@@ -159,10 +159,69 @@ fn test_propfind_depth_infinity_on_collection_is_finite_depth_error() {
         .send()
         .unwrap();
 
-    // RFC-compliant finite-depth refusal should be 403 with DAV precondition body.
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status().as_u16(), 207);
     let xml = response.text().unwrap();
-    assert!(xml.contains("propfind-finite-depth"));
+    assert!(xml.contains("<D:href>/dir/</D:href>"));
+    assert!(xml.contains("<D:href>/dir/nested/</D:href>"));
+    assert!(xml.contains("<D:href>/dir/nested/x.txt</D:href>"));
+    assert!(xml.contains("<D:href>/dir/nested/leaf/</D:href>"));
+}
+
+#[test]
+fn test_propfind_missing_depth_defaults_to_infinity_on_collection() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("dir").join("nested")).unwrap();
+        let mut file = File::create(root.join("dir").join("nested").join("x.txt")).unwrap();
+        writeln!(file, "x").unwrap();
+    });
+    let client = Client::new();
+    let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>"#;
+
+    let response = client
+        .request(
+            Method::from_bytes(b"PROPFIND").unwrap(),
+            format!("http://{}/dir/", server.addr),
+        )
+        .header("Content-Type", "application/xml")
+        .body(body.to_string())
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 207);
+    let xml = response.text().unwrap();
+    assert!(xml.contains("<D:href>/dir/</D:href>"));
+    assert!(xml.contains("<D:href>/dir/nested/</D:href>"));
+    assert!(xml.contains("<D:href>/dir/nested/x.txt</D:href>"));
+}
+
+#[test]
+fn test_propfind_depth_header_is_case_insensitive_for_infinity() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("dir").join("nested")).unwrap();
+        let mut file = File::create(root.join("dir").join("nested").join("x.txt")).unwrap();
+        writeln!(file, "x").unwrap();
+    });
+    let client = Client::new();
+    let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:"><D:allprop/></D:propfind>"#;
+
+    let response = client
+        .request(
+            Method::from_bytes(b"PROPFIND").unwrap(),
+            format!("http://{}/dir/", server.addr),
+        )
+        .header("Depth", "InFiNiTy")
+        .header("Content-Type", "application/xml")
+        .body(body.to_string())
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status().as_u16(), 207);
+    let xml = response.text().unwrap();
+    assert!(xml.contains("<D:href>/dir/</D:href>"));
+    assert!(xml.contains("<D:href>/dir/nested/</D:href>"));
+    assert!(xml.contains("<D:href>/dir/nested/x.txt</D:href>"));
 }
 
 #[test]

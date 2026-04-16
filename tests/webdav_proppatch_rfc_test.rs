@@ -312,6 +312,58 @@ fn test_proppatch_protected_live_property_returns_403_propstat() {
 }
 
 #[test]
+fn test_proppatch_is_atomic_when_any_instruction_fails() {
+    let server = setup_test_server_with_tree(|root| {
+        let mut file = File::create(root.join("sample.txt")).unwrap();
+        writeln!(file, "hello").unwrap();
+    });
+    let client = Client::new();
+
+    let body = r#"<?xml version="1.0" encoding="utf-8"?>
+<D:propertyupdate xmlns:D="DAV:">
+  <D:set>
+    <D:prop>
+      <Z:favorite xmlns:Z="urn:test">blue</Z:favorite>
+      <D:getetag>"override"</D:getetag>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>"#;
+    let resp = client
+        .request(
+            Method::from_bytes(b"PROPPATCH").unwrap(),
+            format!("http://{}/sample.txt", server.addr),
+        )
+        .header("Content-Type", "application/xml")
+        .body(body.to_string())
+        .send()
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 207);
+    let xml = resp.text().unwrap();
+    assert!(xml.contains("HTTP/1.1 403 Forbidden"));
+    assert!(xml.contains("HTTP/1.1 424 Failed Dependency"));
+
+    let propfind_body = r#"<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:">
+  <D:prop>
+    <Z:favorite xmlns:Z="urn:test"/>
+  </D:prop>
+</D:propfind>"#;
+    let read_resp = client
+        .request(
+            Method::from_bytes(b"PROPFIND").unwrap(),
+            format!("http://{}/sample.txt", server.addr),
+        )
+        .header("Depth", "0")
+        .header("Content-Type", "application/xml")
+        .body(propfind_body.to_string())
+        .send()
+        .unwrap();
+    assert_eq!(read_resp.status().as_u16(), 207);
+    let read_xml = read_resp.text().unwrap();
+    assert!(read_xml.contains("HTTP/1.1 404 Not Found"));
+}
+
+#[test]
 fn test_proppatch_namespace_distinct_properties_do_not_collide() {
     let server = setup_test_server_with_tree(|root| {
         let mut file = File::create(root.join("sample.txt")).unwrap();

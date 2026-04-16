@@ -221,6 +221,32 @@ fn test_file_lock_rejects_depth_infinity() {
 }
 
 #[test]
+fn test_collection_lock_accepts_case_insensitive_depth_infinity() {
+    let server = setup_test_server_with_tree(|root| {
+        std::fs::create_dir_all(root.join("dir")).unwrap();
+    });
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"LOCK").unwrap(),
+            format!("http://{}/dir/", server.addr),
+        )
+        .header("Depth", "InFiNiTy")
+        .body(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope><D:exclusive/></D:lockscope>
+  <D:locktype><D:write/></D:locktype>
+</D:lockinfo>"#,
+        )
+        .send()
+        .unwrap();
+
+    assert!(response.status() == StatusCode::CREATED || response.status() == StatusCode::OK);
+}
+
+#[test]
 fn test_if_not_condition_does_not_satisfy_lock_requirement() {
     let server = setup_test_server_with_tree(|root| {
         let mut file = File::create(root.join("doc.txt")).unwrap();
@@ -368,6 +394,72 @@ fn test_unlock_with_wrong_token_is_conflict() {
         .send()
         .unwrap();
     assert_eq!(unlock.status(), StatusCode::CONFLICT);
+}
+
+#[test]
+fn test_unlock_missing_lock_token_is_bad_request() {
+    let server = setup_test_server_with_tree(|root| {
+        let mut file = File::create(root.join("doc.txt")).unwrap();
+        writeln!(file, "hello").unwrap();
+    });
+    let client = Client::new();
+    let _token = acquire_lock_token(&client, server.addr, "/doc.txt");
+
+    let unlock = client
+        .request(
+            Method::from_bytes(b"UNLOCK").unwrap(),
+            format!("http://{}/doc.txt", server.addr),
+        )
+        .send()
+        .unwrap();
+    assert_eq!(unlock.status(), StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn test_unlock_without_active_lock_is_conflict() {
+    let server = setup_test_server_with_tree(|root| {
+        let mut file = File::create(root.join("doc.txt")).unwrap();
+        writeln!(file, "hello").unwrap();
+    });
+    let client = Client::new();
+
+    let unlock = client
+        .request(
+            Method::from_bytes(b"UNLOCK").unwrap(),
+            format!("http://{}/doc.txt", server.addr),
+        )
+        .header("Lock-Token", "<opaquelocktoken:does-not-exist>")
+        .send()
+        .unwrap();
+    assert_eq!(unlock.status(), StatusCode::CONFLICT);
+}
+
+#[test]
+fn test_lock_on_unmapped_url_creates_resource() {
+    let server = setup_test_server_with_tree(|_root| {});
+    let client = Client::new();
+
+    let lock = client
+        .request(
+            Method::from_bytes(b"LOCK").unwrap(),
+            format!("http://{}/new-doc.txt", server.addr),
+        )
+        .body(
+            r#"<?xml version="1.0" encoding="utf-8"?>
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope><D:exclusive/></D:lockscope>
+  <D:locktype><D:write/></D:locktype>
+</D:lockinfo>"#,
+        )
+        .send()
+        .unwrap();
+    assert_eq!(lock.status(), StatusCode::CREATED);
+
+    let get = client
+        .get(format!("http://{}/new-doc.txt", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(get.status(), StatusCode::OK);
 }
 
 #[test]

@@ -21,7 +21,7 @@ Current WebDAV support targets RFC 4918 Class 1 + Class 2 core behavior without 
 - `PROPFIND` semantics: `allprop`, `propname`, named `prop`, and `200`/`404` `propstat` grouping
 - `PROPPATCH` semantics: dead-property `set`/`remove` with `207` response model
 - Lock semantics: token-gated writes with `If`-header parsing, lock refresh, and lock-aware copy/move/delete preconditions
-- `PROPFIND` `Depth: infinity` on collections is refused with RFC-shaped `403` DAV precondition (`propfind-finite-depth`)
+- `PROPFIND` depth handling supports `Depth: 0`, `Depth: 1`, and recursive `Depth: infinity` on collections
 
 Known scope limits:
 

@@ -173,6 +173,32 @@ fn test_copy_depth_zero_on_collection_does_not_copy_members() {
 }
 
 #[test]
+fn test_copy_collection_without_depth_defaults_to_infinity() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("src").join("nested")).unwrap();
+        let mut child = File::create(root.join("src").join("nested").join("child.txt")).unwrap();
+        writeln!(child, "child").unwrap();
+    });
+    let client = Client::new();
+
+    let copy_resp = client
+        .request(
+            Method::from_bytes(b"COPY").unwrap(),
+            format!("http://{}/src/", server.addr),
+        )
+        .header("Destination", format!("http://{}/dst/", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(copy_resp.status(), StatusCode::CREATED);
+
+    let child = client
+        .get(format!("http://{}/dst/nested/child.txt", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(child.status(), StatusCode::OK);
+}
+
+#[test]
 fn test_copy_destination_descendant_of_source_is_bad_request() {
     let server = setup_test_server_with_tree(|root| {
         create_dir_all(root.join("src").join("nested")).unwrap();
@@ -276,6 +302,129 @@ fn test_copy_invalid_depth_is_bad_request() {
         .send()
         .unwrap();
     assert_eq!(copy_resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn test_copy_depth_infinity_is_case_insensitive() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("src").join("nested")).unwrap();
+        let mut child = File::create(root.join("src").join("nested").join("child.txt")).unwrap();
+        writeln!(child, "child").unwrap();
+    });
+    let client = Client::new();
+
+    let copy_resp = client
+        .request(
+            Method::from_bytes(b"COPY").unwrap(),
+            format!("http://{}/src/", server.addr),
+        )
+        .header("Depth", "InFiNiTy")
+        .header("Destination", format!("http://{}/dst/", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(copy_resp.status(), StatusCode::CREATED);
+
+    let nested_resp = client
+        .get(format!("http://{}/dst/nested/child.txt", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(nested_resp.status(), StatusCode::OK);
+}
+
+#[test]
+fn test_delete_collection_rejects_non_infinity_depth_header() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("dir").join("nested")).unwrap();
+    });
+    let client = Client::new();
+
+    let delete_resp = client
+        .request(Method::DELETE, format!("http://{}/dir/", server.addr))
+        .header("Depth", "0")
+        .send()
+        .unwrap();
+    assert_eq!(delete_resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn test_move_collection_rejects_non_infinity_depth_header() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("src").join("nested")).unwrap();
+    });
+    let client = Client::new();
+
+    let move_resp = client
+        .request(
+            Method::from_bytes(b"MOVE").unwrap(),
+            format!("http://{}/src/", server.addr),
+        )
+        .header("Depth", "0")
+        .header("Destination", format!("http://{}/dst/", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(move_resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn test_move_collection_accepts_case_insensitive_infinity_depth() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("src").join("nested")).unwrap();
+        let mut child = File::create(root.join("src").join("nested").join("child.txt")).unwrap();
+        writeln!(child, "child").unwrap();
+    });
+    let client = Client::new();
+
+    let move_resp = client
+        .request(
+            Method::from_bytes(b"MOVE").unwrap(),
+            format!("http://{}/src/", server.addr),
+        )
+        .header("Depth", "InFiNiTy")
+        .header("Destination", format!("http://{}/dst/", server.addr))
+        .send()
+        .unwrap();
+    assert!(
+        move_resp.status() == StatusCode::CREATED || move_resp.status() == StatusCode::NO_CONTENT
+    );
+
+    let check = client
+        .get(format!("http://{}/dst/nested/child.txt", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(check.status(), StatusCode::OK);
+}
+
+#[test]
+fn test_move_collection_without_depth_defaults_to_infinity() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("src").join("nested")).unwrap();
+        let mut child = File::create(root.join("src").join("nested").join("child.txt")).unwrap();
+        writeln!(child, "child").unwrap();
+    });
+    let client = Client::new();
+
+    let move_resp = client
+        .request(
+            Method::from_bytes(b"MOVE").unwrap(),
+            format!("http://{}/src/", server.addr),
+        )
+        .header("Destination", format!("http://{}/dst/", server.addr))
+        .send()
+        .unwrap();
+    assert!(
+        move_resp.status() == StatusCode::CREATED || move_resp.status() == StatusCode::NO_CONTENT
+    );
+
+    let moved = client
+        .get(format!("http://{}/dst/nested/child.txt", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(moved.status(), StatusCode::OK);
+    let old = client
+        .get(format!("http://{}/src/nested/child.txt", server.addr))
+        .send()
+        .unwrap();
+    assert_eq!(old.status(), StatusCode::NOT_FOUND);
 }
 
 #[test]

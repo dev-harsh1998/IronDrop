@@ -116,16 +116,22 @@ fn handle_propfind(request: &Request, base_dir: &Path) -> Result<Response, AppEr
         return Err(AppError::NotFound);
     }
 
-    if depth == DavDepth::Infinity && target_path.is_dir() {
-        return Ok(propfind_finite_depth_error_response());
-    }
-
     let mut resources = vec![target_path.clone()];
-    if depth == DavDepth::One && target_path.is_dir() {
-        for entry in std::fs::read_dir(&target_path)? {
-            let entry = entry?;
-            let entry_path = entry.path();
-            resources.push(entry_path);
+    if target_path.is_dir() {
+        match depth {
+            DavDepth::Zero => {}
+            DavDepth::One => {
+                let mut entries = Vec::new();
+                for entry in std::fs::read_dir(&target_path)? {
+                    let entry = entry?;
+                    entries.push(entry.path());
+                }
+                entries.sort_by(|a, b| a.to_string_lossy().cmp(&b.to_string_lossy()));
+                resources.extend(entries);
+            }
+            DavDepth::Infinity => {
+                collect_recursive_resources(&target_path, &mut resources)?;
+            }
         }
     }
 
@@ -343,24 +349,24 @@ fn parse_prop_name_from_token(
     })
 }
 
-fn propfind_finite_depth_error_response() -> Response {
-    let mut headers = HashMap::new();
-    headers.insert(
-        "Content-Type".to_string(),
-        "application/xml; charset=utf-8".to_string(),
-    );
-    Response {
-        status_code: 403,
-        status_text: "Forbidden".to_string(),
-        headers,
-        body: ResponseBody::Text(
-            r#"<?xml version="1.0" encoding="utf-8"?>
-<D:error xmlns:D="DAV:">
-  <D:propfind-finite-depth/>
-</D:error>"#
-                .to_string(),
-        ),
+fn collect_recursive_resources(root: &Path, resources: &mut Vec<PathBuf>) -> Result<(), AppError> {
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(current_dir) = stack.pop() {
+        let mut children = Vec::new();
+        for entry in std::fs::read_dir(&current_dir)? {
+            let entry = entry?;
+            children.push((entry.path(), entry.file_type()?));
+        }
+        children.sort_by(|(a, _), (b, _)| a.to_string_lossy().cmp(&b.to_string_lossy()));
+
+        for (entry_path, file_type) in children {
+            resources.push(entry_path.clone());
+            if file_type.is_dir() {
+                stack.push(entry_path);
+            }
+        }
     }
+    Ok(())
 }
 
 fn handle_mkcol(request: &Request, base_dir: &Path) -> Result<Response, AppError> {
@@ -379,6 +385,11 @@ fn handle_mkcol(request: &Request, base_dir: &Path) -> Result<Response, AppError
 
     if target_path.exists() {
         return Ok(status_response(405, "Method Not Allowed"));
+    }
+    if !request_body_bytes(request)?.is_empty() {
+        // We do not implement request-body extensions for MKCOL, so reject
+        // non-empty bodies instead of silently ignoring them.
+        return Ok(status_response(415, "Unsupported Media Type"));
     }
 
     let Some(parent) = target_path.parent() else {
@@ -455,6 +466,7 @@ fn handle_delete(request: &Request, base_dir: &Path) -> Result<Response, AppErro
     if !target_path.exists() {
         return Err(AppError::NotFound);
     }
+    validate_delete_depth_header(&request.headers, target_path.is_dir())?;
 
     if target_path.is_dir() {
         let locked_descendants = locked_descendants_without_token(request, &target_path);
@@ -514,6 +526,9 @@ fn handle_copy_or_move(
     }
     if !source.exists() {
         return Err(AppError::NotFound);
+    }
+    if is_move {
+        validate_move_depth_header(&request.headers, source.is_dir())?;
     }
 
     let destination_header = request
@@ -628,11 +643,11 @@ fn handle_copy_or_move(
 fn parse_copy_depth_header(headers: &HashMap<String, String>) -> Result<CopyDepth, AppError> {
     let depth = headers
         .get("depth")
-        .map(|value| value.trim())
-        .unwrap_or("infinity");
-    match depth {
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_else(|| "infinity".to_string());
+    match depth.as_str() {
         "0" => Ok(CopyDepth::Zero),
-        "infinity" | "Infinity" | "INFINITY" => Ok(CopyDepth::Infinity),
+        "infinity" => Ok(CopyDepth::Infinity),
         _ => Err(AppError::BadRequest),
     }
 }
@@ -1033,35 +1048,42 @@ fn handle_proppatch(request: &Request, base_dir: &Path) -> Result<Response, AppE
     }
 
     let key = lock_key(&target_path);
-    let mut ok_props: Vec<(PropName, Option<String>)> = Vec::new();
+    let mut ok_or_dependent_props: Vec<(PropName, Option<String>)> = Vec::new();
     let mut missing_props: Vec<(PropName, Option<String>)> = Vec::new();
     let mut forbidden_props: Vec<(PropName, Option<String>)> = Vec::new();
+    let mut has_failure = false;
 
     let mut guard = dead_props_map()
         .lock()
         .map_err(|_| AppError::InternalServerError("dead properties map poisoned".to_string()))?;
-    let props = guard.entry(key).or_default();
+    let current_props = guard.get(&key).cloned().unwrap_or_default();
+    let mut working_props = current_props.clone();
 
     for operation in operations {
         for (name, value) in operation.props {
             if is_protected_property(&name) {
                 forbidden_props.push((name, None));
+                has_failure = true;
                 continue;
             }
             match operation.action {
                 PropPatchAction::Set => {
-                    props.insert(name.clone(), value.unwrap_or_default());
-                    ok_props.push((name, None));
+                    working_props.insert(name.clone(), value.unwrap_or_default());
+                    ok_or_dependent_props.push((name, None));
                 }
                 PropPatchAction::Remove => {
-                    if props.remove(&name).is_some() {
-                        ok_props.push((name, None));
+                    if working_props.remove(&name).is_some() {
+                        ok_or_dependent_props.push((name, None));
                     } else {
                         missing_props.push((name, None));
+                        has_failure = true;
                     }
                 }
             }
         }
+    }
+    if !has_failure {
+        guard.insert(key, working_props);
     }
     drop(guard);
 
@@ -1075,8 +1097,16 @@ fn handle_proppatch(request: &Request, base_dir: &Path) -> Result<Response, AppE
     xml.push_str("    <D:href>");
     xml.push_str(&xml_escape(&href));
     xml.push_str("</D:href>\n");
-    if !ok_props.is_empty() {
-        append_propstat(&mut xml, &ok_props, "HTTP/1.1 200 OK");
+    if !ok_or_dependent_props.is_empty() {
+        if has_failure {
+            append_propstat(
+                &mut xml,
+                &ok_or_dependent_props,
+                "HTTP/1.1 424 Failed Dependency",
+            );
+        } else {
+            append_propstat(&mut xml, &ok_or_dependent_props, "HTTP/1.1 200 OK");
+        }
     }
     if !missing_props.is_empty() {
         append_propstat(&mut xml, &missing_props, "HTTP/1.1 404 Not Found");
@@ -1235,12 +1265,12 @@ fn parse_prop_elements(
 fn parse_depth_header(headers: &HashMap<String, String>) -> Result<DavDepth, AppError> {
     let depth = headers
         .get("depth")
-        .map(|value| value.trim())
-        .unwrap_or("infinity");
-    match depth {
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_else(|| "infinity".to_string());
+    match depth.as_str() {
         "0" => Ok(DavDepth::Zero),
         "1" => Ok(DavDepth::One),
-        "infinity" | "Infinity" | "INFINITY" => Ok(DavDepth::Infinity),
+        "infinity" => Ok(DavDepth::Infinity),
         _ => Err(AppError::BadRequest),
     }
 }
@@ -1533,12 +1563,46 @@ fn parse_lock_depth(
 ) -> Result<bool, AppError> {
     let depth = headers
         .get("depth")
-        .map(|value| value.trim())
-        .unwrap_or(if is_collection { "infinity" } else { "0" });
-    match depth {
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_else(|| {
+            if is_collection {
+                "infinity".to_string()
+            } else {
+                "0".to_string()
+            }
+        });
+    match depth.as_str() {
         "0" => Ok(false),
-        "infinity" | "Infinity" | "INFINITY" if is_collection => Ok(true),
+        "infinity" if is_collection => Ok(true),
         _ => Err(AppError::BadRequest),
+    }
+}
+
+fn validate_delete_depth_header(
+    headers: &HashMap<String, String>,
+    is_collection: bool,
+) -> Result<(), AppError> {
+    if !is_collection {
+        return Ok(());
+    }
+    match headers.get("depth") {
+        None => Ok(()),
+        Some(value) if value.trim().eq_ignore_ascii_case("infinity") => Ok(()),
+        Some(_) => Err(AppError::BadRequest),
+    }
+}
+
+fn validate_move_depth_header(
+    headers: &HashMap<String, String>,
+    is_collection: bool,
+) -> Result<(), AppError> {
+    if !is_collection {
+        return Ok(());
+    }
+    match headers.get("depth") {
+        None => Ok(()),
+        Some(value) if value.trim().eq_ignore_ascii_case("infinity") => Ok(()),
+        Some(_) => Err(AppError::BadRequest),
     }
 }
 

@@ -112,6 +112,44 @@ fn test_mkcol_parent_missing_conflict() {
 }
 
 #[test]
+fn test_mkcol_existing_resource_is_method_not_allowed() {
+    let server = setup_test_server_with_tree(|root| {
+        let mut file = File::create(root.join("exists.txt")).unwrap();
+        writeln!(file, "x").unwrap();
+    });
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"MKCOL").unwrap(),
+            format!("http://{}/exists.txt", server.addr),
+        )
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
+}
+
+#[test]
+fn test_mkcol_with_request_body_is_unsupported_media_type() {
+    let server = setup_test_server_with_tree(|_| {});
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"MKCOL").unwrap(),
+            format!("http://{}/newdir/", server.addr),
+        )
+        .header("Content-Type", "application/xml")
+        .body("<mkcol/>".to_string())
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    assert!(!server.root.join("newdir").exists());
+}
+
+#[test]
 fn test_put_creates_and_updates_file() {
     let server = setup_test_server_with_tree(|_| {});
     let client = Client::new();
@@ -137,6 +175,39 @@ fn test_put_creates_and_updates_file() {
         fs::read_to_string(server.root.join("notes.txt")).unwrap(),
         "updated"
     );
+}
+
+#[test]
+fn test_put_missing_parent_conflict() {
+    let server = setup_test_server_with_tree(|_root| {});
+    let client = Client::new();
+
+    let response = client
+        .request(
+            Method::from_bytes(b"PUT").unwrap(),
+            format!("http://{}/missing/path/note.txt", server.addr),
+        )
+        .body("body".to_string())
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+}
+
+#[test]
+fn test_put_on_existing_collection_is_method_not_allowed() {
+    let server = setup_test_server_with_tree(|root| {
+        create_dir_all(root.join("docs")).unwrap();
+    });
+    let client = Client::new();
+
+    let response = client
+        .request(Method::PUT, format!("http://{}/docs/", server.addr))
+        .body("not allowed".to_string())
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
 }
 
 #[test]
@@ -170,6 +241,19 @@ fn test_delete_removes_file_and_collection() {
         .unwrap();
     assert_eq!(delete_dir.status(), StatusCode::NO_CONTENT);
     assert!(!server.root.join("to-delete-dir").exists());
+}
+
+#[test]
+fn test_delete_base_forbidden() {
+    let server = setup_test_server_with_tree(|_root| {});
+    let client = Client::new();
+
+    let response = client
+        .request(Method::DELETE, format!("http://{}/", server.addr))
+        .send()
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
 #[test]

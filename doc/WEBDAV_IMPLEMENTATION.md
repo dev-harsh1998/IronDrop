@@ -68,8 +68,9 @@ IronDrop supports the common PROPFIND modes:
 
 and depth handling:
 
-- `Depth: 0` and `Depth: 1` for collections
-- `Depth: infinity` on collections refused with RFC-shaped finite-depth precondition response
+- `Depth: 0` returns only the target resource
+- `Depth: 1` returns the target plus immediate children
+- `Depth: infinity` recursively returns all descendants of a collection
 
 ```mermaid
 flowchart TD
