@@ -1,6 +1,6 @@
 # WebDAV Implementation Guide
 
-Version: 2.7.1
+Version: 2.7.2
 
 This guide explains how the WebDAV implementation works in plain language. It focuses on request flow, lock behavior, and the core RFC 4918 semantics implemented in `src/webdav.rs`.
 
@@ -71,6 +71,9 @@ and depth handling:
 - `Depth: 0` returns only the target resource
 - `Depth: 1` returns the target plus immediate children
 - `Depth: infinity` recursively returns all descendants of a collection
+
+> [!NOTE]
+> For `Depth: infinity`, IronDrop traverses the tree dynamically using a background thread and streams the XML directly to the client using `Transfer-Encoding: chunked`. This ensures memory usage remains near-zero even for directories with millions of files.
 
 ```mermaid
 flowchart TD

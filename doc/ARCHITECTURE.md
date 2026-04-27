@@ -1,4 +1,4 @@
-# IronDrop Architecture Documentation v2.7.1
+# IronDrop Architecture Documentation v2.7.2
 
 ## Overview
 
@@ -136,7 +136,7 @@ src/
 ├── handlers.rs          # Internal route handlers
 ├── middleware.rs        # Authentication middleware
 ├── templates.rs         # Template engine with embedded assets
-├── fs.rs                # File system operations and directory listing
+├── fs.rs                # File system operations, lazy metadata, and UI directory pagination
 ├── response.rs          # Response types and error response helpers
 ├── upload.rs            # Upload handling + validation
 ├── multipart.rs         # Multipart form parsing
@@ -377,7 +377,7 @@ The test suite verifies correct mode selection (memory vs disk), cleanup behavio
 | Operation | Typical Latency | Notes |
 |-----------|----------------|-------|
 | Static Assets | <0.5ms | CSS/JS with caching headers |
-| Directory Listing | <2ms | Template rendering with file sorting |
+| Directory Listing | <2ms | Template rendering with paginated lazy-loaded file metadata |
 | Health Checks | <0.1ms | JSON status endpoints |
 | File Downloads | Variable | Depends on file size and network |
 | File Uploads | Variable | Includes validation and atomic writing |
@@ -500,4 +500,4 @@ pub enum AppError {
 4. **CDN Integration**: Edge caching and global distribution
 5. **Database Caching**: Redis integration for session management
 
-This architecture documentation reflects the current state of IronDrop v2.7.1 and serves as a foundation for understanding the system's design principles, implementation details, and operational characteristics.
+This architecture documentation reflects the current state of IronDrop v2.7.2 and serves as a foundation for understanding the system's design principles, implementation details, and operational characteristics.
