@@ -87,6 +87,11 @@ pub struct Cli {
     /// Path to SSL/TLS private key file (PEM format) for HTTPS support
     #[arg(long, value_parser = validate_ssl_file)]
     pub ssl_key: Option<PathBuf>,
+
+    /// Base URL path prefix for reverse proxy sub-path deployments (e.g., "/webstorage").
+    /// When set, all generated URLs are prefixed and incoming requests must start with this path.
+    #[arg(long, value_parser = validate_base_path)]
+    pub base_path: Option<String>,
 }
 
 /// Validate upload size (minimum 1 MB, no upper limit for direct streaming)
@@ -231,6 +236,7 @@ mod tests {
             log_dir: None,
             ssl_cert: None,
             ssl_key: None,
+            base_path: None,
         };
 
         // Test conversion
@@ -270,6 +276,7 @@ mod tests {
             log_dir: None,
             ssl_cert: None,
             ssl_key: None,
+            base_path: None,
         };
 
         assert!(cli.validate().is_ok());
@@ -345,4 +352,27 @@ fn validate_ssl_file(s: &str) -> Result<PathBuf, String> {
         Ok(_) => Ok(path),
         Err(e) => Err(format!("Cannot read SSL file {}: {}", path.display(), e)),
     }
+}
+
+/// Validate and normalize base path for reverse proxy sub-path deployments.
+/// Ensures the value starts with `/` and does not end with `/`.
+fn validate_base_path(s: &str) -> Result<String, String> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return Err("Base path cannot be empty".to_string());
+    }
+    // Ensure leading slash
+    let with_slash = if trimmed.starts_with('/') {
+        trimmed.to_string()
+    } else {
+        format!("/{trimmed}")
+    };
+    // Strip trailing slash(es)
+    let normalized = with_slash.trim_end_matches('/').to_string();
+    if normalized.is_empty() {
+        return Err(
+            "Base path cannot be just '/' — omit --base-path to serve from root".to_string(),
+        );
+    }
+    Ok(normalized)
 }

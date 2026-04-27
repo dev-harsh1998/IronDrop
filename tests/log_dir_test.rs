@@ -36,6 +36,7 @@ fn create_test_cli_with_log_dir(log_dir: Option<PathBuf>) -> Cli {
         log_dir,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     }
 }
 

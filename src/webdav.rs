@@ -839,7 +839,23 @@ fn extract_destination_path(
         {
             return Err(AppError::BadRequest);
         }
-        return decode_percent_path(&rest[path_start..]);
+        let raw_path = decode_percent_path(&rest[path_start..])?;
+
+        // Strip the base_path prefix if configured
+        let bp = crate::templates::base_path();
+        if !bp.is_empty() {
+            if let Some(stripped) = raw_path.strip_prefix(bp) {
+                let normalized = if stripped.is_empty() || !stripped.starts_with('/') {
+                    format!("/{stripped}")
+                } else {
+                    stripped.to_string()
+                };
+                return Ok(normalized);
+            }
+            // Destination doesn't match base_path — treat as bad request
+            return Err(AppError::BadRequest);
+        }
+        return Ok(raw_path);
     }
 
     Err(AppError::BadRequest)
@@ -1959,12 +1975,14 @@ fn etag_for_resource(path: &Path, metadata: &std::fs::Metadata) -> String {
 }
 
 fn build_href(base_dir: &Path, resource: &Path, is_dir: bool) -> String {
+    let bp = crate::templates::base_path();
+
     if resource == base_dir {
-        return "/".to_string();
+        return format!("{}/", bp);
     }
 
     let relative = resource.strip_prefix(base_dir).unwrap_or(resource);
-    let mut href = String::from("/");
+    let mut href = format!("{}/", bp);
     let mut first = true;
     for component in relative.components() {
         if let Component::Normal(segment) = component {

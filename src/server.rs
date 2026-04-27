@@ -1112,6 +1112,11 @@ pub fn run_server_with_config(config: Config) -> Result<(), AppError> {
         log_dir: config.log_dir,
         ssl_cert: config.ssl_cert,
         ssl_key: config.ssl_key,
+        base_path: if config.base_path.is_empty() {
+            None
+        } else {
+            Some(config.base_path)
+        },
     };
 
     run_server(cli, None, None)
@@ -1224,6 +1229,9 @@ async fn run_server_async(
     let password = Arc::new(cli.password.clone());
     let chunk_size = cli.chunk_size.unwrap_or(1024);
     let cli_arc = Arc::new(cli);
+
+    // Initialize the global base path for reverse proxy sub-path support
+    crate::templates::init_base_path(cli_arc.base_path.clone().unwrap_or_default());
 
     let mut router = Router::new();
     if cli_arc.username.is_some() && cli_arc.password.is_some() {

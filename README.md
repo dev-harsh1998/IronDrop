@@ -165,15 +165,24 @@ location / {
 ```
 
 **Subpath Configuration (e.g., `/webstorage/`):**
+
+Start IronDrop with the `--base-path` flag:
+```bash
+irondrop -d ./files --base-path /webstorage --listen 0.0.0.0
+```
+
+Then configure Nginx to forward the full path (no stripping needed):
 ```nginx
 location /webstorage/ {
-    proxy_pass http://127.0.0.1:8080/;
-    proxy_redirect / /webstorage/;
-    sub_filter 'href="/"' 'href="/webstorage/"';
-    sub_filter_once off;
-    # ... see deployment guide for full sub_filter list
+    proxy_pass http://127.0.0.1:8080/webstorage/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    client_max_body_size 0;
+    proxy_buffering off;
 }
 ```
+
+> **Note:** No `sub_filter` hacks or extra `/_irondrop/` location blocks are needed. The `--base-path` flag makes IronDrop fully reverse-proxy aware — all generated URLs (HTML links, JavaScript API calls, WebDAV hrefs, HTTP redirects) are automatically prefixed with the configured base path.
 
 See the [Deployment Guide](./doc/DEPLOYMENT.md#nginx-reverse-proxy-deployment) for full configuration examples and optimization settings.
 
@@ -183,13 +192,14 @@ See the [Deployment Guide](./doc/DEPLOYMENT.md#nginx-reverse-proxy-deployment) f
 IronDrop offers extensive customization through command-line arguments:
 
 | Option | Description | Example |
-|--------|-------------|----------|
+|--------|-------------|---------|
 | `-d, --directory` | **Required** - Directory to serve | `-d /home/user/files` |
 | `-l, --listen` | Listen address (default: 127.0.0.1) | `-l 0.0.0.0` |
 | `-p, --port` | Port number (default: 8080) | `-p 3000` |
 | `--enable-upload` | Enable file uploads | `--enable-upload true` |
 | `--enable-webdav` | Enable WebDAV methods (`OPTIONS`, `PROPFIND`, `PROPPATCH`, `MKCOL`, `PUT`, `DELETE`, `COPY`, `MOVE`, `LOCK`, `UNLOCK`) | `--enable-webdav true` |
 | `--disable-rate-limit` | Disable rate limiting **only when WebDAV is enabled** | `--enable-webdav true --disable-rate-limit true` |
+| `--base-path` | Base URL path prefix for reverse proxy sub-path deployments | `--base-path /webstorage` |
 | `--username/--password` | Basic authentication | `--username admin --password secret` |
 | `-a, --allowed-extensions` | Restrict file types | `-a "*.pdf,*.doc,*.zip"` |
 | `-t, --threads` | Tokio runtime worker threads (default: 8) | `-t 16` |

@@ -45,6 +45,7 @@ where
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();

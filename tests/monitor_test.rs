@@ -49,6 +49,7 @@ fn setup_test_server() -> TestServer {
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -216,6 +217,7 @@ fn test_monitor_ignores_macos_finder_propfind_noise_from_error_counter() {
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -285,6 +287,7 @@ fn test_monitor_ignores_macos_metadata_propfind_noise_from_error_counter() {
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -354,6 +357,7 @@ fn test_monitor_ignores_archive_service_temp_propfind_noise_from_error_counter()
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();

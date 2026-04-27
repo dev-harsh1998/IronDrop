@@ -2,6 +2,7 @@
 
 // Dark Mode Only Directory Listing Enhancements with Fast Search
 document.addEventListener('DOMContentLoaded', function() {
+    const basePath = window.__BASE_PATH || '';
     // Apply loading animation with staggered effect
     const container = document.querySelector('.container');
     const header = document.querySelector('.directory-header');
@@ -638,7 +639,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 const currentPath = window.location.pathname;
-                const response = await fetch(`/_irondrop/search?q=${encodeURIComponent(query)}&path=${encodeURIComponent(currentPath)}`);
+                const response = await fetch(`${basePath}/_irondrop/search?q=${encodeURIComponent(query)}&path=${encodeURIComponent(currentPath)}`);
                 
                 if (!response.ok) {
                     console.warn('API search failed:', response.status);
@@ -720,7 +721,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 `;
                 
                 item.addEventListener('click', () => {
-                    window.location.href = result.path;
+                    window.location.href = basePath + result.path;
                 });
                 
                 dropdownResults.appendChild(item);
