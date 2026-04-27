@@ -349,6 +349,10 @@ pub async fn handle_client_async<S>(
 
     match response_result {
         Ok(response) => {
+            // Check if this is a Finder noise 404 before logging and stats
+            let is_finder_noise = response.status_code == 404
+                && crate::utils::is_macos_finder_noise_path(&request_path);
+
             log_request_line(
                 &log_prefix,
                 &request_method,
@@ -357,8 +361,10 @@ pub async fn handle_client_async<S>(
             );
             match send_response_async(&mut stream, response, &log_prefix).await {
                 Ok(body_bytes) => {
-                    if let Some(stats) = stats {
-                        stats.record_request(true, body_bytes);
+                    if !is_finder_noise {
+                        if let Some(stats) = stats {
+                            stats.record_request(true, body_bytes);
+                        }
                     }
                 }
                 Err(_) => {
@@ -369,12 +375,14 @@ pub async fn handle_client_async<S>(
             }
         }
         Err(e) => {
-            let ignore_error_for_stats = matches!(e, AppError::NotFound)
+            let is_finder_noise = matches!(e, AppError::NotFound)
                 && request_method == "PROPFIND"
                 && crate::utils::is_macos_finder_noise_path(&request_path);
             send_error_response_async(&mut stream, e, &log_prefix).await;
-            if let Some(stats) = stats {
-                stats.record_request(ignore_error_for_stats, 0);
+            if !is_finder_noise {
+                if let Some(stats) = stats {
+                    stats.record_request(false, 0);
+                }
             }
         }
     }
@@ -388,6 +396,12 @@ fn log_request_line(log_prefix: &str, method: &str, path: &str, status_code: u16
     let path_only = path.split('?').next().unwrap_or(path);
     if is_monitor_path(path_only) {
         monitor_request_log_rate_limited(method, status_code);
+        return;
+    }
+    // Suppress macOS Finder noise (._files, .Spotlight, .AU.*, etc.) to TRACE
+    // level to keep logs clean. These are harmless 404s from Finder probing.
+    if status_code == 404 && crate::utils::is_macos_finder_noise_path(path_only) {
+        trace!("{log_prefix} {method} {path} -> {status_code} (finder noise)");
         return;
     }
     info!("{log_prefix} {method} {path} -> {status_code}");
