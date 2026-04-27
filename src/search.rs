@@ -536,7 +536,7 @@ impl RadixBucket {
 impl UltraLowMemoryIndex {
     /// Create new ultra-low memory index with optimized capacity planning
     pub fn new(base_dir: PathBuf) -> Self {
-        let estimated_entries = 10_000_000; // Plan for 10M entries
+        let estimated_entries = 100_000; // Plan for 100K entries initial capacity
         let estimated_string_pool_size = estimated_entries * 15; // ~15 chars average filename
 
         // Initialize radix buckets array

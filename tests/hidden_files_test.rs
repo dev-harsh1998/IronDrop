@@ -83,7 +83,7 @@ mod integration_tests {
         fs::create_dir(&hidden_dir).unwrap();
 
         // Generate directory listing HTML
-        let listing_result = generate_directory_listing(temp_path, "/", None);
+        let listing_result = generate_directory_listing(temp_path, "/", None, 1);
         assert!(listing_result.is_ok());
 
         let listing_html = listing_result.unwrap();
@@ -133,7 +133,7 @@ mod integration_tests {
         }
 
         // Generate directory listing HTML
-        let listing_result = generate_directory_listing(temp_path, "/", None);
+        let listing_result = generate_directory_listing(temp_path, "/", None, 1);
         assert!(listing_result.is_ok());
 
         let listing_html = listing_result.unwrap();

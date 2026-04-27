@@ -164,7 +164,7 @@ fn test_directory_listing_rendering() {
     ];
 
     let result =
-        engine.render_directory_listing("/downloads", &test_entries, 3, false, "/downloads");
+        engine.render_directory_listing("/downloads", &test_entries, 3, false, "/downloads", 1, 1);
     assert!(
         result.is_ok(),
         "Directory listing should render successfully"

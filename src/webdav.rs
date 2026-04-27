@@ -116,36 +116,6 @@ fn handle_propfind(request: &Request, base_dir: &Path) -> Result<Response, AppEr
         return Err(AppError::NotFound);
     }
 
-    let mut resources = vec![target_path.clone()];
-    if target_path.is_dir() {
-        match depth {
-            DavDepth::Zero => {}
-            DavDepth::One => {
-                let mut entries = Vec::new();
-                for entry in std::fs::read_dir(&target_path)? {
-                    let entry = entry?;
-                    entries.push(entry.path());
-                }
-                entries.sort_by(|a, b| a.to_string_lossy().cmp(&b.to_string_lossy()));
-                resources.extend(entries);
-            }
-            DavDepth::Infinity => {
-                collect_recursive_resources(&target_path, &mut resources)?;
-            }
-        }
-    }
-
-    let mut body = String::from(
-        r#"<?xml version="1.0" encoding="utf-8"?>
-<D:multistatus xmlns:D="DAV:">
-"#,
-    );
-
-    for resource in resources {
-        append_multistatus_response(&mut body, base_dir, &resource, &mode)?;
-    }
-    body.push_str("</D:multistatus>\n");
-
     let mut headers = HashMap::new();
     headers.insert(
         "Content-Type".to_string(),
@@ -153,6 +123,70 @@ fn handle_propfind(request: &Request, base_dir: &Path) -> Result<Response, AppEr
     );
     headers.insert("DAV".to_string(), "1,2".to_string());
     headers.insert("Allow".to_string(), allow_header_value().to_string());
+
+    if depth == DavDepth::Infinity && target_path.is_dir() {
+        let (tx, rx) = tokio::sync::mpsc::channel(64);
+        let base_dir = base_dir.to_path_buf();
+        let target_path = target_path.clone();
+
+        std::thread::spawn(move || {
+            let _ = tx.blocking_send(
+                b"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<D:multistatus xmlns:D=\"DAV:\">\n"
+                    .to_vec(),
+            );
+
+            let mut element = String::new();
+            if append_multistatus_response(&mut element, &base_dir, &target_path, &mode).is_ok() {
+                let _ = tx.blocking_send(element.into_bytes());
+            }
+
+            let mut stack = vec![target_path];
+            while let Some(current_dir) = stack.pop() {
+                if let Ok(entries) = std::fs::read_dir(&current_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let mut element = String::new();
+                        if append_multistatus_response(&mut element, &base_dir, &path, &mode)
+                            .is_ok()
+                        {
+                            let _ = tx.blocking_send(element.into_bytes());
+                        }
+                        if entry.file_type().map(|f| f.is_dir()).unwrap_or(false) {
+                            stack.push(path);
+                        }
+                    }
+                }
+            }
+            let _ = tx.blocking_send(b"</D:multistatus>\n".to_vec());
+        });
+
+        return Ok(Response {
+            status_code: 207,
+            status_text: "Multi-Status".to_string(),
+            headers,
+            body: ResponseBody::AsyncStream(rx),
+        });
+    }
+
+    let mut resources = vec![target_path.clone()];
+    if target_path.is_dir() && depth == DavDepth::One {
+        let mut entries = Vec::new();
+        for entry in std::fs::read_dir(&target_path)? {
+            let entry = entry?;
+            entries.push(entry.path());
+        }
+        entries.sort_by(|a, b| a.to_string_lossy().cmp(&b.to_string_lossy()));
+        resources.extend(entries);
+    }
+
+    let mut body = String::from(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<D:multistatus xmlns:D=\"DAV:\">\n",
+    );
+
+    for resource in resources {
+        append_multistatus_response(&mut body, base_dir, &resource, &mode)?;
+    }
+    body.push_str("</D:multistatus>\n");
 
     Ok(Response {
         status_code: 207,
@@ -163,7 +197,7 @@ fn handle_propfind(request: &Request, base_dir: &Path) -> Result<Response, AppEr
 }
 
 fn parse_propfind_mode(request: &Request) -> Result<PropfindMode, AppError> {
-    let body = request_body_bytes(request)?;
+    let body = request_body_bytes_with_limit(request, 8 * 1024 * 1024)?;
     if body.is_empty() {
         return Ok(PropfindMode::AllProp);
     }
@@ -349,26 +383,6 @@ fn parse_prop_name_from_token(
     })
 }
 
-fn collect_recursive_resources(root: &Path, resources: &mut Vec<PathBuf>) -> Result<(), AppError> {
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(current_dir) = stack.pop() {
-        let mut children = Vec::new();
-        for entry in std::fs::read_dir(&current_dir)? {
-            let entry = entry?;
-            children.push((entry.path(), entry.file_type()?));
-        }
-        children.sort_by(|(a, _), (b, _)| a.to_string_lossy().cmp(&b.to_string_lossy()));
-
-        for (entry_path, file_type) in children {
-            resources.push(entry_path.clone());
-            if file_type.is_dir() {
-                stack.push(entry_path);
-            }
-        }
-    }
-    Ok(())
-}
-
 fn handle_mkcol(request: &Request, base_dir: &Path) -> Result<Response, AppError> {
     let _op_guard = op_guard()
         .lock()
@@ -386,7 +400,12 @@ fn handle_mkcol(request: &Request, base_dir: &Path) -> Result<Response, AppError
     if target_path.exists() {
         return Ok(status_response(405, "Method Not Allowed"));
     }
-    if !request_body_bytes(request)?.is_empty() {
+    if request
+        .body
+        .as_ref()
+        .map(|b| !b.is_empty())
+        .unwrap_or(false)
+    {
         // We do not implement request-body extensions for MKCOL, so reject
         // non-empty bodies instead of silently ignoring them.
         return Ok(status_response(415, "Unsupported Media Type"));
@@ -432,11 +451,23 @@ fn handle_put(request: &Request, base_dir: &Path) -> Result<Response, AppError> 
     }
 
     let existed = target_path.exists();
-    let body_bytes = request_body_bytes(request)?;
 
-    let mut file = std::fs::File::create(&target_path)?;
-    file.write_all(&body_bytes)?;
-    file.sync_all()?;
+    if let Some(body) = &request.body {
+        match body {
+            RequestBody::Memory(data) => {
+                let mut file = std::fs::File::create(&target_path)?;
+                file.write_all(data)?;
+                file.sync_all()?;
+            }
+            RequestBody::File { path, .. } => {
+                if std::fs::rename(path, &target_path).is_err() {
+                    std::fs::copy(path, &target_path)?;
+                }
+            }
+        }
+    } else {
+        std::fs::File::create(&target_path)?;
+    }
 
     if existed {
         Ok(status_response(204, "No Content"))
@@ -659,7 +690,7 @@ fn handle_lock(request: &Request, base_dir: &Path) -> Result<Response, AppError>
     let target_path = resolve_request_path(base_dir, &request.path)?;
     let key = lock_key(&target_path);
     cleanup_expired_locks();
-    let lock_body = request_body_bytes(request)?;
+    let lock_body = request_body_bytes_with_limit(request, 8 * 1024 * 1024)?;
     debug!("WebDAV LOCK target={}", target_path.display());
 
     let target_is_collection = target_path.is_dir() || request.path.ends_with('/');
@@ -902,10 +933,20 @@ fn copy_path_recursive(source: &Path, destination: &Path) -> Result<(), AppError
     }
 }
 
-fn request_body_bytes(request: &Request) -> Result<Vec<u8>, AppError> {
+fn request_body_bytes_with_limit(request: &Request, max_size: usize) -> Result<Vec<u8>, AppError> {
     match &request.body {
-        Some(RequestBody::Memory(data)) => Ok(data.clone()),
-        Some(RequestBody::File { path, .. }) => std::fs::read(path).map_err(AppError::from),
+        Some(RequestBody::Memory(data)) => {
+            if data.len() > max_size {
+                return Err(AppError::PayloadTooLarge(max_size as u64));
+            }
+            Ok(data.clone())
+        }
+        Some(RequestBody::File { path, size }) => {
+            if *size as usize > max_size {
+                return Err(AppError::PayloadTooLarge(max_size as u64));
+            }
+            std::fs::read(path).map_err(AppError::from)
+        }
         None => Ok(Vec::new()),
     }
 }
@@ -1055,7 +1096,7 @@ fn handle_proppatch(request: &Request, base_dir: &Path) -> Result<Response, AppE
         return Ok(response);
     }
 
-    let body = request_body_bytes(request)?;
+    let body = request_body_bytes_with_limit(request, 8 * 1024 * 1024)?;
     let body_str = std::str::from_utf8(&body).map_err(|_| AppError::BadRequest)?;
 
     let operations = parse_propertyupdate_operations(body_str);

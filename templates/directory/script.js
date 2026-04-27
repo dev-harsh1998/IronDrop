@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (listing) listing.style.opacity = '0';
     if (footer) footer.style.opacity = '0';
     
-    const rows = document.querySelectorAll('tbody tr');
+    const rows = document.querySelectorAll('tbody tr:not(.pagination-row)');
     const totalFiles = rows.length;
     
     // Global variables for search functionality
