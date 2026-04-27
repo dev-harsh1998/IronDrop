@@ -278,7 +278,9 @@ For comprehensive documentation, see our [Complete Documentation Index](./doc/RE
 
 ## Version notes
 
-Recent releases include direct-to-disk uploads, an ultra-compact search mode, and a `/monitor` page with a JSON endpoint.
+Recent releases include:
+- **v2.7.2**: Major memory optimizations: WebDAV `Transfer-Encoding: chunked` background thread streaming (near-zero RAM usage for large tree traversals), Web UI 1,000-file pagination with lazy metadata loading, and a massive ~340MB reduction in default search index bootstrap footprint.
+- **v2.7.1**: Direct-to-disk uploads, ultra-compact search mode, and a `/monitor` page with a JSON endpoint.
 
 ## Documentation
 
@@ -306,10 +308,10 @@ IronDrop has extensive documentation covering its architecture, API, and feature
 
 ## Testing
 
-IronDrop is rigorously tested with **272 automated tests**:
+IronDrop is rigorously tested with **325 automated tests**:
 
-- **48 unit tests** in core source modules
-- **224 integration/system tests** across **28** test files (including WebDAV RFC suites)
+- **44 unit tests** in core source modules
+- **281 integration/system tests** across **30** test files (including WebDAV RFC suites)
 
 ### Coverage Areas
 - HTTP parser/request handling, auth, rate limiting, monitoring, uploads, search, and utilities
@@ -341,7 +343,7 @@ IronDrop is licensed under the [MIT License](./LICENSE).
 <div align="center">
   <p>
     <strong>Made with ❤️ and 🦀 in Rust</strong><br>
-    <em>Dependency-free core engine paths • Production ready • Battle tested with 272 automated tests</em>
+    <em>Dependency-free core engine paths • Production ready • Battle tested with 325 automated tests</em>
   </p>
   <p>
     <a href="https://github.com/dev-harsh1998/IronDrop">⭐ Star us on GitHub</a>
