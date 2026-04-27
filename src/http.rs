@@ -19,9 +19,9 @@ const MAX_REQUEST_BODY_SIZE: usize = 10 * 1024 * 1024 * 1024;
 /// Maximum size for request headers (8KB) to prevent header buffer overflow
 const MAX_HEADERS_SIZE: usize = 8 * 1024;
 
-/// Threshold for streaming request bodies to disk (64MB)
+/// Threshold for streaming request bodies to disk (2MB)
 /// This ensures total memory usage stays well below 128MB
-pub const STREAM_TO_DISK_THRESHOLD: usize = 64 * 1024 * 1024;
+pub const STREAM_TO_DISK_THRESHOLD: usize = 2 * 1024 * 1024;
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Represents a parsed incoming HTTP request.
@@ -79,6 +79,7 @@ pub enum ResponseBody {
     Binary(Vec<u8>),
     StaticBinary(&'static [u8]),
     Stream(StreamBody),
+    AsyncStream(tokio::sync::mpsc::Receiver<Vec<u8>>),
 }
 
 impl Request {
@@ -360,7 +361,9 @@ pub async fn handle_client_async<S>(
                 response.status_code,
             );
             match send_response_async(&mut stream, response, &log_prefix).await {
-                Ok(body_bytes) => {
+                Ok(body_bytes) =>
+                {
+                    #[allow(clippy::collapsible_if)]
                     if !is_finder_noise {
                         if let Some(stats) = stats {
                             stats.record_request(true, body_bytes);
@@ -379,6 +382,7 @@ pub async fn handle_client_async<S>(
                 && request_method == "PROPFIND"
                 && crate::utils::is_macos_finder_noise_path(&request_path);
             send_error_response_async(&mut stream, e, &log_prefix).await;
+            #[allow(clippy::collapsible_if)]
             if !is_finder_noise {
                 if let Some(stats) = stats {
                     stats.record_request(false, 0);
@@ -511,17 +515,19 @@ where
         .keys()
         .any(|k| k.to_lowercase() == "content-length");
     if !has_content_length {
-        let length = match &response.body {
-            ResponseBody::Text(text) => text.len(),
-            ResponseBody::StaticText(text) => text.len(),
-            ResponseBody::Binary(bytes) => bytes.len(),
-            ResponseBody::StaticBinary(bytes) => bytes.len(),
-            ResponseBody::Stream(stream_body) => stream_body.size as usize,
+        let length_opt = match &response.body {
+            ResponseBody::Text(text) => Some(text.len()),
+            ResponseBody::StaticText(text) => Some(text.len()),
+            ResponseBody::Binary(bytes) => Some(bytes.len()),
+            ResponseBody::StaticBinary(bytes) => Some(bytes.len()),
+            ResponseBody::Stream(stream_body) => Some(stream_body.size as usize),
+            ResponseBody::AsyncStream(_) => None,
         };
-        response_str.push_str(&format!(
-            "Content-Length: {length}
-"
-        ));
+        if let Some(length) = length_opt {
+            response_str.push_str(&format!("Content-Length: {length}\r\n"));
+        } else {
+            response_str.push_str("Transfer-Encoding: chunked\r\n");
+        }
     }
 
     response_str.push_str("\r\n");
@@ -558,6 +564,19 @@ where
                 stream.write_all(&buffer[..bytes_read]).await?;
                 body_sent += bytes_read as u64;
             }
+        }
+        ResponseBody::AsyncStream(mut receiver) => {
+            while let Some(chunk) = receiver.recv().await {
+                if chunk.is_empty() {
+                    continue;
+                }
+                let hex_size = format!("{:X}\r\n", chunk.len());
+                stream.write_all(hex_size.as_bytes()).await?;
+                stream.write_all(&chunk).await?;
+                stream.write_all(b"\r\n").await?;
+                body_sent += chunk.len() as u64;
+            }
+            stream.write_all(b"0\r\n\r\n").await?;
         }
     }
 

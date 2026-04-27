@@ -591,7 +591,29 @@ pub fn handle_file_request(
             base_path: cli.base_path.clone().unwrap_or_default(),
         });
 
-        let html_content = generate_directory_listing(&full_path, &request.path, config.as_ref())?;
+        // Extract page from query parameters
+        let query_params: HashMap<String, String> =
+            if let Some(query_string) = request.path.split('?').nth(1) {
+                query_string
+                    .split('&')
+                    .filter_map(|param| {
+                        let mut parts = param.splitn(2, '=');
+                        match (parts.next(), parts.next()) {
+                            (Some(key), Some(value)) => Some((url_decode(key), url_decode(value))),
+                            _ => None,
+                        }
+                    })
+                    .collect()
+            } else {
+                HashMap::new()
+            };
+        let page = query_params
+            .get("p")
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(1);
+
+        let html_content =
+            generate_directory_listing(&full_path, &request.path, config.as_ref(), page)?;
         Ok(Response {
             status_code: 200,
             status_text: "OK".to_string(),

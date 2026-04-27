@@ -20,7 +20,15 @@ fn test_directory_listing_escapes_and_percent_encodes() {
     ];
 
     let html = engine
-        .render_directory_listing("/downloads", &entries, entries.len(), false, "/downloads")
+        .render_directory_listing(
+            "/downloads",
+            &entries,
+            entries.len(),
+            false,
+            "/downloads",
+            1,
+            1,
+        )
         .expect("render ok");
 
     // Visible name should be HTML-escaped

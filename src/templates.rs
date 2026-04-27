@@ -527,6 +527,7 @@ impl TemplateEngine {
     }
 
     /// Generate directory listing HTML using base template system
+    #[allow(clippy::too_many_arguments)]
     pub fn render_directory_listing(
         &self,
         path: &str,
@@ -534,6 +535,8 @@ impl TemplateEngine {
         entry_count: usize,
         upload_enabled: bool,
         current_path: &str,
+        page: usize,
+        total_pages: usize,
     ) -> Result<String, AppError> {
         debug!(
             "Rendering directory listing: path='{}', entries={}, upload_enabled={}",
@@ -623,6 +626,23 @@ impl TemplateEngine {
                 size,
                 date
             ));
+        }
+
+        if total_pages > 1 {
+            let mut pagination_html = String::from(
+                "<tr class=\"pagination-row\"><td colspan=\"3\" style=\"text-align: center; padding: 15px;\">",
+            );
+
+            if page > 1 {
+                pagination_html.push_str(&format!("<a href=\"?p={}\" class=\"btn btn-light\" style=\"margin-right: 10px;\">← Previous Page</a>", page - 1));
+            }
+            pagination_html.push_str(&format!("<span>Page {} of {}</span>", page, total_pages));
+            if page < total_pages {
+                pagination_html.push_str(&format!("<a href=\"?p={}\" class=\"btn btn-light\" style=\"margin-left: 10px;\">Next Page →</a>", page + 1));
+            }
+
+            pagination_html.push_str("</td></tr>");
+            entries_html.push_str(&pagination_html);
         }
 
         variables.insert("ENTRIES".to_string(), entries_html);

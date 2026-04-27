@@ -14,42 +14,32 @@ pub fn generate_directory_listing(
     path: &Path,
     request_path: &str,
     config: Option<&Config>,
+    page: usize,
 ) -> Result<String, AppError> {
     debug!("Generating directory listing for: '{}'", path.display());
     trace!("Request path: '{}'", request_path);
 
     let mut entries = Vec::new();
 
-    // Collect and sort entries
+    // Collect and sort entries using lazy metadata lookup (super fast, low memory)
     trace!("Reading directory entries from: {}", path.display());
     for entry in fs::read_dir(path)? {
         let entry = entry?;
-        let metadata = entry.metadata()?;
+        let file_type = entry.file_type()?;
         let file_name = entry.file_name().into_string().unwrap_or_default();
 
-        // Skip hidden files (starting with '._' or '.DS_Store')
         if is_hidden_file(&file_name) {
-            trace!("Skipping hidden file: {}", file_name);
             continue;
         }
 
-        trace!(
-            "Found entry: {} ({})",
-            file_name,
-            if metadata.is_dir() {
-                "directory"
-            } else {
-                "file"
-            }
-        );
-        entries.push((entry.path(), file_name, metadata));
+        entries.push((entry.path(), file_name, file_type.is_dir()));
     }
 
     debug!("Found {} entries, sorting...", entries.len());
     // Sort: directories first, then alphabetically
     entries.sort_by(|a, b| {
-        let a_is_dir = a.2.is_dir();
-        let b_is_dir = b.2.is_dir();
+        let a_is_dir = a.2;
+        let b_is_dir = b.2;
 
         match (a_is_dir, b_is_dir) {
             (true, false) => std::cmp::Ordering::Less,
@@ -65,51 +55,56 @@ pub fn generate_directory_listing(
     };
 
     debug!("Preparing {} entries for template rendering", entries.len());
-    // Prepare entries data for template
-    let mut template_entries = Vec::new();
+    let total_count = entries.len();
+    let limit = 1000;
+    let total_pages = total_count.div_ceil(limit);
+    let safe_page = page.max(1).min(total_pages.max(1));
+    let offset = (safe_page - 1) * limit;
 
-    for (_entry_path, file_name, metadata) in entries {
-        let is_dir = metadata.is_dir();
+    let page_entries: Vec<_> = entries.into_iter().skip(offset).take(limit).collect();
+    let mut template_entries = Vec::with_capacity(page_entries.len());
+
+    for (entry_path, file_name, is_dir) in page_entries {
         let link_name = if is_dir {
             format!("{file_name}/")
         } else {
             file_name.clone()
         };
 
+        // Lazy metadata fetch for only the current page's files
+        let metadata_res = std::fs::metadata(&entry_path);
+
         let size = if is_dir {
             "-".to_string()
         } else {
-            format_file_size(metadata.len())
+            metadata_res
+                .as_ref()
+                .map(|m| format_file_size(m.len()))
+                .unwrap_or_else(|_| "-".to_string())
         };
 
-        let modified = metadata
-            .modified()
+        let modified = metadata_res
             .ok()
+            .and_then(|m| m.modified().ok())
             .and_then(|time| time.duration_since(SystemTime::UNIX_EPOCH).ok())
-            .map(|duration| {
-                let timestamp = duration.as_secs();
-                format_timestamp(timestamp)
-            })
+            .map(|duration| format_timestamp(duration.as_secs()))
             .unwrap_or_else(|| "-".to_string());
 
         template_entries.push((link_name, size, modified));
     }
 
     debug!("Creating template engine and rendering directory listing");
-    // Create template engine with embedded templates
     let engine = TemplateEngine::global();
 
-    // Render using template with conditional upload button
-    trace!(
-        "Upload enabled: {}",
-        config.map(|c| c.enable_upload).unwrap_or(false)
-    );
+    let upload_enabled = config.map(|c| c.enable_upload).unwrap_or(false);
     engine.render_directory_listing(
         display_path,
         &template_entries,
-        template_entries.len(),
-        config.map(|c| c.enable_upload).unwrap_or(false),
+        total_count,
+        upload_enabled,
         request_path,
+        safe_page,
+        total_pages,
     )
 }
 
