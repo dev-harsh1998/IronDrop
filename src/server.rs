@@ -478,7 +478,7 @@ impl ServerStats {
         }
     }
 
-    /// Check if memory pressure is detected (memory usage > 15MB)
+    /// Check if memory pressure is detected (memory usage > 150MB)
     /// This triggers aggressive cleanup in rate limiter and other components
     pub fn check_memory_pressure(&self, rate_limiter: Option<&RateLimiter>) -> bool {
         trace!("Checking memory pressure");
@@ -486,11 +486,11 @@ impl ServerStats {
 
         if available {
             if let Some(memory) = current_memory {
-                // Trigger cleanup if memory exceeds 15MB (baseline is ~4MB)
+                // Trigger cleanup if memory exceeds 150MB (baseline is ~30MB)
                 let memory_mb = memory / (1024 * 1024);
                 trace!("Current memory usage: {}MB", memory_mb);
 
-                if memory_mb > 15 {
+                if memory_mb > 150 {
                     warn!("Memory pressure detected: {}MB usage", memory_mb);
 
                     // Trigger rate limiter cleanup if provided
