@@ -11,6 +11,7 @@ class UploadManager {
         this.fileCounter = 0;
         this.totalBytes = 0;
         this.uploadedBytes = 0;
+        this.basePath = window.__BASE_PATH || '';
 
         this.init();
     }
@@ -401,9 +402,9 @@ class UploadManager {
         const uploadTo = urlParams.get('upload_to');
 
         if (uploadTo) {
-            return `/_irondrop/upload?upload_to=${encodeURIComponent(uploadTo)}`;
+            return `${this.basePath}/_irondrop/upload?upload_to=${encodeURIComponent(uploadTo)}`;
         } else {
-            return '/_irondrop/upload';
+            return `${this.basePath}/_irondrop/upload`;
         }
     }
 

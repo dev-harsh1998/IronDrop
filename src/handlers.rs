@@ -546,7 +546,7 @@ pub fn handle_file_request(
         // Redirect directory paths without trailing slash to canonical URL with slash
         if !request.path.ends_with('/') {
             let mut headers = HashMap::new();
-            let canonical = format!("{}/", request.path);
+            let canonical = crate::templates::prefixed(&format!("{}/", request.path));
             headers.insert("Location".to_string(), canonical);
             return Ok(Response {
                 status_code: 301,
@@ -588,6 +588,7 @@ pub fn handle_file_request(
             log_dir: cli.log_dir.clone(),
             ssl_cert: cli.ssl_cert.clone(),
             ssl_key: cli.ssl_key.clone(),
+            base_path: cli.base_path.clone().unwrap_or_default(),
         });
 
         let html_content = generate_directory_listing(&full_path, &request.path, config.as_ref())?;

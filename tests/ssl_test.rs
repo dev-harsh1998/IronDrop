@@ -96,6 +96,7 @@ fn setup_ssl_server(username: Option<String>, password: Option<String>) -> TestS
         log_dir: None,
         ssl_cert: Some(cert_path),
         ssl_key: Some(key_path),
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -279,6 +280,7 @@ fn test_ssl_missing_cert_file() {
         log_dir: None,
         ssl_cert: Some(bogus_cert),
         ssl_key: Some(key_path),
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -321,6 +323,7 @@ fn test_ssl_missing_key_file() {
         log_dir: None,
         ssl_cert: Some(cert_path),
         ssl_key: Some(bogus_key),
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
@@ -359,6 +362,7 @@ fn test_ssl_cert_without_key() {
         log_dir: None,
         ssl_cert: Some(cert_path),
         ssl_key: None,
+        base_path: None,
     };
 
     let result = cli.validate();
@@ -400,6 +404,7 @@ fn test_ssl_key_without_cert() {
         log_dir: None,
         ssl_cert: None,
         ssl_key: Some(key_path),
+        base_path: None,
     };
 
     let result = cli.validate();
@@ -444,6 +449,7 @@ fn test_http_still_works_without_ssl() {
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();

@@ -10,6 +10,30 @@ use std::sync::atomic::AtomicBool;
 
 pub static AUTH_ENABLED: AtomicBool = AtomicBool::new(false);
 
+/// Global base path prefix for reverse proxy sub-path deployments.
+/// Empty string when serving from root, e.g. "/webstorage" when behind a proxy.
+static BASE_PATH: OnceLock<String> = OnceLock::new();
+
+/// Initialize the global base path. Call once during server startup.
+pub fn init_base_path(path: String) {
+    let _ = BASE_PATH.set(path);
+}
+
+/// Get the configured base path prefix (empty string if not set).
+pub fn base_path() -> &'static str {
+    BASE_PATH.get().map(|s| s.as_str()).unwrap_or("")
+}
+
+/// Prepend the base path to an absolute path (e.g. "/_irondrop/foo" -> "/webstorage/_irondrop/foo").
+pub fn prefixed(path: &str) -> String {
+    let bp = base_path();
+    if bp.is_empty() {
+        path.to_string()
+    } else {
+        format!("{bp}{path}")
+    }
+}
+
 // Embed templates at compile time
 // Base template
 const BASE_HTML: &str = include_str!("../templates/common/base.html");
@@ -160,16 +184,19 @@ impl TemplateEngine {
         let content = self.render(content_template, variables)?;
 
         // Create variables for the base template
+        let bp = base_path();
         let mut base_variables = variables.clone();
+        base_variables.insert("BASE_PATH".to_string(), bp.to_string());
         base_variables.insert("PAGE_TITLE".to_string(), page_title.to_string());
         base_variables.insert("PAGE_STYLES".to_string(), page_styles.to_string());
         base_variables.insert("PAGE_SCRIPTS".to_string(), page_scripts.to_string());
 
         let auth_enabled = AUTH_ENABLED.load(std::sync::atomic::Ordering::SeqCst);
+        let logout_href = prefixed("/_irondrop/logout");
         let full_header_actions = if auth_enabled && content_template != "logout_content" {
             format!(
                 r#"{}
-                <a href="/_irondrop/logout" onclick="event.preventDefault(); var xhr = new XMLHttpRequest(); xhr.open('GET', '/_irondrop/logout', true, 'logout', 'logout'); xhr.send(); xhr.onreadystatechange = function() {{ if (xhr.readyState == 4) window.location.href = '/_irondrop/logout'; }};" class="btn btn-light" id="logoutBtn" style="margin-left: 8px;" title="Logout">
+                <a href="{logout_href}" onclick="event.preventDefault(); var xhr = new XMLHttpRequest(); xhr.open('GET', '{logout_href}', true, 'logout', 'logout'); xhr.send(); xhr.onreadystatechange = function() {{ if (xhr.readyState == 4) window.location.href = '{logout_href}'; }};" class="btn btn-light" id="logoutBtn" style="margin-left: 8px;" title="Logout">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                         <polyline points="16 17 21 12 16 7"></polyline>
@@ -206,9 +233,14 @@ impl TemplateEngine {
                 .trim_end_matches('/')
                 .to_string()
         };
-        let page_styles =
-            r#"<link rel="stylesheet" href="/_irondrop/static/directory/styles.css">"#;
-        let page_scripts = r#"<script src="/_irondrop/static/directory/script.js"></script>"#;
+        let page_styles = format!(
+            r#"<link rel="stylesheet" href="{}/_irondrop/static/directory/styles.css">"#,
+            base_path()
+        );
+        let page_scripts = format!(
+            r#"<script src="{}/_irondrop/static/directory/script.js"></script>"#,
+            base_path()
+        );
 
         // Build header actions based on upload status
         let header_actions = if variables
@@ -221,14 +253,15 @@ impl TemplateEngine {
                 .unwrap_or(&String::new())
                 .clone();
             format!(
-                r#"<a href="/_irondrop/upload{suffix}" class="btn btn-light">
+                r#"<a href="{}/_irondrop/upload{suffix}" class="btn btn-light">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="17,8 12,3 7,8" />
                         <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
                     Upload Files
-                </a>"#
+                </a>"#,
+                base_path()
             )
         } else {
             String::new()
@@ -248,8 +281,8 @@ impl TemplateEngine {
         self.render_page(
             "directory_content",
             &page_title,
-            page_styles,
-            page_scripts,
+            &page_styles,
+            &page_scripts,
             &header_actions,
             &enhanced_variables,
         )
@@ -337,15 +370,21 @@ impl TemplateEngine {
         variables.insert("VERSION".to_string(), crate::VERSION.to_string());
 
         let page_title = format!("{error_code} {error_message}");
-        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/error/styles.css">"#;
-        let page_scripts = r#"<script src="/_irondrop/static/error/script.js"></script>"#;
+        let page_styles = format!(
+            r#"<link rel="stylesheet" href="{}/_irondrop/static/error/styles.css">"#,
+            base_path()
+        );
+        let page_scripts = format!(
+            r#"<script src="{}/_irondrop/static/error/script.js"></script>"#,
+            base_path()
+        );
         let header_actions = ""; // No actions on error page
 
         self.render_page(
             "error_content",
             &page_title,
-            page_styles,
-            page_scripts,
+            &page_styles,
+            &page_scripts,
             header_actions,
             &variables,
         )
@@ -357,12 +396,19 @@ impl TemplateEngine {
         variables.insert("PATH".to_string(), path.to_string());
 
         let page_title = format!("Upload to {path}");
-        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/upload/styles.css">"#;
-        let page_scripts = r#"<script src="/_irondrop/static/upload/script.js"></script>"#;
+        let page_styles = format!(
+            r#"<link rel="stylesheet" href="{}/_irondrop/static/upload/styles.css">"#,
+            base_path()
+        );
+        let page_scripts = format!(
+            r#"<script src="{}/_irondrop/static/upload/script.js"></script>"#,
+            base_path()
+        );
 
         // Header action is back to directory
+        let back_href = prefixed(path);
         let header_actions = format!(
-            r#"<a href="{path}" class="btn btn-light" id="backToDir">
+            r#"<a href="{back_href}" class="btn btn-light" id="backToDir">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="m12 19-7-7 7-7" />
                         <path d="m19 12H5" />
@@ -374,8 +420,8 @@ impl TemplateEngine {
         self.render_page(
             "upload_content",
             &page_title,
-            page_styles,
-            page_scripts,
+            &page_styles,
+            &page_scripts,
             &header_actions,
             &variables,
         )
@@ -545,13 +591,15 @@ impl TemplateEngine {
                 Self::get_file_icon(name)
             };
 
-            // Build absolute href using CURRENT_PATH to avoid base-URL ambiguity
+            // Build absolute href using CURRENT_PATH, prefixed with base_path
+            let bp = base_path();
             let base_clean = current_path.trim_end_matches('/');
             let href = if base_clean.is_empty() {
-                format!("/{}", percent_encode(name))
+                format!("{}/{}", bp, percent_encode(name))
             } else {
                 format!(
-                    "/{}/{}",
+                    "{}/{}/{}",
+                    bp,
                     base_clean.trim_start_matches('/'),
                     percent_encode(name)
                 )
@@ -615,21 +663,29 @@ impl TemplateEngine {
     pub fn render_monitor_page(&self) -> Result<String, AppError> {
         debug!("Rendering monitor page");
         let page_title = "Monitor";
-        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/monitor/styles.css">"#;
-        let page_scripts = r#"
+        let page_styles = format!(
+            r#"<link rel="stylesheet" href="{}/_irondrop/static/monitor/styles.css">"#,
+            base_path()
+        );
+        let page_scripts = format!(
+            r#"
             <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-            <script src="/_irondrop/static/monitor/script.js"></script>
-        "#;
-        let header_actions = r#"<a href="/" class="btn btn-light">← Back to Files</a>"#;
+            <script src="{}/_irondrop/static/monitor/script.js"></script>
+        "#,
+            base_path()
+        );
+        let back_href = prefixed("/");
+        let header_actions =
+            format!(r#"<a href="{back_href}" class="btn btn-light">← Back to Files</a>"#);
 
         let variables = HashMap::new();
 
         self.render_page(
             "monitor_content",
             page_title,
-            page_styles,
-            page_scripts,
-            header_actions,
+            &page_styles,
+            &page_scripts,
+            &header_actions,
             &variables,
         )
     }
@@ -649,9 +705,14 @@ impl TemplateEngine {
         warnings: &str,
     ) -> Result<String, AppError> {
         let page_title = "Upload Successful";
-        let page_styles = r#"<link rel="stylesheet" href="/_irondrop/static/upload/styles.css">"#;
+        let page_styles = format!(
+            r#"<link rel="stylesheet" href="{}/_irondrop/static/upload/styles.css">"#,
+            base_path()
+        );
         let page_scripts = "";
-        let header_actions = r#"<a href="/" class="btn btn-light">← Back to Files</a>"#;
+        let back_href = prefixed("/");
+        let header_actions =
+            format!(r#"<a href="{back_href}" class="btn btn-light">← Back to Files</a>"#);
 
         let mut variables = HashMap::new();
         variables.insert("FILE_COUNT".to_string(), file_count.to_string());
@@ -663,9 +724,9 @@ impl TemplateEngine {
         self.render_page(
             "upload_success",
             page_title,
-            page_styles,
+            &page_styles,
             page_scripts,
-            header_actions,
+            &header_actions,
             &variables,
         )
     }

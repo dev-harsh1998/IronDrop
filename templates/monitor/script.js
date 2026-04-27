@@ -3,6 +3,7 @@
 
 let chartJsLoaded = false;
 let chartsInitialized = false;
+const basePath = window.__BASE_PATH || '';
 
 // Check if Chart.js loaded correctly
 window.addEventListener('load', function() {
@@ -192,7 +193,7 @@ async function loadMetrics() {
     setLoadingState(true);
 
     try {
-        const response = await fetch('/monitor?json=1');
+        const response = await fetch(basePath + '/monitor?json=1');
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -583,7 +584,7 @@ async function performMemoryCleanup() {
     
     try {
         console.log('Initiating memory cleanup...');
-        const response = await fetch('/_irondrop/cleanup-memory', {
+        const response = await fetch(basePath + '/_irondrop/cleanup-memory', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

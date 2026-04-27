@@ -184,6 +184,7 @@ verbose = false
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -233,6 +234,7 @@ max_upload_size = 1GB
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -266,6 +268,7 @@ fn test_config_defaults() {
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -308,6 +311,7 @@ fn test_config_file_load_error() {
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let result = Config::load(&cli);
@@ -378,6 +382,7 @@ directory = {}
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -423,6 +428,7 @@ port = 9999
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     };
 
     let config = Config::load(&cli).expect("Failed to load config");
@@ -473,6 +479,7 @@ fn test_config_invalid_port_values() {
             log_dir: None,
             ssl_cert: None,
             ssl_key: None,
+            base_path: None,
         };
 
         let result = Config::load(&cli);
@@ -520,6 +527,7 @@ fn test_config_invalid_port_values() {
             log_dir: None,
             ssl_cert: None,
             ssl_key: None,
+            base_path: None,
         };
 
         let result = Config::load(&cli);
@@ -578,6 +586,7 @@ fn test_config_invalid_file_size_formats() {
             log_dir: None,
             ssl_cert: None,
             ssl_key: None,
+            base_path: None,
         };
 
         let result = Config::load(&cli);
@@ -656,6 +665,7 @@ fn test_config_boolean_edge_cases() {
             log_dir: None,
             ssl_cert: None,
             ssl_key: None,
+            base_path: None,
         };
 
         let result = Config::load(&cli);
@@ -706,6 +716,7 @@ fn test_config_malformed_ini_syntax() {
             log_dir: None,
             ssl_cert: None,
             ssl_key: None,
+            base_path: None,
         };
 
         let _result = Config::load(&cli);

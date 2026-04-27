@@ -37,6 +37,9 @@ pub struct Config {
     // SSL settings
     pub ssl_cert: Option<PathBuf>,
     pub ssl_key: Option<PathBuf>,
+
+    // Reverse proxy settings
+    pub base_path: String,
 }
 
 impl Config {
@@ -87,6 +90,7 @@ impl Config {
             log_dir: Self::get_log_dir(&ini, cli),
             ssl_cert: Self::get_ssl_cert(&ini, cli),
             ssl_key: Self::get_ssl_key(&ini, cli),
+            base_path: Self::get_base_path(&ini, cli),
         };
 
         log::debug!("Configuration loading completed successfully");
@@ -364,6 +368,28 @@ impl Config {
         ini.get_string("ssl", "key").map(PathBuf::from)
     }
 
+    fn get_base_path(ini: &IniConfig, cli: &Cli) -> String {
+        // CLI argument takes precedence
+        if let Some(ref base_path) = cli.base_path {
+            return base_path.clone();
+        }
+        // INI file
+        if let Some(bp) = ini.get_string("server", "base_path") {
+            let trimmed = bp.trim();
+            if !trimmed.is_empty() {
+                // Normalize: ensure leading slash, strip trailing slash
+                let with_slash = if trimmed.starts_with('/') {
+                    trimmed.to_string()
+                } else {
+                    format!("/{trimmed}")
+                };
+                return with_slash.trim_end_matches('/').to_string();
+            }
+        }
+        // Default: empty string (app served from root)
+        String::new()
+    }
+
     /// Print configuration summary
     pub fn print_summary(&self) {
         log::info!("Configuration Summary:");
@@ -405,6 +431,9 @@ impl Config {
         } else {
             log::info!("  SSL/TLS: Disabled (HTTP only)");
         }
+        if !self.base_path.is_empty() {
+            log::info!("  Base Path: {}", self.base_path);
+        }
     }
 }
 
@@ -434,6 +463,7 @@ mod tests {
             log_dir: None,
             ssl_cert: None,
             ssl_key: None,
+            base_path: None,
         }
     }
 

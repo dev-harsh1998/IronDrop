@@ -28,6 +28,7 @@ fn create_test_cli(upload_dir: PathBuf) -> Cli {
         log_dir: None,
         ssl_cert: None,
         ssl_key: None,
+        base_path: None,
     }
 }
 

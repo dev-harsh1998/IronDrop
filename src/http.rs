@@ -210,10 +210,9 @@ impl Request {
 
 // Static asset, favicon, upload, and health handlers moved to handlers.rs
 
-/// Determines the correct response based on the request.
 #[allow(clippy::too_many_arguments)]
 fn route_request(
-    request: &Request,
+    request: &mut Request,
     base_dir: &Arc<PathBuf>,
     allowed_extensions: &Arc<Vec<glob::Pattern>>,
     _username: &Arc<Option<String>>,
@@ -223,6 +222,30 @@ fn route_request(
     _stats: Option<&crate::server::ServerStats>,
     router: &Arc<Router>,
 ) -> Result<Response, AppError> {
+    // Strip the base path prefix from the request path for reverse proxy support.
+    // If a base_path is configured and the request doesn't match, return 404.
+    let bp = crate::templates::base_path();
+    if !bp.is_empty() {
+        let path_only = request
+            .path
+            .split('?')
+            .next()
+            .unwrap_or(&request.path)
+            .to_string();
+        if path_only == bp || path_only.starts_with(&format!("{bp}/")) {
+            // Strip the base path prefix from the full path (including query string)
+            let stripped = request.path[bp.len()..].to_string();
+            request.path = if stripped.is_empty() || !stripped.starts_with('/') {
+                format!("/{stripped}")
+            } else {
+                stripped
+            };
+        } else {
+            // Request path doesn't match the configured base path — 404
+            return Err(AppError::NotFound);
+        }
+    }
+
     trace!("Routing {} {} through router", request.method, request.path);
     // Authentication is now handled by middleware in the router
     // First check if router handles the request (internal routes)
@@ -270,7 +293,7 @@ pub async fn handle_client_async<S>(
 {
     let log_prefix = format!("[{}]", peer_addr);
 
-    let request = match Request::from_async_stream(&mut stream).await {
+    let mut request = match Request::from_async_stream(&mut stream).await {
         Ok(req) => req,
         Err(e) => {
             send_error_response_async(&mut stream, e, &log_prefix).await;
@@ -299,7 +322,7 @@ pub async fn handle_client_async<S>(
         move || {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 route_request(
-                    &request,
+                    &mut request,
                     &base_dir,
                     &allowed_extensions,
                     &username,
@@ -371,7 +394,15 @@ fn log_request_line(log_prefix: &str, method: &str, path: &str, status_code: u16
 }
 
 fn is_monitor_path(path: &str) -> bool {
-    path == "/monitor" || path.starts_with("/_irondrop/monitor")
+    let bp = crate::templates::base_path();
+    if bp.is_empty() {
+        path == "/monitor" || path.starts_with("/_irondrop/monitor")
+    } else {
+        path == format!("{bp}/monitor")
+            || path.starts_with(&format!("{bp}/_irondrop/monitor"))
+            || path == "/monitor"
+            || path.starts_with("/_irondrop/monitor")
+    }
 }
 
 fn monitor_request_log_rate_limited(method: &str, status_code: u16) {
