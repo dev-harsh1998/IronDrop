@@ -1,713 +1,204 @@
 # IronDrop API Reference
 
-## Overview
+This document describes the current HTTP surface implemented by the code in this repository.
 
-IronDrop provides a RESTful HTTP API for file operations, directory browsing, and system monitoring. This document describes all available endpoints, their parameters, and response formats.
+## Base Behavior
 
-## Base Configuration
+- default listen address: `127.0.0.1`
+- default port: `8080`
+- optional Basic Auth applies to the whole server when configured
+- when `--base-path /prefix` is set, every route in this document must be prefixed with `/prefix`
 
-### Default Settings
-- **Host**: `127.0.0.1` (configurable via `--listen`)
-- **Port**: `8080` (configurable via `--port`)
-- **Protocol**: HTTP/1.1
-- **Authentication**: Optional Basic Auth (configurable via `--username`/`--password`)
+## Directory And File Routes
 
-### Common Headers
+### `GET /` and `GET /<path>`
 
-#### Request Headers
-```http
-# Authentication (if enabled)
-Authorization: Basic <base64-encoded-credentials>
+Serves either:
 
-# For file uploads
-Content-Type: multipart/form-data; boundary=<boundary>
-Content-Length: <content-length>
+- an HTML directory listing for directories
+- a file stream for files
 
-# For API requests
-Accept: application/json, text/html
-User-Agent: <client-identifier>
+Notes:
+
+- directories without a trailing slash are redirected to their canonical slash form with `301 Moved Permanently`
+- directory listings are HTML only
+- directory pagination uses `?p=<page>`
+- file responses include `Accept-Ranges: bytes`
+- valid range requests may return `206 Partial Content`
+
+Common error codes:
+
+- `401 Unauthorized` when Basic Auth is enabled and credentials are missing or invalid
+- `403 Forbidden` for path traversal attempts or blocked extensions
+- `404 Not Found` for missing paths
+- `405 Method Not Allowed` for unsupported methods
+
+## Upload Routes
+
+Uploads are disabled unless `--enable-upload true` or `enable_upload = true` is set.
+
+### `GET /_irondrop/upload`
+
+Returns the embedded HTML upload page.
+
+Optional query parameters:
+
+- `upload_to`: subdirectory inside the served tree where uploaded files should be written
+
+### `POST /_irondrop/upload`
+
+Accepts an uploaded file body and writes it into the served directory tree.
+
+Filename resolution order:
+
+1. `Content-Disposition: ...; filename=...`
+2. `X-Filename`
+3. final URL segment when it looks like a filename
+4. generated fallback name such as `upload_<timestamp>.bin`
+
+Target directory:
+
+- default: the served directory
+- override: `upload_to=/subdir`
+
+Response format:
+
+- JSON when `Accept: application/json` is sent or the request looks like an XHR request
+- HTML otherwise
+
+Example raw upload:
+
+```bash
+curl -X POST \
+  -H 'Content-Type: application/octet-stream' \
+  -H 'X-Filename: document.txt' \
+  --data-binary @document.txt \
+  'http://127.0.0.1:8080/_irondrop/upload?upload_to=/incoming'
 ```
 
-#### Response Headers
-```http
-# Standard headers
-Server: irondrop/<version>
-Content-Type: <mime-type>
-Content-Length: <content-length>
-Connection: close
+Current behavior to note:
 
-# Caching headers (for static assets)
-Cache-Control: public, max-age=3600
+- public upload routing is `POST` only
+- request bodies up to 2 MiB stay in memory; larger ones are spooled to a temporary file
+- uploads are still bounded by the HTTP parser request-body limit of 10 GiB
+- there is no public `--upload-dir` flag
+
+Common upload errors:
+
+- `400 Bad Request` when the body is missing or malformed
+- `401 Unauthorized` when auth is enabled
+- `405 Method Not Allowed` when uploads are disabled
+- `413 Payload Too Large` when the configured upload limit is exceeded
+- `415 Unsupported Media Type` when the filename extension is rejected
+
+## Search Route
+
+### `GET /_irondrop/search`
+
+Query parameters:
+
+- `q`: required, 2 to 100 characters
+- `path`: optional search root inside the served tree, default `/`
+- `limit`: optional, default `50`, max `200`
+- `offset`: optional, default `0`
+
+Example:
+
+```bash
+curl 'http://127.0.0.1:8080/_irondrop/search?q=document&path=/&limit=10&offset=0'
 ```
 
-## Endpoints
+Response shape:
 
-### 1. Directory Listing
-
-#### `GET /` and `GET /<path>/`
-Retrieves directory contents or serves files.
-
-**Parameters:**
-- `path`: Directory path relative to served directory (optional, defaults to root)
-
-**Query Parameters:**
-- None (sorting and formatting handled by frontend JavaScript)
-
-**Security:**
-- Path traversal protection with canonical path validation
-- Hidden file filtering (files starting with '.')
-- System directory access prevention
-
-**Response Formats:**
-
-**HTML Response (Default):**
-```http
-HTTP/1.1 200 OK
-Content-Type: text/html; charset=utf-8
-
-<!DOCTYPE html>
-<html>
-<!-- Professional directory listing with file table -->
-</html>
-```
-
-**JSON Response:**
 ```json
-{
-  "path": "/",
-  "entries": [
-    {
-      "name": "document.pdf",
-      "type": "file",
-      "size": 1048576,
-      "modified": "2024-01-01T12:00:00Z",
-      "mime_type": "application/pdf"
-    },
-    {
-      "name": "subdirectory",
-      "type": "directory",
-      "size": null,
-      "modified": "2024-01-01T12:00:00Z",
-      "mime_type": null
-    }
-  ],
-  "stats": {
-    "total_files": 1,
-    "total_directories": 1,
-    "total_size": 1048576
+[
+  {
+    "name": "document.txt",
+    "path": "/docs/document.txt",
+    "size": "8 B",
+    "type": "file"
   }
-}
+]
 ```
 
-**Error Responses:**
-```http
-# Directory not found
-HTTP/1.1 404 Not Found
-Content-Type: text/html
+Notes:
 
-# Access denied
-HTTP/1.1 403 Forbidden
-Content-Type: text/html
+- the public API returns a JSON array, not a wrapped object
+- results are sorted by internal score before pagination
+- there is no `/api/search` route in the current codebase
 
-# Authentication required
-HTTP/1.1 401 Unauthorized
-WWW-Authenticate: Basic realm="IronDrop"
-```
+## Monitoring And Health Routes
 
-### 2. File Downloads
+### `GET /monitor`
+### `GET /_irondrop/monitor`
 
-#### `GET /<file-path>`
-Downloads individual files with support for range requests.
+Returns the HTML monitoring dashboard.
 
-**Parameters:**
-- `file-path`: Path to file relative to served directory
+### `GET /monitor?json=1`
+### `GET /_irondrop/monitor?json=1`
 
-**Request Headers:**
-```http
-# Range request (optional)
-Range: bytes=0-1023
+Returns machine-readable monitoring data.
 
-# Conditional requests (optional)
-If-None-Match: "<etag>"
-If-Modified-Since: <date>
-```
+### `GET /_irondrop/health`
+### `GET /_irondrop/status`
+### `GET /_health`
 
-**Response:**
-```http
-HTTP/1.1 200 OK
-Content-Type: application/octet-stream
-Content-Length: 1048576
-Content-Disposition: attachment; filename="document.pdf"
-Accept-Ranges: bytes
-ETag: "abc123"
-Last-Modified: Mon, 01 Jan 2024 12:00:00 GMT
+Returns a JSON health payload. `/_irondrop/status` currently matches the health payload and `/_health` is kept for compatibility.
 
-<file-content>
-```
+## Static And Internal Utility Routes
 
-**Range Response:**
-```http
-HTTP/1.1 206 Partial Content
-Content-Type: application/octet-stream
-Content-Length: 1024
-Content-Range: bytes 0-1023/1048576
-Accept-Ranges: bytes
+- `GET /_irondrop/static/<asset>`: embedded CSS and JavaScript assets
+- `GET /_irondrop/logo`: embedded project logo
+- `GET /favicon.ico`, `GET /favicon-16x16.png`, `GET /favicon-32x32.png`: embedded browser icons
+- `GET /_irondrop/logout`: logout page that returns `401` and `WWW-Authenticate`
+- `POST /_irondrop/cleanup-memory`: triggers search-memory cleanup and returns a small JSON status payload
 
-<partial-file-content>
-```
+## WebDAV Methods
 
-**Error Responses:**
-```http
-# File not found
-HTTP/1.1 404 Not Found
+WebDAV methods are handled on normal file paths, not on `/_irondrop/*` routes.
 
-# File extension not allowed
-HTTP/1.1 403 Forbidden
+When WebDAV is enabled, these methods are accepted:
 
-# Range not satisfiable
-HTTP/1.1 416 Range Not Satisfiable
-Content-Range: bytes */1048576
-```
+- `OPTIONS`
+- `PROPFIND`
+- `PROPPATCH`
+- `MKCOL`
+- `PUT`
+- `DELETE`
+- `COPY`
+- `MOVE`
+- `LOCK`
+- `UNLOCK`
 
-### 3. File Upload System
-
-#### `GET /_irondrop/upload`
-Displays the upload interface page.
-
-**Response:**
-```http
-HTTP/1.1 200 OK
-Content-Type: text/html; charset=utf-8
-
-<!DOCTYPE html>
-<html>
-<!-- Modern upload interface with direct binary upload -->
-</html>
-```
-
-#### `POST /_irondrop/upload`
-Uploads files using direct binary streaming for optimal performance and unlimited file size support.
-
-**Direct Upload Features:**
-- **Direct Binary Streaming**: No multipart parsing overhead
-- **Automatic Mode Selection**: Small uploads (≤64MB) processed in memory, large uploads (>64MB) streamed to disk
-- **Constant Memory Usage**: ~7MB RAM usage regardless of file size
-- **Unlimited File Sizes**: No artificial size restrictions
-- **Atomic Operations**: Complete uploads or clean failure with automatic cleanup
-
-**Request:**
-```http
-POST /_irondrop/upload HTTP/1.1
-Content-Type: application/octet-stream
-Content-Length: <content-length>
-X-Filename: document.pdf
-
-<raw-binary-file-data>
-```
-
-**Processing Modes:**
-- **Memory Mode** (≤64MB): Direct processing in memory for minimal latency
-- **Streaming Mode** (>64MB): Direct streaming to disk with constant ~7MB memory usage
-
-**Success Response (JSON):**
-```json
-{
-  "status": "success",
-  "message": "Files uploaded successfully",
-  "files": [
-    {
-      "name": "document.pdf",
-      "size": 1048576,
-      "saved_as": "document.pdf",
-      "location": "/path/to/uploads/document.pdf"
-    },
-    {
-      "name": "image.jpg",
-      "size": 524288,
-      "saved_as": "image_1.jpg",
-      "location": "/path/to/uploads/image_1.jpg"
-    }
-  ],
-  "upload_stats": {
-    "total_files": 2,
-    "total_size": 1572864,
-    "upload_time_ms": 150
-  }
-}
-```
-
-**Success Response (HTML):**
-```http
-HTTP/1.1 200 OK
-Content-Type: text/html
-
-<!DOCTYPE html>
-<html>
-<body>
-  <h1>Upload Successful</h1>
-  <p>2 files uploaded successfully</p>
-  <!-- Upload results page -->
-</body>
-</html>
-```
-
-**Error Responses:**
-```json
-# File too large
-{
-  "status": "error",
-  "error": "PayloadTooLarge",
-  "message": "File size exceeds maximum allowed size",
-  "details": {
-    "max_size": 10737418240,
-    "file_size": 21474836480,
-    "filename": "large_file.zip"
-  }
-}
-
-# Invalid file type
-{
-  "status": "error",
-  "error": "UnsupportedMediaType",
-  "message": "File type not allowed",
-  "details": {
-    "filename": "script.exe",
-    "extension": ".exe",
-    "allowed_extensions": ["*.txt", "*.pdf", "*.jpg"]
-  }
-}
-
-# Upload disabled
-{
-  "status": "error",
-  "error": "MethodNotAllowed",
-  "message": "File uploads are disabled on this server"
-}
-```
-
-### 4. Search API
-
-#### `GET /_irondrop/search`
-Searches for files and directories within the served directory tree.
-
-**Query Parameters:**
-- `q` (required): Search query string
-- `limit` (optional): Maximum number of results (default: 50, max: 100)
-- `offset` (optional): Result offset for pagination (default: 0)
-- `case_sensitive` (optional): Case-sensitive search (`true`/`false`, default: `false`)
-- `path` (optional): Search within specific subdirectory (default: root)
-
-**Examples:**
-```http
-GET /_irondrop/search?q=document
-GET /_irondrop/search?q=report&limit=20&offset=10
-GET /_irondrop/search?q=Config&case_sensitive=true
-GET /_irondrop/search?q=readme&path=/docs
-```
-
-**Success Response:**
-```json
-{
-  "status": "success",
-  "query": "document",
-  "results": [
-    {
-      "name": "document.pdf",
-      "path": "/files/document.pdf",
-      "size": "1.0 MB",
-      "file_type": "document",
-      "score": 1.0,
-      "last_modified": 1704067200
-    },
-    {
-      "name": "my-document.txt",
-      "path": "/files/subfolder/my-document.txt", 
-      "size": "4.2 KB",
-      "file_type": "text",
-      "score": 0.8,
-      "last_modified": 1704063600
-    }
-  ],
-  "pagination": {
-    "total": 15,
-    "limit": 50,
-    "offset": 0,
-    "has_more": false
-  },
-  "search_stats": {
-    "search_time_ms": 12,
-    "indexed_files": 1247,
-    "cache_hit": false
-  }
-}
-```
-
-**Error Responses:**
-```json
-# Missing query parameter
-{
-  "status": "error",
-  "error": "BadRequest",
-  "message": "Missing required parameter: q"
-}
-
-# Search engine not available
-{
-  "status": "error", 
-  "error": "ServiceUnavailable",
-  "message": "Search engine is currently indexing, please try again"
-}
-
-# Invalid parameters
-{
-  "status": "error",
-  "error": "BadRequest",
-  "message": "Invalid limit parameter: maximum 100 allowed",
-  "details": {
-    "limit": 500,
-    "max_limit": 100
-  }
-}
-```
-
-**Performance Notes:**
-- **Dual-Mode Search Engine**: Automatically selects Standard mode (≤100K files) or Ultra-Compact mode (>100K files)
-- **Standard Mode**: In-memory search with full feature set
-- **Ultra-Compact Mode**: Memory-optimized for very large trees (around ~110MB RAM for ~10M entries)
-- **Real-time Indexing**: No pre-indexing required, searches current filesystem state
-- **Search Types**: Substring matching, fuzzy matching, and token-based search
-- **Result Highlighting**: Matched portions highlighted in results
-
-### 5. Static Assets
-
-#### `GET /_irondrop/static/<asset-path>`
-Serves template assets (CSS, JavaScript, images).
-
-**Examples:**
-- `GET /_irondrop/static/directory/styles.css`
-- `GET /_irondrop/static/upload/script.js`
-- `GET /_irondrop/static/error/styles.css`
-
-**Response:**
-```http
-HTTP/1.1 200 OK
-Content-Type: text/css
-Cache-Control: public, max-age=3600
-ETag: "asset-hash"
-
-/* CSS content */
-```
-
-**Error Response:**
-```http
-HTTP/1.1 404 Not Found
-Content-Type: text/plain
-
-Static asset not found
-```
-
-### 6. Health and Monitoring
-
-#### `GET /_irondrop/health`
-Basic health check endpoint.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "service": "irondrop",
-  "version": "<current>",
-  "timestamp": 1700000000,
-  "features": ["rate_limiting", "statistics", "native_mime_detection"]
-}
-```
-
-#### `GET /_irondrop/status`
-Status endpoint.
-
-Currently this returns the same payload as `/_irondrop/health`.
-
-#### `GET /_irondrop/monitor`
-HTML monitoring dashboard (human-friendly) that auto-refreshes via JavaScript to show live server statistics. Provides request counts, bytes served (downloads), and upload metrics (counts, bytes, success rate, concurrency, average processing time).
-
-**Response (HTML):**
-```http
-HTTP/1.1 200 OK
-Content-Type: text/html; charset=utf-8
-
-<!DOCTYPE html>
-<html>
-  <!-- Embedded dashboard template with real-time updates -->
-</html>
-```
-
-#### `GET /_irondrop/monitor?json=1`
-Machine-readable JSON stats for integration with external monitoring / scripting.
-
-**Response (JSON):**
-```json
-{
-  "requests": { "total": 42, "successful": 40, "errors": 2 },
-  "downloads": {
-    "bytes_served": 1048576
-  },
-  "uptime_secs": 360,
-  "memory": {
-    "available": true,
-    "current_bytes": 33554432,
-    "peak_bytes": 67108864,
-    "current_mb": 32.0,
-    "peak_mb": 64.0
-  },
-  "uploads": {
-    "total_uploads": 5,
-    "successful_uploads": 5,
-    "failed_uploads": 0,
-    "files_uploaded": 7,
-    "upload_bytes": 5242880,
-    "average_upload_size": 748982,
-    "largest_upload": 2097152,
-    "concurrent_uploads": 0,
-    "average_processing_ms": 152.4,
-    "success_rate": 100.0
-  }
-}
-```
-
-**Notes:**
-- `bytes_served` counts only response body bytes (excludes headers).
-- `average_processing_ms` is the rolling average (last 100 uploads).
-- All counters are cumulative since server start.
-
-**Planned Extensions (future versions):** active connections, per-endpoint metrics, Prometheus format.
+When WebDAV is disabled, those methods return `405 Method Not Allowed`.
 
 ## Authentication
 
-### Basic Authentication
+When `--username` and `--password` are configured, auth middleware runs before route handling. That includes:
 
-When authentication is enabled via `--username` and `--password`, all endpoints require Basic Authentication.
+- file and directory routes
+- upload routes
+- monitoring and health routes
+- internal static assets
 
-**Request:**
-```http
-GET / HTTP/1.1
-Authorization: Basic <base64-encoded-username:password>
-```
+Example:
 
-**Unauthorized Response:**
-```http
-HTTP/1.1 401 Unauthorized
-WWW-Authenticate: Basic realm="IronDrop"
-Content-Type: text/html
-
-<!DOCTYPE html>
-<html>
-<body>
-  <h1>401 Unauthorized</h1>
-  <p>This server requires authentication.</p>
-</body>
-</html>
-```
-
-## Rate Limiting
-
-IronDrop implements rate limiting to prevent abuse. Rate limiting is enforced before request handling; when a client exceeds limits, the connection may be rejected/closed.
-
-### Default Limits
-- **Requests per minute**: 120 (configurable)
-- **Concurrent connections per IP**: 10 (configurable)
-
-## Error Handling
-
-### HTTP Status Codes
-
-| Code | Meaning | Description |
-|------|---------|-------------|
-| 200 | OK | Request successful |
-| 206 | Partial Content | Range request successful |
-| 400 | Bad Request | Malformed request |
-| 401 | Unauthorized | Authentication required |
-| 403 | Forbidden | Access denied or file type not allowed |
-| 404 | Not Found | File or directory not found |
-| 405 | Method Not Allowed | HTTP method not supported |
-| 413 | Payload Too Large | Upload size exceeds limit |
-| 415 | Unsupported Media Type | File type not allowed |
-| 416 | Range Not Satisfiable | Invalid range request |
-| 500 | Internal Server Error | Server error |
-
-### Error Response Format
-Errors are returned as HTML pages for browser-facing endpoints. JSON is returned only by JSON endpoints (for example `/_irondrop/health` and `/_irondrop/monitor?json=1`).
-
-**HTML Error Response:**
-```html
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Error 404 - Not Found</title>
-    <link rel="stylesheet" href="/_irondrop/static/error/styles.css">
-</head>
-<body>
-    <div class="error-container">
-        <h1>404 - Not Found</h1>
-        <p>The requested resource could not be found.</p>
-        <a href="/">← Back to Home</a>
-    </div>
-</body>
-</html>
-```
-
-## Client Integration Examples
-
-### JavaScript/Fetch API
-
-**Directory Listing:**
-```javascript
-// Get directory listing as JSON
-const response = await fetch('/path/to/directory?format=json');
-const data = await response.json();
-
-console.log(`Found ${data.entries.length} items`);
-data.entries.forEach(entry => {
-    console.log(`${entry.name} (${entry.type})`);
-});
-```
-
-**File Upload:**
-```javascript
-// Upload multiple files
-const formData = new FormData();
-formData.append('file', file1);
-formData.append('file', file2);
-
-const response = await fetch('/upload', {
-    method: 'POST',
-    body: formData,
-    headers: {
-        'Accept': 'application/json'
-    }
-});
-
-const result = await response.json();
-if (result.status === 'success') {
-    console.log(`Uploaded ${result.files.length} files`);
-}
-```
-
-**Search Files:**
-```javascript
-// Search for files
-const searchResponse = await fetch('/_irondrop/search?q=document&limit=10');
-const searchData = await searchResponse.json();
-
-if (searchData.status === 'success') {
-    console.log(`Found ${searchData.results.length} results`);
-    searchData.results.forEach(result => {
-        console.log(`${result.name} - Score: ${result.score}`);
-    });
-}
-```
-
-**Health Check:**
-```javascript
-// Monitor server health
-const health = await fetch('/_irondrop/health').then(r => r.json());
-console.log(`Server status: ${health.status} (${health.version})`);
-```
-
-### cURL Examples
-
-**Download file:**
 ```bash
-curl -O http://localhost:8080/path/to/file.pdf
+curl -u admin:secret http://127.0.0.1:8080/_irondrop/health
 ```
 
-**Upload file:**
-```bash
-curl -X POST -H "Content-Type: application/octet-stream" -H "X-Filename: document.pdf" --data-binary @document.pdf http://localhost:8080/_irondrop/upload
-```
+## Error Summary
 
-**Get directory listing as JSON:**
-```bash
-curl "http://localhost:8080/directory" -H "Accept: application/json" | jq .
-```
+Common status codes used by the current implementation:
 
-**Search files:**
-```bash
-curl "http://localhost:8080/_irondrop/search?q=document&limit=5" | jq .
-```
-
-**Health check:**
-```bash
-curl http://localhost:8080/_irondrop/health
-```
-
-**With authentication:**
-```bash
-curl -u username:password http://localhost:8080/
-```
-
-### Python/Requests
-
-**Directory listing:**
-```python
-import requests
-
-response = requests.get('http://localhost:8080/path', 
-                       headers={'Accept': 'application/json'})
-data = response.json()
-
-for entry in data['entries']:
-    print(f"{entry['name']} - {entry['type']}")
-```
-
-**File upload:**
-```python
-import requests
-
-with open('document.pdf', 'rb') as f:
-    headers = {
-        'Content-Type': 'application/octet-stream',
-        'X-Filename': 'document.pdf'
-    }
-    response = requests.post('http://localhost:8080/_irondrop/upload', 
-                           data=f, headers=headers)
-
-if response.status_code == 200:
-    result = response.json()
-    print(f"Upload successful: {result['message']}")
-```
-
-**Search files:**
-```python
-import requests
-
-response = requests.get('http://localhost:8080/_irondrop/search', 
-                       params={'q': 'document', 'limit': 10})
-data = response.json()
-
-if data['status'] == 'success':
-    for result in data['results']:
-        print(f"{result['name']} - Score: {result['score']}")
-```
-
-## Security Considerations
-
-### Best Practices
-1. **Use HTTPS in production** (enable built-in TLS or deploy behind a reverse proxy)
-2. **Enable authentication** for sensitive directories
-3. **Configure appropriate file extension filters**
-4. **Monitor rate limiting logs** for abuse detection
-5. **Regularly review upload directories** for malicious content
-6. **Set appropriate upload size limits** based on available storage
-7. **Use strong passwords** for Basic Authentication
-
-### Security Headers
-IronDrop sets appropriate `Content-Type` headers for responses. Additional security headers should be handled by your reverse proxy if required.
-
-### Input Validation
-All inputs are validated:
-- File extensions against allowed patterns
-- Upload sizes against configured limits
-- File names for path traversal attempts
-- HTTP headers for malformed content
-
-This API reference covers the current public HTTP surface area and provides examples for client integration.
+- `200 OK`
+- `206 Partial Content`
+- `301 Moved Permanently`
+- `400 Bad Request`
+- `401 Unauthorized`
+- `403 Forbidden`
+- `404 Not Found`
+- `405 Method Not Allowed`
+- `413 Payload Too Large`
+- `415 Unsupported Media Type`
+- `500 Internal Server Error`

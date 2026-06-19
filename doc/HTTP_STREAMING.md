@@ -1,329 +1,92 @@
-# IronDrop Direct Upload Streaming (v2.7.1)
+# IronDrop HTTP Body Streaming
+
+This guide documents the current request-body handling used by `src/http.rs` and `src/upload.rs`.
 
 ## Overview
 
-IronDrop implements direct streaming uploads. Large request bodies are streamed to disk, avoiding unbounded memory growth. Small bodies are processed in memory.
+IronDrop does not keep every upload body in memory.
 
-**Status**: Production-ready (v2.7.1)
-- Direct streaming implementation with bounded memory usage
-- Handling from small to very large files
-- Tests cover stability and cleanup
-- Simple binary streaming path and straightforward API
+The HTTP layer uses a two-stage model:
 
-## Key Features
+- request bodies up to 2 MiB are stored in memory
+- larger request bodies are spooled to a temporary file and passed to handlers as a file-backed body
 
-### Direct streaming logic
-- **Small uploads** (≤64MB): Processed in memory for optimal performance
-- **Large uploads** (>64MB): Directly streamed to disk with constant memory usage
-- **No size limits**: Removed artificial 10GB restrictions
-- **Constant memory**: RAM usage stays at ~7MB regardless of file size
-
-### Direct binary path
-- **Raw binary uploads**: No multipart parsing complexity
-- **Direct disk streaming**: Files written directly to storage
-- **Automatic cleanup**: Temporary files managed transparently
-- **Unified interface**: Upload handlers work seamlessly with both variants
-- **Type safety**: Rust's type system ensures correct handling
-
-### Security and resource management
-- **Automatic cleanup**: Temporary files are automatically removed after request completion
-- **Size limits**: Configurable limits prevent resource exhaustion
-- **Path safety**: Secure temporary file creation with unique naming
-- **Error handling**: Comprehensive error recovery with cleanup on failure
-
-## Architecture
-
-### RequestBody Enum
-
-The core of the streaming system is the `RequestBody` enum that provides a unified interface for both memory and disk-based request bodies:
+This is represented by `RequestBody`:
 
 ```rust
-#[derive(Debug, Clone)]
 pub enum RequestBody {
-    /// Small request body stored in memory
     Memory(Vec<u8>),
-    /// Large request body streamed to a temporary file
-    File(PathBuf),
+    File { path: PathBuf, size: u64 },
 }
 ```
 
-### Automatic Mode Selection
+## Thresholds
 
-The HTTP layer automatically determines the appropriate storage method based on content size:
+Current thresholds in the codebase:
 
-```rust
-// Automatic streaming logic in http.rs
-if content_length <= STREAMING_THRESHOLD {
-    // Small upload: keep in memory
-    let body_data = read_body_to_memory(stream, content_length)?;
-    request.body = Some(RequestBody::Memory(body_data));
-} else {
-    // Large upload: stream to disk
-    let temp_file_path = stream_body_to_disk(stream, content_length)?;
-    request.body = Some(RequestBody::File(temp_file_path));
-}
-```
+- HTTP parser spool-to-disk threshold: `2 * 1024 * 1024` bytes
+- upload handler in-memory threshold: `2 * 1024 * 1024` bytes
+- HTTP parser maximum request-body size: `10 * 1024 * 1024 * 1024` bytes
 
-### Memory Threshold Configuration
+That means uploads are not unbounded today: they are still capped by the request parser at 10 GiB unless the code changes.
 
-```rust
-/// Threshold for switching between memory and disk storage
-/// Files larger than 64MB are automatically streamed to disk
-/// This ensures total memory usage stays well below 128MB
-const STREAM_TO_DISK_THRESHOLD: usize = 64 * 1024 * 1024; // 64MB
-```
+## Request Flow
 
-## Implementation Details
+1. IronDrop reads the request line and headers.
+2. The body reader decides whether to keep the body in memory or spill it to a temp file.
+3. Route handling receives a `Request` whose body is either `RequestBody::Memory` or `RequestBody::File`.
+4. After request processing completes, file-backed temp bodies are removed.
 
-### HTTP Request Processing
+The cleanup happens in `handle_client_async()` after the response has been sent.
 
-The HTTP layer (`src/http.rs`) handles the automatic streaming logic:
+## Upload Integration
 
-1. **Content-Length Detection**: Extracts content length from HTTP headers
-2. **Mode Selection**: Compares content length against streaming threshold
-3. **Memory Processing**: Small uploads are read directly into memory
-4. **Disk Streaming**: Large uploads are streamed to temporary files
-5. **Request Construction**: Creates appropriate `RequestBody` variant
+The upload handler at `/_irondrop/upload` works on top of the same `RequestBody` abstraction.
 
-### Upload Handler Integration
+Behavior today:
 
-Upload handlers (`src/upload.rs`) work transparently with both variants:
+- small bodies are written from memory to the destination file
+- larger bodies are copied from the temp file to the final destination
+- final writes are atomic through a temp-file-and-rename pattern
+- filenames are validated and checked against allowed extensions
 
-```rust
-// Upload handlers automatically handle both memory and file variants
-match &request.body {
-    Some(RequestBody::Memory(data)) => {
-        // Process in-memory data
-        let cursor = Cursor::new(data.clone());
-        let parser = MultipartParser::new(cursor, &boundary, config)?;
-        // ... process multipart data
-    }
-    Some(RequestBody::File(path)) => {
-        // Process file-based data
-        let file = File::open(path)?;
-        let parser = MultipartParser::new(file, &boundary, config)?;
-        // ... process multipart data
-    }
-    None => return Err(AppError::invalid_multipart("No body")),
-}
-```
+Public upload routing is `POST /_irondrop/upload`. The internal upload handler also accepts `PUT` if called directly in code, but that is not currently exposed as a public route.
 
-### Temporary File Management
+## Temp Files
 
-The system uses secure temporary file creation and automatic cleanup:
+Temp files are created with unique names using:
 
-```rust
-// Secure temporary file creation
-let temp_filename = format!(
-    "{}{}_{}_{:x}.tmp",
-    TEMP_FILE_PREFIX,
-    std::process::id(),
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos(),
-    thread_rng().gen::<u32>()
-);
-```
+- process id
+- current time
+- a monotonic counter
 
-### Automatic Cleanup
+They are used in two places:
 
-Temporary files are automatically cleaned up when the request is complete:
+- HTTP request-body spooling in `src/http.rs`
+- final atomic upload writes in `src/upload.rs`
 
-```rust
-impl Drop for Request {
-    fn drop(&mut self) {
-        if let Some(RequestBody::File(path)) = &self.body {
-            if path.exists() {
-                let _ = std::fs::remove_file(path);
-            }
-        }
-    }
-}
-```
+## Operational Notes
 
-## Performance Characteristics
+- very large uploads still need enough disk space for temporary storage
+- if uploads are enabled, the served directory tree must be writable where uploads should land
+- the request parser supports both `Content-Length` bodies and chunked transfer encoding
+- JSON upload responses are selected through `Accept: application/json` or XHR-style requests
 
-### Memory Usage
+## What This Guide Corrects
 
-| Upload Size | Storage Method | Memory Usage | Disk Usage |
-|-------------|----------------|--------------|------------|
-| 1KB - 64MB  | Memory         | ~Upload Size | None       |
-| 64MB - 10GB+| Disk Streaming | ~64KB Buffer | Upload Size|
+The current implementation does not match some older documentation claims:
 
-### Processing Speed
+- the spool threshold is 2 MiB, not 64 MiB
+- there is no `IRONDROP_STREAMING_THRESHOLD` runtime override
+- uploads are not described by a multipart-only model
+- the parser still enforces a 10 GiB maximum request-body size
 
-- **Small uploads**: Optimal performance with in-memory processing
-- **Large uploads**: Consistent performance regardless of size
-- **Concurrent uploads**: Each request handled independently
-- **Resource protection**: No memory exhaustion from large uploads
-
-### Scalability Benefits
-
-1. **Memory Efficiency**: Large uploads don't consume system memory
-2. **Concurrent Handling**: Multiple large uploads can be processed simultaneously
-3. **Resource Predictability**: Memory usage remains bounded regardless of upload size
-4. **System Stability**: Prevents out-of-memory conditions
-
-## Testing
-
-### HTTP Streaming Tests
-
-The implementation includes comprehensive tests in `tests/http_streaming_test.rs`:
-
-```rust
-#[test]
-fn test_small_body_memory_storage() {
-    // Verifies small uploads are kept in memory
-    let small_body = "a".repeat(500 * 1024); // 500KB
-    // ... test implementation
-}
-
-#[test]
-fn test_large_body_disk_streaming() {
-    // Verifies large uploads are streamed to disk
-    let large_body = "a".repeat(2 * 1024 * 1024); // 64MB
-    // ... test implementation
-}
-```
-
-### Test Coverage
-
-- **Memory storage verification**: Confirms small uploads use memory storage
-- **Disk streaming verification**: Confirms large uploads use disk storage
-- **Automatic cleanup testing**: Verifies temporary files are removed
-- **Error handling**: Tests cleanup on failure scenarios
-- **Integration testing**: End-to-end upload functionality
-
-## Configuration
-
-### Environment Variables
+## Example Raw Upload
 
 ```bash
-# Optional: Override default streaming threshold
-export IRONDROP_STREAMING_THRESHOLD=2097152  # 64MB
+curl -X POST \
+  -H 'Content-Type: application/octet-stream' \
+  -H 'X-Filename: big.bin' \
+  --data-binary @big.bin \
+  http://127.0.0.1:8080/_irondrop/upload
 ```
-
-### CLI Configuration
-
-The streaming system respects existing CLI configuration:
-
-```bash
-# Maximum upload size (affects both memory and disk uploads)
-irondrop --max-upload-size 10GB
-
-# Upload directory (where temporary files are created)
-irondrop --directory /path/to/uploads
-```
-
-## Security Considerations
-
-### Temporary File Security
-
-1. **Unique naming**: Process ID, timestamp, and a monotonic counter ensure unique filenames
-2. **Secure location**: Temporary files created in upload directory
-3. **Automatic cleanup**: Files removed immediately after processing
-4. **Error cleanup**: Files removed even if processing fails
-
-### Resource Protection
-
-1. **Size limits**: Existing upload size limits apply to both variants
-2. **Memory bounds**: Large uploads don't consume system memory
-3. **Disk space**: Temporary files are cleaned up immediately
-4. **Concurrent limits**: Rate limiting and blocking isolation prevent resource exhaustion under concurrency
-
-## Migration Guide
-
-### Existing Code Compatibility
-
-The streaming implementation is fully backward compatible. Existing upload handlers continue to work without modification:
-
-```rust
-// Before: Direct access to body data
-let body_data = request.body.as_ref().unwrap();
-
-// After: Pattern matching on RequestBody variants
-match &request.body {
-    Some(RequestBody::Memory(data)) => {
-        // Handle memory-based body
-    }
-    Some(RequestBody::File { path, size }) => {
-        // Handle file-based body
-        let _ = size;
-    }
-    None => {
-        // Handle missing body
-    }
-}
-```
-
-### Test Updates
-
-Tests need to be updated to use the new `RequestBody` enum:
-
-```rust
-// Before
-body: Some(body_data),
-
-// After
-body: Some(RequestBody::Memory(body_data)),
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Temporary file permissions**: Ensure upload directory is writable
-2. **Disk space**: Monitor available disk space for large uploads
-3. **Cleanup failures**: Check logs for temporary file cleanup errors
-
-### Debugging
-
-Enable detailed logging to monitor streaming behavior:
-
-```bash
-RUST_LOG=debug irondrop --directory /uploads --port 8080
-```
-
-### Monitoring
-
-The streaming system integrates with IronDrop's monitoring:
-
-- Upload statistics include both memory and disk uploads
-- Performance metrics track processing time for both variants
-- Error rates monitor cleanup failures and streaming errors
-
-## Future Enhancements
-
-### Planned Features
-
-1. **Configurable threshold**: Runtime configuration of streaming threshold
-2. **Compression support**: Automatic compression for large uploads
-3. **Progress tracking**: Real-time progress for disk-streamed uploads
-4. **Metrics integration**: Detailed metrics for streaming performance
-
-### Performance Optimizations
-
-1. **Buffer pool**: Reusable buffers for streaming operations
-2. **Async I/O**: Non-blocking disk operations for better concurrency
-3. **Memory mapping**: Memory-mapped files for very large uploads
-4. **Chunked processing**: Streaming processing without temporary files
-
-## Version History
-
-- **v2.7.1**: Direct streaming implementation with unlimited file size support
-  - Automatic memory/disk switching based on content size
-  - `RequestBody` enum with `Memory` and `File` variants
-  - Comprehensive test coverage with dedicated streaming tests
-  - Full backward compatibility with existing upload handlers
-  - Automatic temporary file cleanup and error handling
-
-## Related Documentation
-
-- [Upload Integration Guide](./UPLOAD_INTEGRATION.md) - Upload UI and form handling
-- [Multipart Parser Documentation](./MULTIPART_README.md) - Multipart form processing
-- [API Reference](./API_REFERENCE.md) - HTTP API endpoints and responses
-- [Architecture Documentation](./ARCHITECTURE.md) - Overall system architecture
-- [Testing Documentation](./TESTING_DOCUMENTATION.md) - Test suite and validation
-
-The HTTP streaming implementation provides a robust foundation for handling uploads of any size while maintaining optimal performance and resource utilization.

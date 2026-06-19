@@ -428,7 +428,7 @@ fn test_new_feature() {
 
 - [Architecture Documentation](./ARCHITECTURE.md) - System architecture overview
 - [Configuration System](./CONFIGURATION_SYSTEM.md) - Configuration testing details
-- [Security Fixes](./SECURITY_FIXES.md) - Security test scenarios
+- [Security Fixes](./RFC_OWASP_COMPLIANCE.md) - Security test scenarios
 - [API Reference](./API_REFERENCE.md) - API endpoint testing
 - [Documentation Index](./README.md) - Complete documentation suite
 

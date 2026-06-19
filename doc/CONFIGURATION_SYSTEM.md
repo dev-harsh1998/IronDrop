@@ -1,165 +1,192 @@
-## IronDrop Configuration System (v2.7.1)
+# IronDrop Configuration System
 
-### Overview
-IronDrop 2.5 introduces a first‑class configuration system with hierarchical precedence and zero external dependencies. It complements (not replaces) the existing CLI flags, enabling reproducible deployments, easier automation, and environment portability. The system is intentionally simple: an internal INI parser (`src/config/ini_parser.rs`) plus a composition layer (`src/config/mod.rs`) that merges values from multiple sources.
+This document describes the configuration behavior implemented today in `src/config/mod.rs` and related CLI code.
 
-### Goals
-* Deterministic startup configuration (documented precedence)
-* Human‑readable, comment‑friendly format (INI)
-* Zero dependencies (fully in‑tree parser)
-* Security by validation (size bounds, directory integrity, auth opt‑in)
-* Backwards compatibility (all existing CLI flags still function)
+## Precedence
 
-### Precedence Model
-Highest → Lowest (first match wins):
-1. CLI Flag (explicit non‑default value)  
-2. INI File Value  
-3. Built‑in Default
+Current precedence is:
 
-The INI file itself is optional. If absent, behavior is identical to pre‑2.5 versions except for the new `--config-file` flag.
+1. CLI flags
+2. INI file values
+3. built-in defaults
 
-### Configuration File Discovery Order
-If `--config-file <path>` is NOT provided, IronDrop searches:
+The current config loader does not apply `IRONDROP_*` environment-variable overrides.
+
+The only environment-sensitive behavior in the current startup path is logging: if `RUST_LOG` is already set, IronDrop keeps that value instead of setting its own default log level.
+
+## Config File Discovery
+
+If `--config-file <path>` is provided, that exact file is loaded and startup fails if it does not exist.
+
+Otherwise, IronDrop searches in this order:
+
 1. `./irondrop.ini`
 2. `./irondrop.conf`
 3. `$HOME/.config/irondrop/config.ini`
-4. `/etc/irondrop/config.ini` (Unix only)
+4. `/etc/irondrop/config.ini` on Unix
 
-If none exist, startup proceeds with defaults + CLI overrides.
+## Required CLI Input
 
-### New CLI Flag
-| Flag | Description |
-|------|-------------|
-| `--config-file <path>` | Explicit path to an INI configuration file. Errors if not found. |
-| `--disable-rate-limit <bool>` | Disable rate limiting, effective only when WebDAV is enabled. |
-| `--ssl-cert <path>` | Path to PEM certificate file for HTTPS. Requires `--ssl-key`. |
-| `--ssl-key <path>` | Path to PEM private key file for HTTPS. Requires `--ssl-cert`. |
+`--directory` is required on the CLI.
 
-### INI Format Features
-* Sections (`[server]`, `[upload]`, `[webdav]`, `[auth]`, `[logging]`, `[security]`, `[ssl]`)
-* Comments starting with `#` or `;`
-* Key = value pairs (whitespace tolerant)
-* Inline comments after values (`key = value  # note`)
-* Empty lines ignored
-* Graceful handling of malformed section headers (skipped, not fatal)
+Although the sample config file contains a `directory = ...` comment in the `[server]` section, the current implementation always takes the served directory from the CLI argument.
 
-### Supported Keys (by Section)
-```
-[server]
-listen = 0.0.0.0            # String (IP or hostname)
-port = 8080                 # Integer (u16)
-threads = 16                # Integer (usize)
-chunk_size = 2048           # Integer (usize, bytes per read)
-directory = /data/files     # (Not used for precedence; directory always comes from CLI)
+## Supported Sections And Keys
 
-[upload]
-enabled = true              # bool (true/false/yes/no/on/off/1/0)
-max_size = 5GB              # File size parser (B, KB, MB, GB, TB; decimals allowed: 1.5GB)
-directory = /data/uploads   # Optional override for upload target
+### `[server]`
 
-[webdav]
-enable_webdav = false       # bool
-disable_rate_limit = false  # bool (ignored unless enable_webdav = true)
+- `listen`
+- `port`
+- `threads`
+- `chunk_size`
+- `base_path`
+- `enable_webdav` is also accepted here as a compatibility fallback, though `[webdav]` is the preferred section
 
-[auth]
-username = alice
-password = secret123
+### `[upload]`
 
-[security]
-allowed_extensions = *.zip,*.txt,*.pdf
+- `enable_upload`
+- `max_upload_size`
+- `max_size` as a backward-compatible alias
 
-[logging]
-verbose = true              # Enables debug logging
-detailed = false            # Enables info‑level below verbose
+Notes:
 
-[ssl]
-cert = /path/to/cert.pem   # PEM certificate file (required for HTTPS)
-key = /path/to/key.pem     # PEM private key file (required for HTTPS)
-```
+- upload size values are parsed as bytes from human-readable strings such as `100MB`, `2GB`, or `1.5GB`
+- there is no config key for a separate upload directory because uploads are written inside the served directory tree
 
-### Data Type Parsing
-| Type | Behavior |
-|------|----------|
-| Boolean | Case‑insensitive: true/false, yes/no, on/off, 1/0 |
-| Integer | Parsed via `str::parse()`; invalid -> ignored (falls back) |
-| File Size | Supports suffixes B / KB / MB / GB / TB; decimal numeric part accepted |
-| List | Comma‑separated, trimmed entries; empty entries removed |
+### `[webdav]`
 
-### Internal Architecture
-Component | Responsibility | File
-----------|----------------|------
-`IniConfig` | Parse & store raw key/value data | `src/config/ini_parser.rs`
-`Config` | Merge CLI + INI + defaults; expose strongly typed fields | `src/config/mod.rs`
-`Config::load()` | Orchestrates discovery, parsing, precedence, assembly | `src/config/mod.rs`
-`run_server_with_config()` | Transitional adapter (Config → Cli) | `src/server.rs`
+- `enable_webdav`
+- `disable_rate_limit`
 
-### Safety & Validation
-* Explicit error if user supplies `--config-file` and file is missing.
-* Upload size normalized to bytes internally (CLI still in MB for backwards compatibility).
-* Directory for serving content always comes from required CLI `--directory` (prevents surprising relocation by config files outside working context).
-* Parser avoids panics: malformed lines are either validated or produce targeted errors (empty key, empty section) while benign malformed section headers are ignored.
+`disable_rate_limit` only takes effect when WebDAV is enabled.
 
-### Example Minimal INI
-```
+### `[auth]`
+
+- `username`
+- `password`
+
+### `[security]`
+
+- `allowed_extensions`
+
+This is parsed as a comma-separated list of glob patterns.
+
+### `[logging]`
+
+- `verbose`
+- `detailed`
+- `log_dir`
+
+### `[ssl]`
+
+- `cert`
+- `key`
+
+Both must be present together to enable HTTPS.
+
+## Current Defaults
+
+Defaults applied by `Config::load()`:
+
+- `listen = 127.0.0.1`
+- `port = 8080`
+- `threads = 8`
+- `chunk_size = 1024`
+- `enable_upload = false`
+- `enable_webdav = false`
+- `disable_rate_limit = false`
+- `allowed_extensions = *.zip,*.txt`
+- `verbose = false`
+- `detailed = false`
+- `base_path = ""`
+- `max_upload_size = unlimited` at the config layer, subject to HTTP request parsing limits
+
+## CLI Flags In The Current Codebase
+
+The `Cli` struct currently exposes these user-facing options:
+
+- `-d`, `--directory`
+- `-l`, `--listen`
+- `-p`, `--port`
+- `-a`, `--allowed-extensions`
+- `-t`, `--threads`
+- `-c`, `--chunk-size`
+- `-v`, `--verbose`
+- `--detailed-logging`
+- `--username`
+- `--password`
+- `--enable-upload`
+- `--max-upload-size`
+- `--enable-webdav`
+- `--disable-rate-limit`
+- `--config-file`
+- `--log-dir`
+- `--ssl-cert`
+- `--ssl-key`
+- `--base-path`
+
+The current codebase does not expose:
+
+- `--upload-dir`
+- `--password-file`
+- `IRONDROP_*` config overrides
+
+## Example INI File
+
+```ini
 [server]
 listen = 0.0.0.0
-port = 9090
+port = 8080
+threads = 16
+chunk_size = 8192
+base_path = /files
 
 [upload]
-enabled = true
-max_size = 2.5GB
+enable_upload = true
+max_upload_size = 5GB
 
 [webdav]
 enable_webdav = true
 disable_rate_limit = false
 
 [auth]
-username = demo
-password = changeMe!
+username = admin
+password = change-me
+
+[security]
+allowed_extensions = *.pdf,*.txt,*.jpg,*.png,*.zip
+
+[logging]
+detailed = true
+
+[ssl]
+cert = /etc/irondrop/cert.pem
+key = /etc/irondrop/key.pem
 ```
 
-### Example Combined Usage
+Start the server with:
+
+```bash
+irondrop -d /srv/files --config-file /etc/irondrop/config.ini
 ```
-irondrop -d ./public --config-file prod.ini --threads 32 --verbose
-```
-Explanation:
-* `threads` + `verbose` come from CLI (override INI).
-* Remaining unset CLI values (e.g., port/listen) come from `prod.ini`.
-* Any unspecified keys fall back to defaults.
 
-### Migration Guidance (Pre‑2.5 → 2.5)
-Scenario | Action
----------|-------
-Existing shell scripts | Keep working; optionally add a pinned INI for reproducibility.
-Multiple environments | Create `irondrop.{dev,staging,prod}.ini`; select via `--config-file`.
-Secrets management | Keep credentials out of scripts; place in controlled permission INI.
+## Logging Behavior
 
-### Test Coverage (Highlights)
-Test Focus | File | Purpose
------------|------|--------
-INI parsing primitives | `tests/config_test.rs` | Booleans, lists, file sizes, comments
-Precedence correctness | `tests/config_test.rs` | CLI overrides vs INI
-Upload configuration | `tests/config_test.rs` | Directory + size conversions
-Authentication fields | `tests/config_test.rs` | Username/password propagation
-Edge cases | `src/config/ini_parser.rs` (unit tests) | Malformed sections, decimal sizes
+At startup, IronDrop maps config values to log levels like this when `RUST_LOG` is not already set:
 
-### Future Enhancements
-Planned ideas (not yet implemented):
-* Environment variable interpolation (`${VAR}`) with allow‑list
-* Hot reload signal (SIGHUP) for config values safe to update (logging, limits)
-* Export effective configuration as JSON via an admin endpoint
-* Validate `allowed_extensions` globs at load time with detailed diagnostics
+- `verbose = true` -> `debug`
+- `detailed = true` -> `info`
+- otherwise -> `warn`
 
-### Quick Troubleshooting
-Symptom | Likely Cause | Fix
---------|--------------|----
-"Config file specified but not found" | Wrong path to `--config-file` | Use absolute path or place file in working dir
-Upload larger than expected limit rejected | `max_upload_size` parsed lower than intended | Ensure suffix (e.g., `5GB` not `5G`)
-Verbose logging not active | Only `detailed` set in INI | Use `verbose = true` OR `--verbose`
-Auth not enforced | Missing `[auth]` values | Supply both `username` and `password`
+If `log_dir` is set, IronDrop writes to a timestamped log file in that directory. The directory must already exist and be writable.
 
-### Summary
-The configuration system provides deterministic, transparent startup behavior while retaining the original simplicity of the CLI interface. It is intentionally minimal, auditable, and fully covered by tests to ensure reliability in production deployments.
+## Validation Notes
 
----
-Return to documentation index: [./README.md](./README.md)
+Current validation includes:
+
+- the served directory must exist and be a directory
+- `--ssl-cert` and `--ssl-key` must be provided together
+- `--config-file` must point to an existing readable file
+- `--log-dir` must already exist and be writable
+- `--base-path` is normalized to start with `/` and not end with `/`
+- `--max-upload-size` must be greater than zero

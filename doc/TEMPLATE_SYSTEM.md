@@ -333,9 +333,9 @@ let err_html = engine.render_error_page(404, "Not Found", get_error_description(
 ## 15. See Also
 
 - [Architecture Documentation](./ARCHITECTURE.md#template--ui-system)  
-- [Upload Integration Guide](./UPLOAD_INTEGRATION.md)  
+- [Upload Integration Guide](./HTTP_STREAMING.md)  
 - [Multipart Parser Documentation](./MULTIPART_README.md)  
-- [Security Fixes Documentation](./SECURITY_FIXES.md)  
+- [Security Fixes Documentation](./RFC_OWASP_COMPLIANCE.md)  
 - [Documentation Index](./README.md)
 
 ---

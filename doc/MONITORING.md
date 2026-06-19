@@ -1,21 +1,22 @@
 # IronDrop Monitoring Guide
 
-This guide documents the built-in monitoring capabilities introduced with the `/monitor` endpoint and supporting health APIs.
+This guide documents the monitoring endpoints that exist in the current server implementation.
 
-## Overview
+## Endpoints
 
-IronDrop exposes lightweight operational telemetry without requiring an external monitoring stack:
+- `/monitor`: HTML dashboard
+- `/monitor?json=1`: JSON metrics through the legacy-friendly route
+- `/_irondrop/monitor`: HTML dashboard through the internal namespace
+- `/_irondrop/monitor?json=1`: JSON metrics through the internal namespace
+- `/_irondrop/health`: health payload
+- `/_irondrop/status`: status payload, currently the same as health
+- `/_health`: compatibility health route
 
-| Endpoint | Format | Purpose |
-|----------|--------|---------|
-| `/monitor` | HTML | Human dashboard for live stats |
-| `/_irondrop/monitor?json=1` | JSON | Machine-readable metrics for scripting / scraping |
-| `/_irondrop/health` | JSON | Liveness probe (status / service / version / timestamp / features) (legacy: `/_health`) |
-| `/_irondrop/status` | JSON | Status payload (currently same as health) |
+If Basic Auth is enabled, these endpoints require credentials like every other route.
 
-## Data Model
+## JSON Payload
 
-`/_irondrop/monitor?json=1` returns these top-level keys:
+`/_irondrop/monitor?json=1` returns this shape:
 
 ```json
 {
@@ -44,85 +45,45 @@ IronDrop exposes lightweight operational telemetry without requiring an external
 }
 ```
 
-### Field Semantics
-- `requests.total` – All handled requests (success + error) since start.
-- `requests.successful` / `errors` – Outcome classification.
-- `downloads.bytes_served` – Cumulative body bytes sent (excludes HTTP headers).
-- `uptime_secs` – Elapsed seconds since the server started.
-- `uploads.*` – Aggregated upload subsystem metrics (only updated when uploads enabled).
-- `average_processing_ms` – Rolling average (last 100 uploads) in milliseconds.
-- `success_rate` – Percentage of successful uploads over total uploads (0 if none yet).
-- `concurrent_uploads` – Point-in-time counter incremented on start and decremented on completion.
+## Field Notes
 
-## HTML Dashboard
-The `/monitor` HTML view is an embedded template with:
-- No external network calls (all assets embedded) 
-- Auto-refresh polling every 30 seconds (JavaScript fetch to `?json=1`)
-- Separate sections for Requests, Downloads, Uploads
+- `requests.total` counts handled requests since startup
+- `downloads.bytes_served` counts response-body bytes, not headers
+- `uploads.average_processing_ms` is a rolling average across the last 100 upload samples
+- `memory.available` can be `false` on platforms or environments where process memory cannot be read
 
-## Usage Examples
+## Dashboard Behavior
 
-### Quick CLI Scrape
+The embedded dashboard JavaScript currently refreshes every 4 seconds.
+
+It renders:
+
+- request totals and success ratio
+- upload counters and throughput summaries
+- download byte counts
+- memory data when available
+- charts backed by in-page history buffers
+
+## Example Commands
+
+Health check:
+
 ```bash
-curl -s http://localhost:8080/_irondrop/monitor?json=1 | jq '.requests.bytes_served'
+curl -f http://127.0.0.1:8080/_irondrop/health
 ```
 
-### Basic Health Probe (Kubernetes / Docker)
+Download bytes served:
+
 ```bash
-curl -f http://localhost:8080/_irondrop/health > /dev/null || echo "Unhealthy"
+curl -s 'http://127.0.0.1:8080/_irondrop/monitor?json=1' | jq '.downloads.bytes_served'
 ```
 
-### Shell Alert When Upload Failures Detected
+Upload failure count:
+
 ```bash
-if [ "$(curl -s http://localhost:8080/_irondrop/monitor?json=1 | jq '.uploads.failed_uploads')" -gt 0 ]; then
-  echo "Upload failures detected" >&2
-fi
+curl -s 'http://127.0.0.1:8080/_irondrop/monitor?json=1' | jq '.uploads.failed_uploads'
 ```
 
-### Log Requests per Minute (Approximate)
-```bash
-prev=0
-while sleep 60; do
-  cur=$(curl -s http://localhost:8080/_irondrop/monitor?json=1 | jq '.requests.total')
-  echo "RPM=$((cur-prev))"
-  prev=$cur
-done
-```
+## Maintenance Endpoint
 
-## Integration Guidelines
-- Poll interval recommendation: 15–60s (dashboard uses 30s).
-- For higher resolution, build a sidecar scraper and aggregate externally.
-- Avoid sub-second polling—counters are cumulative and inexpensive but not real-time high-frequency telemetry.
-
-## Design Notes
-- Byte counting performed at response write boundary (body only) to avoid skew from variable header length.
-- Upload averages retained in a fixed-size ring (truncate beyond 100 samples) to bound memory.
-- Stats guarded by `Arc<Mutex<T>>`; contention is minimal under typical loads. Future optimization: swap to atomics + snapshot struct.
-
-## Extensibility Roadmap (Open for Contribution)
-| Feature | Description | Status |
-|---------|-------------|--------|
-| Active Connections | Live in-flight connection count | Planned |
-| Per-Endpoint Stats | Breakdown by route (/, /upload, /monitor, static) | Planned |
-| Prometheus Export | `/metrics` in OpenMetrics format | Planned |
-| Rolling Rates | Requests/sec and upload throughput windows | Planned |
-| Error Categorization | Distribution by HTTP status class | Planned |
-
-## Security Considerations
-- Endpoint intentionally unauthenticated to support lightweight self-host setups; wrap behind reverse proxy if sensitive.
-- For private deployments: require Basic Auth (same as other routes) or network ACLs.
-- No user-identifying data exposed—only aggregate counters.
-
-## Troubleshooting
-| Symptom | Possible Cause | Action |
-|---------|----------------|--------|
-| `bytes_served` stays 0 | Only HEAD/empty responses so far or early fetch before first response recorded | Perform a file download then re-check |
-| Upload counters not changing | Uploads disabled (`--enable-upload` missing) | Start server with `--enable-upload` |
-| High error count | Client probing invalid paths | Inspect logs (`RUST_LOG=info` or `-v`) |
-| Negative/Unexpected averages | Mutex poisoning from panic (rare) | Check logs for prior panic, restart server |
-
-## Versioning
-Monitoring schema may evolve with additive fields. Consumers should ignore unknown keys. Breaking changes (renames/removals) will bump minor version >= 2.x.
-
----
-*Monitoring Guide for IronDrop v2.7.1*
+`POST /_irondrop/cleanup-memory` triggers explicit search-memory cleanup and returns a small JSON status document.

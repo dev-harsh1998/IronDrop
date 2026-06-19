@@ -1,98 +1,72 @@
-# IronDrop Deployment Guide v2.7.1
+# IronDrop Deployment Guide
 
-## Overview
+This guide focuses on deployment patterns that match the current codebase and CLI.
 
-This guide covers deployment strategies, operational considerations, and best practices for running IronDrop in various environments.
-
-## Quick Start Deployment
-
-### Single Binary Installation
+## Quick Local Run
 
 ```bash
-# Build from source
-git clone https://github.com/dev-harsh1998/IronDrop.git
-cd IronDrop
-cargo build --release
-
-# Install globally
-sudo mv target/release/irondrop /usr/local/bin/
-
-# Basic deployment
 irondrop -d /srv/files --listen 0.0.0.0 --port 8080
 ```
 
-### Verification
+Verify the server:
 
 ```bash
-# Test server health
-curl http://localhost:8080/_irondrop/health
-
-# Test file listing
-curl http://localhost:8080/
-
-# Test upload (if enabled)
-curl -X POST -F "file=@test.txt" http://localhost:8080/upload
+curl http://127.0.0.1:8080/_irondrop/health
+curl http://127.0.0.1:8080/
+curl 'http://127.0.0.1:8080/_irondrop/search?q=test&path=/'
 ```
 
-## Production Deployment
+## Production Notes
 
-### System Requirements
+- use a dedicated service account
+- make the served directory readable by that account
+- if uploads are enabled, the served directory tree also needs write permission where uploads should land
+- if `log_dir` is configured, create it before startup
+- if auth is enabled, monitoring and health endpoints also require credentials
 
-#### Minimum System Requirements
-| Resource | Minimum | Recommended | Notes |
-|----------|---------|-------------|-------|
-| CPU | 1 core | 2+ cores | More cores improve concurrent handling |
-| RAM | 512MB | 2GB+ | Depends on concurrent uploads and file sizes |
-| Disk | 1GB | 10GB+ | Based on served content and upload storage |
-| Network | 100Mbps | 1Gbps+ | For high-throughput file serving |
+## Config-File Driven Deployment
 
-#### Operating System Support
-- **Linux**: Ubuntu 20.04+, CentOS 8+, Debian 11+, Alpine 3.14+
-- **macOS**: 10.15+ (Catalina and newer)
-- **Windows**: Windows 10, Windows Server 2019+
+The easiest way to keep production settings consistent is to place most settings in an INI file and keep `--directory` on the command line.
 
-### Production Configuration
+Example `/etc/irondrop/config.ini`:
 
-#### Basic Production Setup
+```ini
+[server]
+listen = 0.0.0.0
+port = 8080
+threads = 16
+chunk_size = 8192
+base_path = /files
+
+[upload]
+enable_upload = true
+max_upload_size = 5GB
+
+[webdav]
+enable_webdav = true
+disable_rate_limit = false
+
+[auth]
+username = admin
+password = change-me
+
+[security]
+allowed_extensions = *.pdf,*.txt,*.jpg,*.png,*.zip
+
+[logging]
+detailed = true
+log_dir = /var/log/irondrop
+```
+
+Start it with:
+
 ```bash
-# Create dedicated user
-sudo useradd -r -s /bin/false irondrop
-
-# Create directories
-sudo mkdir -p /srv/irondrop/{files,uploads,logs}
-sudo chown -R irondrop:irondrop /srv/irondrop
-
-# Production command
-sudo -u irondrop irondrop \
-  --directory /srv/irondrop/files \
-  --listen 0.0.0.0 \
-  --port 8080 \
-  --threads 16 \
-  --chunk-size 8192 \
-  --enable-upload \
-  --upload-dir /srv/irondrop/uploads \
-  --max-upload-size 5120 \
-  --allowed-extensions "*.pdf,*.txt,*.jpg,*.png,*.zip" \
-  --username admin \
-  --password "$(openssl rand -base64 32)" \
-  --detailed-logging
+irondrop -d /srv/irondrop/files --config-file /etc/irondrop/config.ini
 ```
 
-#### Environment Variables
-```bash
-# Logging configuration
-export RUST_LOG=info
-export RUST_BACKTRACE=1
+## systemd
 
-# Production optimizations
-export RUST_MIN_STACK=2097152  # 2MB stack size
-```
-
-## Service Management
-
-### systemd Service (Linux)
-
-Create `/etc/systemd/system/irondrop.service`:
+Example `/etc/systemd/system/irondrop.service`:
 
 ```ini
 [Unit]
@@ -105,691 +79,156 @@ Type=simple
 User=irondrop
 Group=irondrop
 WorkingDirectory=/srv/irondrop
-ExecStart=/usr/local/bin/irondrop \
-  --directory /srv/irondrop/files \
-  --listen 0.0.0.0 \
-  --port 8080 \
-  --threads 16 \
-  --enable-upload \
-  --upload-dir /srv/irondrop/uploads \
-  --max-upload-size 5120 \
-  --allowed-extensions "*.pdf,*.txt,*.jpg,*.png,*.zip" \
-  --username admin \
-  --password-file /srv/irondrop/password \
-  --detailed-logging
-
-# Security settings
-PrivateTmp=yes
-PrivateDevices=yes
-ProtectHome=yes
-ProtectSystem=strict
-ReadWritePaths=/srv/irondrop
-NoNewPrivileges=true
-MemoryDenyWriteExecute=true
-RestrictRealtime=true
-RestrictSUIDSGID=true
-LockPersonality=true
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
-
-# Resource limits
-LimitNOFILE=65536
-LimitNPROC=4096
-
-# Restart policy
+ExecStart=/usr/local/bin/irondrop --directory /srv/irondrop/files --config-file /etc/irondrop/config.ini
 Restart=always
-RestartSec=5s
-StartLimitInterval=0
-
-# Environment
-Environment=RUST_LOG=info
-Environment=RUST_BACKTRACE=1
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/irondrop /var/log/irondrop
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-**Service Management:**
+Common commands:
+
 ```bash
-# Enable and start service
-sudo systemctl enable irondrop
-sudo systemctl start irondrop
-
-# Check status
+sudo systemctl daemon-reload
+sudo systemctl enable --now irondrop
 sudo systemctl status irondrop
-
-# View logs
 sudo journalctl -u irondrop -f
-
-# Reload configuration
-sudo systemctl reload irondrop
 ```
 
-### Docker Deployment
+## Native HTTPS
 
-#### Dockerfile
+IronDrop can serve HTTPS directly through `rustls`.
+
+Create a self-signed cert for testing:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj '/CN=localhost'
+```
+
+Start HTTPS:
+
+```bash
+irondrop -d /srv/files --ssl-cert cert.pem --ssl-key key.pem --listen 0.0.0.0 --port 8443
+```
+
+Notes:
+
+- both `--ssl-cert` and `--ssl-key` are required
+- the current TLS stack supports TLS 1.2 and 1.3 through `rustls`
+- native HTTPS is often enough for simple deployments
+
+## Reverse Proxy
+
+A reverse proxy is optional, but useful for HTTP/2, central TLS management, or broader ingress policy.
+
+### Root deployment
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 0;
+    proxy_buffering off;
+    proxy_request_buffering off;
+}
+```
+
+### Subpath deployment
+
+Start IronDrop with a base path:
+
+```bash
+irondrop -d /srv/files --base-path /webstorage --listen 0.0.0.0
+```
+
+Proxy the full path through nginx without stripping it:
+
+```nginx
+location /webstorage/ {
+    proxy_pass http://127.0.0.1:8080/webstorage/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    client_max_body_size 0;
+    proxy_buffering off;
+    proxy_request_buffering off;
+}
+```
+
+No `sub_filter` rules are required for the current base-path implementation.
+
+## Docker
+
+A minimal container flow:
+
 ```dockerfile
 FROM rust:1.88-alpine AS builder
-
 WORKDIR /app
 COPY . .
-RUN apk add --no-cache musl-dev && \
-    cargo build --release --target x86_64-unknown-linux-musl
+RUN apk add --no-cache musl-dev && cargo build --release --target x86_64-unknown-linux-musl
 
-FROM alpine:3.18
-RUN apk add --no-cache ca-certificates
-
-# Create non-root user
+FROM alpine:3.20
 RUN adduser -D -s /bin/sh irondrop
-
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/irondrop /usr/local/bin/
-
-# Create directories
-RUN mkdir -p /srv/files /srv/uploads && \
-    chown -R irondrop:irondrop /srv
-
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/irondrop /usr/local/bin/irondrop
 USER irondrop
 WORKDIR /srv
-
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/_irondrop/health || exit 1
-
-CMD ["irondrop", "--directory", "/srv/files", "--listen", "0.0.0.0", "--port", "8080"]
+CMD ["irondrop", "-d", "/srv/files", "--listen", "0.0.0.0"]
 ```
 
-#### Docker Compose
-```yaml
-version: '3.8'
+Runtime notes:
 
+- mount `/srv/files` read-only if uploads are disabled
+- mount it read-write if uploads are enabled because uploads land inside the served tree
+
+Example compose service:
+
+```yaml
 services:
   irondrop:
     build: .
     ports:
       - "8080:8080"
     volumes:
-      - ./files:/srv/files:ro
-      - ./uploads:/srv/uploads:rw
-    environment:
-      - RUST_LOG=info
-    command: >
-      irondrop
-      --directory /srv/files
-      --listen 0.0.0.0
-      --port 8080
-      --threads 16
-      --enable-upload
-      --upload-dir /srv/uploads
-      --max-upload-size 5120
-      --allowed-extensions "*.pdf,*.txt,*.jpg,*.png,*.zip"
-      --detailed-logging
+      - ./files:/srv/files
+    command:
+      - irondrop
+      - -d
+      - /srv/files
+      - --listen
+      - 0.0.0.0
+      - --enable-upload
+      - "true"
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/_irondrop/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
 ```
 
-**Docker Commands:**
-```bash
-# Build and run
-docker-compose up -d
+## Monitoring And Health Checks
 
-# Scale service
-docker-compose up -d --scale irondrop=3
-
-# View logs
-docker-compose logs -f irondrop
-
-# Update
-docker-compose pull && docker-compose up -d
-```
-
-## Native SSL/TLS (HTTPS)
-
-IronDrop has built-in TLS support using rustls (a pure Rust TLS implementation). This means you can serve files over HTTPS directly without a reverse proxy.
-
-### Quick Setup
+Useful probes:
 
 ```bash
-# Generate a self-signed certificate (testing only)
-openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
-  -days 365 -nodes -subj '/CN=localhost'
-
-# Start HTTPS server
-irondrop -d /var/www/files --ssl-cert cert.pem --ssl-key key.pem --listen 0.0.0.0
+curl -f http://127.0.0.1:8080/_irondrop/health
+curl -f 'http://127.0.0.1:8080/_irondrop/monitor?json=1'
 ```
 
-### Production Setup with Let's Encrypt
+If Basic Auth is enabled, include credentials in those probes.
 
-```bash
-# Install certbot and obtain certificate
-sudo certbot certonly --standalone -d files.example.com
+## Current CLI Reality Check
 
-# Start with Let's Encrypt certificates
-irondrop -d /var/www/files \
-  --ssl-cert /etc/letsencrypt/live/files.example.com/fullchain.pem \
-  --ssl-key /etc/letsencrypt/live/files.example.com/privkey.pem \
-  --listen 0.0.0.0 --port 443
-```
+The following options are not present in the current codebase and should not be used in deployment examples:
 
-### INI Configuration
+- `--upload-dir`
+- `--password-file`
 
-```ini
-[server]
-listen = 0.0.0.0
-port = 443
-
-[ssl]
-cert = /etc/letsencrypt/live/files.example.com/fullchain.pem
-key = /etc/letsencrypt/live/files.example.com/privkey.pem
-```
-
-### systemd Service with HTTPS
-
-```ini
-[Unit]
-Description=IronDrop HTTPS File Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/irondrop -d /var/www/files \
-  --ssl-cert /etc/letsencrypt/live/files.example.com/fullchain.pem \
-  --ssl-key /etc/letsencrypt/live/files.example.com/privkey.pem \
-  --listen 0.0.0.0 --port 443
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### TLS Details
-
-- **Protocol versions**: TLS 1.2 and TLS 1.3
-- **Implementation**: rustls via `tokio-rustls` (pure Rust, no OpenSSL dependency)
-- **Certificate format**: PEM (both certificate and private key)
-- **Certificate chains**: Supported (include full chain in cert file)
-- **Performance**: TLS handshake is async on the Tokio runtime; filesystem-heavy request handling is isolated from Tokio worker threads
-
-### Native TLS vs Reverse Proxy
-
-| Feature | Native TLS | Reverse Proxy (nginx) |
-|---------|-----------|----------------------|
-| Setup complexity | Simple (2 flags) | More configuration |
-| HTTP/2 | Not supported | Supported |
-| Load balancing | Single instance | Multiple backends |
-| Certificate management | Manual or certbot | Manual or certbot |
-| Additional dependencies | None | nginx/Apache |
-| Best for | Simple deployments | High-traffic production |
-
-For simple deployments, native TLS is sufficient. For high-traffic production with HTTP/2, load balancing, or caching, a reverse proxy is recommended.
-
-## Reverse Proxy Configuration (Optional)
-
-> **Note:** IronDrop now supports native HTTPS via `--ssl-cert` and `--ssl-key`. A reverse proxy is only needed for advanced features like HTTP/2, load balancing, or caching. See [Native SSL/TLS](#native-ssltls-https) above.
-
-### Nginx Reverse Proxy Deployment
-
-Using Nginx as a reverse proxy is recommended for production environments to handle SSL termination, load balancing, and complex path configurations.
-
-#### 1. Root Domain Deployment
-Use this configuration to host IronDrop directly at a domain or subdomain (e.g., `https://files.example.com/`).
-
-**Nginx Configuration:**
-```nginx
-server {
-    listen 80;
-    server_name files.example.com;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name files.example.com;
-
-    # SSL configuration (Certbot/Let's Encrypt recommended)
-    ssl_certificate /etc/letsencrypt/live/files.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/files.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Performance optimizations for large files
-        client_max_body_size 0; # Disable limit for large uploads
-        proxy_read_timeout 1d;
-        proxy_send_timeout 1d;
-        proxy_connect_timeout 1d;
-        send_timeout 1d;
-        proxy_max_temp_file_size 0;
-        
-        # Disable buffering for streaming
-        proxy_buffering off;
-        proxy_request_buffering off;
-    }
-}
-```
-
-#### 2. Subpath Deployment
-Use this configuration to host IronDrop on a custom subpath (e.g., `https://example.com/webstorage/`). This requires path rewriting and HTML link filtering.
-
-**Nginx Configuration:**
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name example.com;
-
-    # 1. Main Application Subpath
-    location /webstorage/ {
-        proxy_pass http://127.0.0.1:8080/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Rewrite app redirects and HTML links for subpath compatibility
-        proxy_redirect / /webstorage/;
-        sub_filter 'href="/"' 'href="/webstorage/"';
-        sub_filter 'href="/monitor"' 'href="/webstorage/monitor"';
-        sub_filter 'href="/search"' 'href="/webstorage/search"';
-        sub_filter 'href="/upload"' 'href="/webstorage/upload"';
-        sub_filter 'href="/_irondrop/' 'href="/webstorage/_irondrop/';
-        sub_filter_once off;
-
-        # Large file transfer settings
-        client_max_body_size 0;
-        proxy_read_timeout 1d;
-        proxy_send_timeout 1d;
-        proxy_connect_timeout 1d;
-        proxy_max_temp_file_size 0;
-        send_timeout 1d;
-        proxy_buffering off;
-    }
-
-    # 2. Internal Asset Handling
-    location /_irondrop/ {
-        proxy_pass http://127.0.0.1:8080/_irondrop/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        proxy_redirect / /webstorage/;
-        sub_filter 'href="/"' 'href="/webstorage/"';
-        sub_filter 'href="/monitor"' 'href="/webstorage/monitor"';
-        sub_filter 'href="/upload"' 'href="/webstorage/upload"';
-        sub_filter_once off;
-
-        client_max_body_size 0;
-        proxy_read_timeout 1d;
-        send_timeout 1d;
-    }
-
-    # 3. Convenience Redirects
-    location = /webstorage { return 301 /webstorage/; }
-}
-```
-
-#### Deployment Steps
-1. **Save Configuration:** Save the block to `/etc/nginx/sites-available/irondrop`.
-2. **Enable Site:** `sudo ln -s /etc/nginx/sites-available/irondrop /etc/nginx/sites-enabled/` (if using Debian/Ubuntu).
-3. **Customize Path:** If using the subpath config, replace all instances of `/webstorage/` with your desired subpath.
-4. **Test Syntax:** `sudo nginx -t`
-5. **Reload Nginx:** `sudo systemctl reload nginx`
-
-### Apache Configuration
-
-```apache
-# /etc/apache2/sites-available/irondrop.conf
-<VirtualHost *:80>
-    ServerName files.example.com
-    Redirect permanent / https://files.example.com/
-</VirtualHost>
-
-<VirtualHost *:443>
-    ServerName files.example.com
-
-    # SSL configuration
-    SSLEngine on
-    SSLCertificateFile /path/to/cert.pem
-    SSLCertificateKeyFile /path/to/key.pem
-    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
-    SSLCipherSuite ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS
-
-    # Security headers
-    Header always set X-Frame-Options DENY
-    Header always set X-Content-Type-Options nosniff
-    Header always set X-XSS-Protection "1; mode=block"
-    Header always set Strict-Transport-Security "max-age=63072000"
-
-    # Upload limits
-    LimitRequestBody 10737418240  # 10GB
-
-    # Compression
-    LoadModule deflate_module modules/mod_deflate.so
-    <Location />
-        SetOutputFilter DEFLATE
-        SetEnvIfNoCase Request_URI \
-            \.(?:gif|jpe?g|png|zip|tar|gz)$ no-gzip dont-vary
-    </Location>
-
-    # Proxy configuration
-    ProxyPreserveHost On
-    ProxyRequests Off
-
-    <Proxy *>
-        Order deny,allow
-        Allow from all
-    </Proxy>
-
-    ProxyPass /_irondrop/health http://127.0.0.1:8080/_irondrop/health
-    ProxyPassReverse /_irondrop/health http://127.0.0.1:8080/_irondrop/health
-
-    ProxyPass /_health http://127.0.0.1:8080/_health
-    ProxyPassReverse /_health http://127.0.0.1:8080/_health
-
-    ProxyPass / http://127.0.0.1:8080/
-    ProxyPassReverse / http://127.0.0.1:8080/
-</VirtualHost>
-```
-
-## Monitoring and Observability
-
-### Health Monitoring
-
-**Basic Health Check Script:**
-```bash
-#!/bin/bash
-# /usr/local/bin/check-irondrop.sh
-
-HEALTH_URL="http://localhost:8080/_irondrop/health"
-EXPECTED_STATUS="healthy"
-
-response=$(curl -s -f "$HEALTH_URL" | jq -r '.status' 2>/dev/null)
-
-if [ "$response" = "$EXPECTED_STATUS" ]; then
-    echo "IronDrop is healthy"
-    exit 0
-else
-    echo "IronDrop health check failed: $response"
-    exit 1
-fi
-```
-
-**Cron Job for Monitoring:**
-```bash
-# Check every 5 minutes
-*/5 * * * * /usr/local/bin/check-irondrop.sh || logger "IronDrop health check failed"
-```
-
-### Log Management
-
-**Log Rotation Configuration:**
-```bash
-# /etc/logrotate.d/irondrop
-/var/log/irondrop/*.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 0644 irondrop irondrop
-    postrotate
-        systemctl reload irondrop
-    endscript
-}
-```
-
-**Structured Logging with journald:**
-```bash
-# Query logs
-journalctl -u irondrop --since "1 hour ago" --follow
-
-# Filter by log level
-journalctl -u irondrop -p err
-
-# Export logs for analysis
-journalctl -u irondrop --since "1 day ago" -o json > irondrop.log
-```
-
-### Prometheus Metrics (Future Enhancement)
-
-While not currently implemented, here's a suggested metrics endpoint:
-
-```yaml
-# Potential metrics
-irondrop_requests_total{method="GET", status="200"}
-irondrop_request_duration_seconds{method="GET", path="/"}
-irondrop_upload_size_bytes{status="success"}
-irondrop_concurrent_connections
-irondrop_rate_limit_hits_total
-irondrop_file_operations_total{operation="download"}
-```
-
-## Security Hardening
-
-### File System Security
-
-```bash
-# Set restrictive permissions
-chmod 750 /srv/irondrop
-chmod 640 /srv/irondrop/files/*
-chmod 755 /srv/irondrop/uploads
-
-# Use extended attributes (Linux)
-setfacl -d -m u::rwx,g::rx,o::- /srv/irondrop/uploads
-
-# SELinux context (RHEL/CentOS)
-setsebool -P httpd_can_network_connect 1
-semanage fcontext -a -t httpd_exec_t /usr/local/bin/irondrop
-restorecon -v /usr/local/bin/irondrop
-```
-
-### Network Security
-
-**Firewall Configuration (iptables):**
-```bash
-# Allow HTTP/HTTPS traffic
-iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-iptables -A INPUT -p tcp --dport 443 -j ACCEPT
-
-# Rate limiting at network level
-iptables -A INPUT -p tcp --dport 8080 -m state --state NEW -m recent --set
-iptables -A INPUT -p tcp --dport 8080 -m state --state NEW -m recent --update --seconds 60 --hitcount 20 -j DROP
-```
-
-**Firewall Configuration (ufw):**
-```bash
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw limit 8080/tcp
-ufw enable
-```
-
-### Application Security
-
-**Security Configuration:**
-```bash
-# Generate strong password
-openssl rand -base64 32 > /srv/irondrop/password
-chmod 600 /srv/irondrop/password
-chown irondrop:irondrop /srv/irondrop/password
-
-# Run with additional security
-irondrop \
-  --directory /srv/irondrop/files \
-  --upload-dir /srv/irondrop/uploads \
-  --allowed-extensions "*.txt,*.pdf" \
-  --max-upload-size 100 \
-  --username admin \
-  --password-file /srv/irondrop/password
-```
-
-## Performance Optimization
-
-### System Tuning
-
-**File Descriptor Limits:**
-```bash
-# /etc/security/limits.conf
-irondrop soft nofile 65536
-irondrop hard nofile 65536
-```
-
-**Network Tuning:**
-```bash
-# /etc/sysctl.conf
-net.core.somaxconn = 65535
-net.core.netdev_max_backlog = 5000
-net.ipv4.tcp_max_syn_backlog = 65536
-net.ipv4.tcp_fin_timeout = 15
-```
-
-### Application Tuning
-
-**High-Performance Configuration:**
-```bash
-irondrop \
-  --directory /srv/files \
-  --threads 32 \
-  --chunk-size 65536 \
-  --listen 0.0.0.0 \
-  --port 8080
-```
-
-**Memory Optimization:**
-```bash
-# Set optimal stack size
-export RUST_MIN_STACK=1048576  # 1MB
-
-# Reduce memory fragmentation
-export MALLOC_ARENA_MAX=2
-```
-
-## Backup and Recovery
-
-### Backup Strategy
-
-**Configuration Backup:**
-```bash
-#!/bin/bash
-# backup-irondrop-config.sh
-
-BACKUP_DIR="/backup/irondrop/$(date +%Y%m%d)"
-mkdir -p "$BACKUP_DIR"
-
-# Backup configuration
-cp /etc/systemd/system/irondrop.service "$BACKUP_DIR/"
-cp /srv/irondrop/password "$BACKUP_DIR/"
-
-# Backup uploaded files
-tar -czf "$BACKUP_DIR/uploads.tar.gz" /srv/irondrop/uploads/
-
-# Backup served files (if managed by IronDrop)
-tar -czf "$BACKUP_DIR/files.tar.gz" /srv/irondrop/files/
-
-echo "Backup completed: $BACKUP_DIR"
-```
-
-**Recovery Procedure:**
-```bash
-#!/bin/bash
-# restore-irondrop.sh
-
-BACKUP_DIR="$1"
-if [ -z "$BACKUP_DIR" ]; then
-    echo "Usage: $0 <backup-directory>"
-    exit 1
-fi
-
-systemctl stop irondrop
-
-# Restore files
-tar -xzf "$BACKUP_DIR/uploads.tar.gz" -C /
-tar -xzf "$BACKUP_DIR/files.tar.gz" -C /
-
-# Restore configuration
-cp "$BACKUP_DIR/irondrop.service" /etc/systemd/system/
-cp "$BACKUP_DIR/password" /srv/irondrop/
-
-# Fix permissions
-chown -R irondrop:irondrop /srv/irondrop
-
-systemctl daemon-reload
-systemctl start irondrop
-
-echo "Recovery completed"
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Port Already in Use:**
-```bash
-# Find process using port
-sudo lsof -i :8080
-sudo netstat -tulpn | grep :8080
-
-# Kill process if necessary
-sudo kill -9 <PID>
-```
-
-**Permission Denied:**
-```bash
-# Check file permissions
-ls -la /srv/irondrop/
-sudo chown -R irondrop:irondrop /srv/irondrop/
-
-# Check SELinux (RHEL/CentOS)
-sudo sealert -a /var/log/audit/audit.log
-```
-
-**High Memory Usage:**
-```bash
-# Monitor memory usage
-ps aux | grep irondrop
-systemctl status irondrop
-
-# Check for memory leaks
-valgrind --leak-check=full irondrop -d /tmp
-```
-
-**Upload Failures:**
-```bash
-# Check disk space
-df -h /srv/irondrop/uploads/
-
-# Check upload directory permissions
-ls -ld /srv/irondrop/uploads/
-sudo -u irondrop touch /srv/irondrop/uploads/test
-```
-
-### Debugging Commands
-
-```bash
-# Enable debug logging
-RUST_LOG=debug irondrop -d /srv/files -v
-
-# Enable backtrace
-RUST_BACKTRACE=1 irondrop -d /srv/files
-
-# Network debugging
-tcpdump -i any port 8080
-ss -tulpn | grep :8080
-
-# Performance profiling
-perf record -g irondrop -d /srv/files
-strace -p $(pgrep irondrop)
-```
-
-This deployment guide provides comprehensive coverage of production deployment scenarios and operational best practices for IronDrop v2.7.1.
+The current config loader also does not consume `IRONDROP_*` application settings.
