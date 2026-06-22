@@ -12,6 +12,8 @@ class UploadManager {
         this.totalBytes = 0;
         this.uploadedBytes = 0;
         this.basePath = window.__BASE_PATH || '';
+        this.speedSamples = [];
+        this.speedWindowMs = 2000;
 
         this.init();
     }
@@ -37,6 +39,7 @@ class UploadManager {
         this.totalFilesEl = document.getElementById('totalFiles');
         this.totalSizeEl = document.getElementById('totalSize');
         this.completedFilesEl = document.getElementById('completedFiles');
+        this.uploadSpeedEl = document.getElementById('uploadSpeed');
         this.totalProgressEl = document.getElementById('totalProgress');
         this.progressTextEl = document.getElementById('progressText');
     }
@@ -103,7 +106,7 @@ class UploadManager {
     }
 
     // Touch event handlers for mobile devices
-    handleTouchStart(e) {
+    handleTouchStart() {
         // Provide visual feedback on touch
         this.dropZone.classList.add('touch-active');
     }
@@ -151,7 +154,7 @@ class UploadManager {
         }
     }
 
-    validateFile(file) {
+    validateFile() {
         // No size limit - direct streaming handles any file size efficiently
         return { valid: true };
     }
@@ -322,9 +325,6 @@ class UploadManager {
         fileInfo.status = 'uploading';
         this.updateQueueItem(fileInfo);
 
-        // Get current path from URL or default to /
-        const currentPath = this.getCurrentPath();
-
         // Create XMLHttpRequest for progress tracking
         const xhr = new XMLHttpRequest();
         this.uploads.set(id, xhr);
@@ -412,19 +412,24 @@ class UploadManager {
         const totalFiles = this.files.size;
         const completedFiles = Array.from(this.files.values())
             .filter(file => file.status === 'completed').length;
+        const activeUploads = Array.from(this.files.values())
+            .filter(file => file.status === 'uploading').length;
+        const currentUploadedBytes = Array.from(this.files.values())
+            .reduce((sum, file) => sum + file.uploadedBytes, 0);
 
         // Calculate total progress
         let totalProgress = 0;
         if (this.totalBytes > 0) {
-            const currentUploadedBytes = Array.from(this.files.values())
-                .reduce((sum, file) => sum + file.uploadedBytes, 0);
             totalProgress = (currentUploadedBytes / this.totalBytes) * 100;
         }
+
+        const speedMbps = this.updateSpeedEstimate(currentUploadedBytes, activeUploads > 0);
 
         // Update DOM
         this.totalFilesEl.textContent = totalFiles;
         this.totalSizeEl.textContent = this.formatBytes(this.totalBytes);
         this.completedFilesEl.textContent = completedFiles;
+        this.uploadSpeedEl.textContent = this.formatMbps(speedMbps);
         this.totalProgressEl.style.width = `${totalProgress}%`;
         this.progressTextEl.textContent = `${Math.round(totalProgress)}% complete`;
 
@@ -482,6 +487,55 @@ class UploadManager {
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    updateSpeedEstimate(currentUploadedBytes, hasActiveUploads) {
+        if (!hasActiveUploads) {
+            this.speedSamples = [];
+            return 0;
+        }
+
+        const now = performance.now();
+        const lastSample = this.speedSamples[this.speedSamples.length - 1];
+        if (!lastSample || currentUploadedBytes < lastSample.bytes) {
+            this.speedSamples = [{ time: now, bytes: currentUploadedBytes }];
+            return 0;
+        }
+
+        if (currentUploadedBytes !== lastSample.bytes) {
+            this.speedSamples.push({ time: now, bytes: currentUploadedBytes });
+        } else if (now - lastSample.time > this.speedWindowMs) {
+            this.speedSamples = [{ time: now, bytes: currentUploadedBytes }];
+            return 0;
+        }
+
+        const cutoff = now - this.speedWindowMs;
+        while (this.speedSamples.length > 1 && this.speedSamples[1].time < cutoff) {
+            this.speedSamples.shift();
+        }
+
+        if (this.speedSamples.length < 2) {
+            return 0;
+        }
+
+        const firstSample = this.speedSamples[0];
+        const bytesDelta = currentUploadedBytes - firstSample.bytes;
+        const timeDeltaMs = now - firstSample.time;
+        if (bytesDelta <= 0 || timeDeltaMs <= 0) {
+            return 0;
+        }
+
+        return (bytesDelta * 8 * 1000) / (timeDeltaMs * 1000 * 1000);
+    }
+
+    formatMbps(mbps) {
+        if (mbps >= 100) {
+            return `${mbps.toFixed(0)} Mbps`;
+        }
+        if (mbps >= 10) {
+            return `${mbps.toFixed(1)} Mbps`;
+        }
+        return `${mbps.toFixed(2)} Mbps`;
     }
 
     escapeHtml(text) {

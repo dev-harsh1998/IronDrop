@@ -74,8 +74,7 @@ impl RateLimiter {
         let now = Instant::now();
 
         // Check if we need to evict entries before inserting a new one
-        if !connections.contains_key(&ip)
-            && connections.len() >= MAX_RATE_LIMITER_ENTRIES_PER_SHARD
+        if !connections.contains_key(&ip) && connections.len() >= MAX_RATE_LIMITER_ENTRIES_PER_SHARD
         {
             const EVICTION_SAMPLE: usize = 64;
             let mut best_ip: Option<IpAddr> = None;
@@ -183,11 +182,15 @@ impl RateLimiter {
             let mut connections = shard.lock().unwrap();
             let initial_count = connections.len();
 
-            trace!("Rate limiter shard has {} entries before cleanup", initial_count);
+            trace!(
+                "Rate limiter shard has {} entries before cleanup",
+                initial_count
+            );
 
             // Reduced retention time from 5 minutes to 2 minutes
-            connections
-                .retain(|_, info| now.duration_since(info.last_activity) < Duration::from_secs(120));
+            connections.retain(|_, info| {
+                now.duration_since(info.last_activity) < Duration::from_secs(120)
+            });
 
             cleaned_count += initial_count - connections.len();
             if initial_count > connections.len() && connections.capacity() > connections.len() * 2 {
@@ -260,9 +263,7 @@ impl RateLimiter {
 
         trace!(
             "Rate limiter stats: {} entries, ~{} bytes across {} shards",
-            entry_count,
-            estimated_memory,
-            RATE_LIMITER_SHARDS
+            entry_count, estimated_memory, RATE_LIMITER_SHARDS
         );
         (entry_count, estimated_memory)
     }

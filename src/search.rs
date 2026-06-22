@@ -607,15 +607,12 @@ fn contains_case_insensitive_ascii(haystack: &str, needle_lower: &str) -> bool {
     if needle.is_empty() {
         return true;
     }
-    haystack
-        .as_bytes()
-        .windows(needle.len())
-        .any(|window| {
-            window
-                .iter()
-                .zip(needle.iter())
-                .all(|(&lhs, &rhs)| lhs.to_ascii_lowercase() == rhs)
-        })
+    haystack.as_bytes().windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle.iter())
+            .all(|(&lhs, &rhs)| lhs.to_ascii_lowercase() == rhs)
+    })
 }
 
 impl RadixBucket {
@@ -898,7 +895,9 @@ impl UltraLowMemoryIndex {
 
         // Process remaining entries
         if !batch_entries.is_empty() {
-            subdirs.extend(self.process_entry_batch_hierarchical(&mut batch_entries, parent_entry_id)?);
+            subdirs.extend(
+                self.process_entry_batch_hierarchical(&mut batch_entries, parent_entry_id)?,
+            );
         }
 
         // Recursively process subdirectories with the entry IDs generated during batching.
@@ -924,14 +923,13 @@ impl UltraLowMemoryIndex {
             let name_offset = self.add_string(&entry.name);
 
             // Create ultra-compact entry with parent reference
-            let ultra_compact_entry =
-                UltraCompactEntry::new(
-                    name_offset,
-                    parent_entry_id,
-                    entry.size,
-                    entry.modified,
-                    entry.is_dir,
-                );
+            let ultra_compact_entry = UltraCompactEntry::new(
+                name_offset,
+                parent_entry_id,
+                entry.size,
+                entry.modified,
+                entry.is_dir,
+            );
 
             self.entries.push(ultra_compact_entry);
 
@@ -1726,7 +1724,10 @@ pub fn perform_search(
         expanded_limit
     );
     let shared_results = concurrent_index.search_shared(&params.query, expanded_limit)?;
-    debug!("Index search returned {} initial results", shared_results.len());
+    debug!(
+        "Index search returned {} initial results",
+        shared_results.len()
+    );
 
     // If index search returns no results, fall back to filesystem search
     if shared_results.is_empty() {
@@ -2208,11 +2209,7 @@ mod perf_tests {
 
         println!(
             "PERF search_index build_ms={} first_search_us={} cache_hit_us={} entries={} memory_bytes={}",
-            build_ms,
-            first_search_us,
-            cache_hit_us,
-            stats.0,
-            stats.1
+            build_ms, first_search_us, cache_hit_us, stats.0, stats.1
         );
     }
 }
