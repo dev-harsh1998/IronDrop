@@ -10,6 +10,7 @@ use glob::Pattern;
 use log::{debug, info, trace, warn};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
@@ -244,107 +245,75 @@ impl RateLimiter {
 ///
 /// All statistics are automatically reported every 5 minutes in the background
 /// and provide comprehensive insights into server usage and performance.
-#[derive(Default, Clone)]
 pub struct ServerStats {
     // Request statistics
-    pub total_requests: Arc<Mutex<u64>>,
-    pub successful_requests: Arc<Mutex<u64>>,
-    pub error_requests: Arc<Mutex<u64>>,
-    pub bytes_served: Arc<Mutex<u64>>,
-    pub start_time: Arc<Mutex<Option<Instant>>>,
+    total_requests: AtomicU64,
+    successful_requests: AtomicU64,
+    error_requests: AtomicU64,
+    bytes_served: AtomicU64,
+    start_time: Instant,
 
     // Upload statistics
-    pub total_uploads: Arc<Mutex<u64>>,
-    pub successful_uploads: Arc<Mutex<u64>>,
-    pub failed_uploads: Arc<Mutex<u64>>,
-    pub files_uploaded: Arc<Mutex<u64>>,
-    pub upload_bytes: Arc<Mutex<u64>>,
-    pub largest_upload: Arc<Mutex<u64>>,
-    pub concurrent_uploads: Arc<Mutex<u64>>,
-    pub upload_processing_times: Arc<Mutex<Vec<u64>>>,
+    total_uploads: AtomicU64,
+    successful_uploads: AtomicU64,
+    failed_uploads: AtomicU64,
+    files_uploaded: AtomicU64,
+    upload_bytes: AtomicU64,
+    largest_upload: AtomicU64,
+    concurrent_uploads: AtomicU64,
+    upload_processing_times: Mutex<Vec<u64>>,
 
     // Memory statistics
-    pub process_memory_bytes: Arc<Mutex<Option<u64>>>,
-    pub peak_memory_bytes: Arc<Mutex<Option<u64>>>,
-    pub last_memory_check: Arc<Mutex<Option<Instant>>>,
-    pub memory_available: Arc<Mutex<bool>>,
+    process_memory_bytes: Mutex<Option<u64>>,
+    peak_memory_bytes: Mutex<Option<u64>>,
+    last_memory_check: Mutex<Option<Instant>>,
+    memory_available: AtomicBool,
 }
 
 impl ServerStats {
     pub fn new() -> Self {
         Self {
             // Request statistics
-            total_requests: Arc::new(Mutex::new(0)),
-            successful_requests: Arc::new(Mutex::new(0)),
-            error_requests: Arc::new(Mutex::new(0)),
-            bytes_served: Arc::new(Mutex::new(0)),
-            start_time: Arc::new(Mutex::new(Some(Instant::now()))),
+            total_requests: AtomicU64::new(0),
+            successful_requests: AtomicU64::new(0),
+            error_requests: AtomicU64::new(0),
+            bytes_served: AtomicU64::new(0),
+            start_time: Instant::now(),
 
             // Upload statistics
-            total_uploads: Arc::new(Mutex::new(0)),
-            successful_uploads: Arc::new(Mutex::new(0)),
-            failed_uploads: Arc::new(Mutex::new(0)),
-            files_uploaded: Arc::new(Mutex::new(0)),
-            upload_bytes: Arc::new(Mutex::new(0)),
-            largest_upload: Arc::new(Mutex::new(0)),
-            concurrent_uploads: Arc::new(Mutex::new(0)),
-            upload_processing_times: Arc::new(Mutex::new(Vec::new())),
+            total_uploads: AtomicU64::new(0),
+            successful_uploads: AtomicU64::new(0),
+            failed_uploads: AtomicU64::new(0),
+            files_uploaded: AtomicU64::new(0),
+            upload_bytes: AtomicU64::new(0),
+            largest_upload: AtomicU64::new(0),
+            concurrent_uploads: AtomicU64::new(0),
+            upload_processing_times: Mutex::new(Vec::new()),
 
             // Memory statistics
-            process_memory_bytes: Arc::new(Mutex::new(None)),
-            peak_memory_bytes: Arc::new(Mutex::new(None)),
-            last_memory_check: Arc::new(Mutex::new(None)),
-            memory_available: Arc::new(Mutex::new(true)), // Assume available until proven otherwise
+            process_memory_bytes: Mutex::new(None),
+            peak_memory_bytes: Mutex::new(None),
+            last_memory_check: Mutex::new(None),
+            memory_available: AtomicBool::new(true),
         }
     }
 
     pub fn record_request(&self, success: bool, bytes: u64) {
-        trace!("Recording request: success={}, bytes={}", success, bytes);
-
-        if let Ok(mut total) = self.total_requests.lock() {
-            *total += 1;
-            trace!("Total requests now: {}", *total);
-        }
-
+        self.total_requests.fetch_add(1, Ordering::Relaxed);
         if success {
-            if let Ok(mut successful) = self.successful_requests.lock() {
-                *successful += 1;
-                trace!("Successful requests now: {}", *successful);
-            }
-        } else if let Ok(mut errors) = self.error_requests.lock() {
-            *errors += 1;
-            trace!("Error requests now: {}", *errors);
+            self.successful_requests.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.error_requests.fetch_add(1, Ordering::Relaxed);
         }
-
-        if let Ok(mut total_bytes) = self.bytes_served.lock() {
-            *total_bytes += bytes;
-            trace!("Total bytes served now: {}", *total_bytes);
-        }
+        self.bytes_served.fetch_add(bytes, Ordering::Relaxed);
     }
 
     pub fn get_stats(&self) -> (u64, u64, u64, u64, Duration) {
-        let total = *self
-            .total_requests
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let successful = *self
-            .successful_requests
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let errors = *self
-            .error_requests
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let bytes = *self
-            .bytes_served
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let uptime = self
-            .start_time
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"))
-            .map(|start| start.elapsed())
-            .unwrap_or_default();
+        let total = self.total_requests.load(Ordering::Relaxed);
+        let successful = self.successful_requests.load(Ordering::Relaxed);
+        let errors = self.error_requests.load(Ordering::Relaxed);
+        let bytes = self.bytes_served.load(Ordering::Relaxed);
+        let uptime = self.start_time.elapsed();
 
         (total, successful, errors, bytes, uptime)
     }
@@ -364,47 +333,41 @@ impl ServerStats {
         );
 
         // Increment total uploads
-        if let Ok(mut total) = self.total_uploads.lock() {
-            *total += 1;
-            trace!("Total uploads now: {}", *total);
-        }
+        self.total_uploads.fetch_add(1, Ordering::Relaxed);
 
         // Track success/failure
         if success {
-            if let Ok(mut successful) = self.successful_uploads.lock() {
-                *successful += 1;
-            }
-        } else if let Ok(mut failed) = self.failed_uploads.lock() {
-            *failed += 1;
+            self.successful_uploads.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.failed_uploads.fetch_add(1, Ordering::Relaxed);
         }
 
         // Only record additional metrics for successful uploads
         if success {
             // Record number of files uploaded
-            if let Ok(mut files) = self.files_uploaded.lock() {
-                *files += files_count;
-            }
+            self.files_uploaded.fetch_add(files_count, Ordering::Relaxed);
 
             // Record total bytes uploaded
-            if let Ok(mut bytes) = self.upload_bytes.lock() {
-                *bytes += upload_bytes;
-            }
-
-            // Update largest upload if this is bigger
-            if let Ok(mut largest) = self.largest_upload.lock()
-                && largest_file > *largest
-            {
-                *largest = largest_file;
+            self.upload_bytes.fetch_add(upload_bytes, Ordering::Relaxed);
+            let mut current = self.largest_upload.load(Ordering::Relaxed);
+            while largest_file > current {
+                match self.largest_upload.compare_exchange_weak(
+                    current,
+                    largest_file,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(next) => current = next,
+                }
             }
 
             // Record processing time (keep last 100 entries for average calculation)
             if let Ok(mut times) = self.upload_processing_times.lock() {
                 times.push(processing_time_ms);
-                // Use more efficient removal and shrink capacity to prevent unbounded growth
                 let len = times.len();
                 if len > 100 {
                     times.drain(0..len - 100);
-                    // Shrink capacity if it's grown too large (prevent memory leak)
                     if times.capacity() > 200 {
                         times.shrink_to(100);
                     }
@@ -415,53 +378,37 @@ impl ServerStats {
 
     /// Track concurrent upload start
     pub fn start_upload(&self) {
-        if let Ok(mut concurrent) = self.concurrent_uploads.lock() {
-            *concurrent += 1;
-        }
+        self.concurrent_uploads.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Track concurrent upload completion
     pub fn finish_upload(&self) {
-        if let Ok(mut concurrent) = self.concurrent_uploads.lock() {
-            *concurrent = concurrent.saturating_sub(1);
+        let mut current = self.concurrent_uploads.load(Ordering::Relaxed);
+        loop {
+            let next = current.saturating_sub(1);
+            match self.concurrent_uploads.compare_exchange_weak(
+                current,
+                next,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(v) => current = v,
+            }
         }
     }
 
     /// Get upload statistics
     pub fn get_upload_stats(&self) -> UploadStats {
-        let total_uploads = *self
-            .total_uploads
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let successful_uploads = *self
-            .successful_uploads
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let failed_uploads = *self
-            .failed_uploads
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let files_uploaded = *self
-            .files_uploaded
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let upload_bytes = *self
-            .upload_bytes
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let largest_upload = *self
-            .largest_upload
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let concurrent_uploads = *self
-            .concurrent_uploads
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let total_uploads = self.total_uploads.load(Ordering::Relaxed);
+        let successful_uploads = self.successful_uploads.load(Ordering::Relaxed);
+        let failed_uploads = self.failed_uploads.load(Ordering::Relaxed);
+        let files_uploaded = self.files_uploaded.load(Ordering::Relaxed);
+        let upload_bytes = self.upload_bytes.load(Ordering::Relaxed);
+        let largest_upload = self.largest_upload.load(Ordering::Relaxed);
+        let concurrent_uploads = self.concurrent_uploads.load(Ordering::Relaxed);
 
-        let processing_times = self
-            .upload_processing_times
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let processing_times = self.upload_processing_times.lock().unwrap_or_else(|_| panic!("Stats lock poisoned"));
         let average_processing_time = if processing_times.is_empty() {
             0.0
         } else {
@@ -563,13 +510,11 @@ impl ServerStats {
 
             // Update availability status
             let is_available = current_memory_opt.is_some();
-            if let Ok(mut available) = self.memory_available.lock() {
-                if !*available && is_available {
-                    info!("Memory tracking is now available");
-                } else if *available && !is_available {
-                    info!("Memory tracking is no longer available");
-                }
-                *available = is_available;
+            let previous = self.memory_available.swap(is_available, Ordering::Relaxed);
+            if !previous && is_available {
+                info!("Memory tracking is now available");
+            } else if previous && !is_available {
+                info!("Memory tracking is no longer available");
             }
 
             // Update current memory
@@ -608,10 +553,7 @@ impl ServerStats {
             .peak_memory_bytes
             .lock()
             .unwrap_or_else(|_| panic!("Stats lock poisoned"));
-        let available = *self
-            .memory_available
-            .lock()
-            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let available = self.memory_available.load(Ordering::Relaxed);
         (current, peak, available)
     }
 
@@ -621,9 +563,7 @@ impl ServerStats {
 
         // Update availability status
         let is_available = current_memory_opt.is_some();
-        if let Ok(mut available) = self.memory_available.lock() {
-            *available = is_available;
-        }
+        self.memory_available.store(is_available, Ordering::Relaxed);
 
         if let Ok(mut mem) = self.process_memory_bytes.lock() {
             *mem = current_memory_opt;
@@ -965,9 +905,7 @@ mod tests {
         if initial_available {
             // System has memory tracking available, so let's manually simulate unavailable state
             // Set memory as unavailable for testing
-            if let Ok(mut available) = stats.memory_available.lock() {
-                *available = false;
-            }
+            stats.memory_available.store(false, Ordering::Relaxed);
             if let Ok(mut mem) = stats.process_memory_bytes.lock() {
                 *mem = None;
             }
@@ -980,7 +918,7 @@ mod tests {
             let (current, peak, available) = (
                 *stats.process_memory_bytes.lock().unwrap(),
                 *stats.peak_memory_bytes.lock().unwrap(),
-                *stats.memory_available.lock().unwrap(),
+                stats.memory_available.load(Ordering::Relaxed),
             );
 
             // Should indicate unavailable memory based on what we set
