@@ -786,34 +786,20 @@ pub fn handle_search_api_request(
         case_sensitive: false,
     };
 
-    // Perform optimized search with caching and indexing
     debug!("Performing search with parameters: {:?}", params);
-    let mut results = perform_search(base_dir, &params)?;
+    let results = perform_search(base_dir, &params)?;
     debug!("Search returned {} results", results.len());
-
-    // Sort by relevance score
-    results.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    // Apply pagination
-    let total_count = results.len();
-    let paginated_results: Vec<SearchResult> =
-        results.into_iter().skip(offset).take(limit).collect();
 
     let elapsed_ms = start_time.elapsed().as_millis();
     debug!(
-        "Search completed in {}ms, returning {} of {} results",
+        "Search completed in {}ms, returning {} results",
         elapsed_ms,
-        paginated_results.len(),
-        total_count
+        results.len()
     );
     trace!("Pagination applied - offset: {}, limit: {}", offset, limit);
 
     // Create simple JSON manually to avoid serde dependency
-    let json_items: Vec<String> = paginated_results
+    let json_items: Vec<String> = results
         .iter()
         .map(|result| {
             format!(
