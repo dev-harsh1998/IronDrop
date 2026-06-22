@@ -34,7 +34,7 @@ mod tests {
                 score: 50.0,
                 last_modified: Some(1234567890),
             }];
-            cache.put(query, results);
+            cache.put(query, std::sync::Arc::new(results));
         }
 
         // Verify cache has grown

@@ -53,7 +53,7 @@ pub struct SearchCache {
 
 #[derive(Clone)]
 struct CachedSearchResult {
-    results: Vec<SearchResult>,
+    results: Arc<Vec<SearchResult>>,
     timestamp: Instant,
     hit_count: u32,
 }
@@ -103,7 +103,7 @@ impl SearchCache {
         }
     }
 
-    pub fn get(&mut self, key: &str) -> Option<Vec<SearchResult>> {
+    pub fn get(&mut self, key: &str) -> Option<Arc<Vec<SearchResult>>> {
         if let Some(cached) = self.cache.get_mut(key) {
             // Check if cache is still valid (10 seconds TTL for better performance)
             if cached.timestamp.elapsed().as_secs() < 10 {
@@ -130,7 +130,7 @@ impl SearchCache {
         None
     }
 
-    pub fn put(&mut self, key: String, results: Vec<SearchResult>) {
+    pub fn put(&mut self, key: String, results: Arc<Vec<SearchResult>>) {
         // Evict LRU item if cache is full
         while self.cache.len() >= self.max_size {
             if let Some(lru_key) = self.order.pop_back() {
@@ -178,6 +178,32 @@ impl SearchCache {
             self.cache.len(),
             self.max_size
         )
+    }
+}
+
+#[cfg(test)]
+mod search_cache_tests {
+    use super::*;
+
+    #[test]
+    fn search_cache_returns_shared_results_without_copying() {
+        let mut cache = SearchCache::new(10);
+        let results = Arc::new(vec![SearchResult {
+            name: "a".to_string(),
+            path: "/a".to_string(),
+            size: "0".to_string(),
+            file_type: "file".to_string(),
+            score: 1.0,
+            last_modified: None,
+        }]);
+
+        cache.put("k".to_string(), results.clone());
+
+        let got1 = cache.get("k").unwrap();
+        assert!(Arc::ptr_eq(&got1, &results));
+
+        let got2 = cache.get("k").unwrap();
+        assert!(Arc::ptr_eq(&got2, &results));
     }
 }
 
@@ -1305,7 +1331,6 @@ impl ConcurrentUltraLowMemoryIndex {
         }
     }
 
-    /// Perform search with minimal lock contention
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>, AppError> {
         debug!(
             "ConcurrentUltraLowMemoryIndex search: query='{}', limit={}",
@@ -1330,7 +1355,7 @@ impl ConcurrentUltraLowMemoryIndex {
                         cached_results.len()
                     );
                     trace!("Cache hit saved search time");
-                    return Ok(cached_results);
+                    return Ok((*cached_results).clone());
                 }
             }
         }
@@ -1372,11 +1397,38 @@ impl ConcurrentUltraLowMemoryIndex {
 
         // Cache results (quick lock)
         if let Ok(mut cache) = self.search_cache.try_lock() {
-            cache.put(cache_key, results.clone());
+            cache.put(cache_key, Arc::new(results.clone()));
             trace!("Results cached for future queries");
         }
 
         Ok(results)
+    }
+
+    /// Perform search with minimal lock contention
+    pub fn search_shared(&self, query: &str, limit: usize) -> Result<Arc<Vec<SearchResult>>, AppError> {
+        let cache_key = format!("{query}:{limit}");
+
+        {
+            if let Ok(mut cache) = self.search_cache.try_lock() {
+                if let Some(cached_results) = cache.get(&cache_key) {
+                    return Ok(cached_results);
+                }
+            }
+        }
+
+        let results = {
+            let index_guard = self
+                .index
+                .read()
+                .map_err(|_| AppError::InternalServerError("Index lock poisoned".to_string()))?;
+            index_guard.search(query, limit)
+        };
+
+        let shared = Arc::new(results);
+        if let Ok(mut cache) = self.search_cache.try_lock() {
+            cache.put(cache_key, shared.clone());
+        }
+        Ok(shared)
     }
 
     /// Update index with optimistic locking and memory pressure detection
