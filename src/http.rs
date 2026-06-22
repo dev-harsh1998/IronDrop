@@ -185,21 +185,16 @@ impl Request {
                 let hex1 = chars.next().ok_or(AppError::BadRequest)?;
                 let hex2 = chars.next().ok_or(AppError::BadRequest)?;
 
-                if let Ok(byte_val) = u8::from_str_radix(&format!("{hex1}{hex2}"), 16) {
+                if let (Some(d1), Some(d2)) = (hex1.to_digit(16), hex2.to_digit(16)) {
+                    let byte_val = ((d1 << 4) | d2) as u8;
                     if let Some(decoded_char) = char::from_u32(byte_val as u32) {
                         decoded.push(decoded_char);
-                    } else {
-                        // Invalid character, keep as-is
-                        decoded.push(ch);
-                        decoded.push(hex1);
-                        decoded.push(hex2);
+                        continue;
                     }
-                } else {
-                    // Invalid hex, keep as-is
-                    decoded.push(ch);
-                    decoded.push(hex1);
-                    decoded.push(hex2);
                 }
+                decoded.push(ch);
+                decoded.push(hex1);
+                decoded.push(hex2);
             } else {
                 decoded.push(ch);
             }
@@ -513,7 +508,7 @@ where
     let has_content_length = response
         .headers
         .keys()
-        .any(|k| k.to_lowercase() == "content-length");
+        .any(|k| k.eq_ignore_ascii_case("content-length"));
     if !has_content_length {
         let length_opt = match &response.body {
             ResponseBody::Text(text) => Some(text.len()),

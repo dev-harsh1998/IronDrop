@@ -114,11 +114,12 @@ fn url_decode(input: &str) -> String {
         if ch == '%' {
             // Try to decode percent-encoded character
             if let (Some(hex1), Some(hex2)) = (chars.next(), chars.next()) {
-                if let Ok(byte_val) = u8::from_str_radix(&format!("{hex1}{hex2}"), 16)
-                    && let Some(decoded_char) = char::from_u32(byte_val as u32)
-                {
-                    result.push(decoded_char);
-                    continue;
+                if let (Some(d1), Some(d2)) = (hex1.to_digit(16), hex2.to_digit(16)) {
+                    let byte_val = ((d1 << 4) | d2) as u8;
+                    if let Some(decoded_char) = char::from_u32(byte_val as u32) {
+                        result.push(decoded_char);
+                        continue;
+                    }
                 }
                 // If decoding failed, keep the original characters
                 result.push('%');

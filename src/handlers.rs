@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::error::AppError;
 use crate::http::{Request, Response, ResponseBody};
-use crate::search::{SearchParams, SearchResult, perform_search};
+use crate::search::{SearchParams, perform_search};
 use crate::upload::DirectUploadHandler;
 use crate::utils::parse_query_params;
 use log::{debug, error, info, trace};
@@ -701,11 +701,29 @@ fn url_decode(s: &str) -> String {
     let mut chars = s.chars();
     while let Some(ch) = chars.next() {
         if ch == '%' {
-            let hex: String = chars.by_ref().take(2).collect();
-            if let Ok(byte) = u8::from_str_radix(&hex, 16) {
-                result.push(byte as char);
-            } else {
-                result.push(ch);
+            let hex1 = chars.next();
+            let hex2 = chars.next();
+            match (hex1, hex2) {
+                (Some(h1), Some(h2)) => {
+                    if let (Some(d1), Some(d2)) = (h1.to_digit(16), h2.to_digit(16)) {
+                        let byte = ((d1 << 4) | d2) as u8;
+                        result.push(byte as char);
+                    } else {
+                        result.push(ch);
+                        result.push(h1);
+                        result.push(h2);
+                    }
+                }
+                (Some(h1), None) => {
+                    result.push(ch);
+                    result.push(h1);
+                }
+                (None, None) => {
+                    result.push(ch);
+                }
+                (None, Some(_)) => {
+                    result.push(ch);
+                }
             }
         } else if ch == '+' {
             result.push(' ');
