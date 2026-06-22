@@ -5,9 +5,30 @@ use crate::error::AppError;
 use crate::templates::TemplateEngine;
 use crate::utils::is_hidden_file;
 use log::{debug, trace};
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+
+#[derive(Eq, PartialEq)]
+struct ListingEntry {
+    path: PathBuf,
+    file_name: String,
+    is_dir: bool,
+}
+
+impl Ord for ListingEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        compare_listing_entries(self, other)
+    }
+}
+
+impl PartialOrd for ListingEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 /// Enhanced directory listing using modular templates - dark mode only
 pub fn generate_directory_listing(
@@ -19,9 +40,13 @@ pub fn generate_directory_listing(
     debug!("Generating directory listing for: '{}'", path.display());
     trace!("Request path: '{}'", request_path);
 
-    let mut entries = Vec::new();
+    let limit = 1000;
+    let page_size = page.max(1);
+    let selection_size = page_size.saturating_mul(limit);
+    let mut selected_entries = BinaryHeap::with_capacity(selection_size);
+    let mut total_count = 0usize;
 
-    // Collect and sort entries using lazy metadata lookup (super fast, low memory)
+    // Keep only the best entries for the requested page instead of sorting the entire directory.
     trace!("Reading directory entries from: {}", path.display());
     for entry in fs::read_dir(path)? {
         let entry = entry?;
@@ -32,21 +57,30 @@ pub fn generate_directory_listing(
             continue;
         }
 
-        entries.push((entry.path(), file_name, file_type.is_dir()));
+        total_count += 1;
+        let listing_entry = ListingEntry {
+            path: entry.path(),
+            file_name,
+            is_dir: file_type.is_dir(),
+        };
+
+        if selection_size == 0 {
+            continue;
+        }
+        if selected_entries.len() < selection_size {
+            selected_entries.push(listing_entry);
+            continue;
+        }
+        if let Some(current_max) = selected_entries.peek()
+            && compare_listing_entries(&listing_entry, current_max) == Ordering::Less
+        {
+            selected_entries.pop();
+            selected_entries.push(listing_entry);
+        }
     }
 
-    debug!("Found {} entries, sorting...", entries.len());
-    // Sort: directories first, then alphabetically
-    entries.sort_by(|a, b| {
-        let a_is_dir = a.2;
-        let b_is_dir = b.2;
-
-        match (a_is_dir, b_is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => cmp_case_insensitive_ascii(&a.1, &b.1),
-        }
-    });
+    let mut entries = selected_entries.into_vec();
+    entries.sort_unstable_by(compare_listing_entries);
 
     let display_path = if request_path.is_empty() || request_path == "/" {
         "/"
@@ -54,9 +88,7 @@ pub fn generate_directory_listing(
         request_path
     };
 
-    debug!("Preparing {} entries for template rendering", entries.len());
-    let total_count = entries.len();
-    let limit = 1000;
+    debug!("Preparing {} selected entries for template rendering", entries.len());
     let total_pages = total_count.div_ceil(limit);
     let safe_page = page.max(1).min(total_pages.max(1));
     let offset = (safe_page - 1) * limit;
@@ -64,7 +96,12 @@ pub fn generate_directory_listing(
     let page_entries: Vec<_> = entries.into_iter().skip(offset).take(limit).collect();
     let mut template_entries = Vec::with_capacity(page_entries.len());
 
-    for (entry_path, file_name, is_dir) in page_entries {
+    for entry in page_entries {
+        let ListingEntry {
+            path: entry_path,
+            file_name,
+            is_dir,
+        } = entry;
         let link_name = if is_dir {
             format!("{file_name}/")
         } else {
@@ -149,6 +186,48 @@ fn cmp_case_insensitive_ascii(a: &str, b: &str) -> std::cmp::Ordering {
             (Some(_), None) => return std::cmp::Ordering::Greater,
             (None, None) => return std::cmp::Ordering::Equal,
         }
+    }
+}
+
+fn compare_listing_entries(a: &ListingEntry, b: &ListingEntry) -> Ordering {
+    match (a.is_dir, b.is_dir) {
+        (true, false) => Ordering::Less,
+        (false, true) => Ordering::Greater,
+        _ => cmp_case_insensitive_ascii(&a.file_name, &b.file_name),
+    }
+}
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    #[ignore]
+    fn perf_directory_listing_first_page() {
+        let temp_dir = tempdir().unwrap();
+
+        for dir_idx in 0..200 {
+            std::fs::create_dir_all(temp_dir.path().join(format!("dir_{dir_idx:03}"))).unwrap();
+        }
+        for file_idx in 0..9_800 {
+            std::fs::write(
+                temp_dir.path().join(format!("file_{file_idx:05}.txt")),
+                b"irondrop",
+            )
+            .unwrap();
+        }
+
+        let start = std::time::Instant::now();
+        let html = generate_directory_listing(temp_dir.path(), "/", None, 1).unwrap();
+        let elapsed_ms = start.elapsed().as_millis();
+
+        assert!(html.contains("file_"));
+        println!(
+            "PERF directory_listing entries=10000 page=1 render_ms={} html_bytes={}",
+            elapsed_ms,
+            html.len()
+        );
     }
 }
 

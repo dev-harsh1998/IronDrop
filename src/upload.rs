@@ -462,7 +462,7 @@ impl DirectUploadHandler {
             RequestBody::File { path, .. } => {
                 // If body is in file but small enough for memory processing,
                 // read it into memory for simpler handling
-                return self.handle_file_based_upload(path, filename);
+                return self.handle_file_based_upload(path, filename, None);
             }
         };
 
@@ -561,7 +561,9 @@ impl DirectUploadHandler {
                 // This shouldn't happen due to size checks, but handle gracefully
                 return self.handle_memory_upload(body, filename);
             }
-            RequestBody::File { path, size: _ } => self.handle_file_based_upload(path, filename),
+            RequestBody::File { path, size } => {
+                self.handle_file_based_upload(path, filename, Some(*size))
+            }
         }
     }
 
@@ -570,6 +572,7 @@ impl DirectUploadHandler {
         &mut self,
         source_path: &PathBuf,
         filename: &str,
+        known_size: Option<u64>,
     ) -> Result<UploadedFile, AppError> {
         debug!(
             "Processing file-based upload: {} -> {}",
@@ -585,6 +588,43 @@ impl DirectUploadHandler {
         );
         let target_path = self.target_dir.join(&final_filename);
         trace!("Target path: {}", target_path.display());
+
+        // Fast path: reuse the request-body temp file when the target lives on the same filesystem.
+        match fs::rename(source_path, &target_path) {
+            Ok(()) => {
+                let file_size = known_size.unwrap_or_else(|| {
+                    fs::metadata(&target_path).map(|m| m.len()).unwrap_or_default()
+                });
+                let mime_type = get_mime_type(&target_path).to_string();
+                info!(
+                    "Successfully uploaded file via rename fast path: {} ({} bytes) to {}",
+                    final_filename,
+                    file_size,
+                    target_path.display()
+                );
+                return Ok(UploadedFile {
+                    original_name: filename.to_string(),
+                    saved_name: final_filename,
+                    saved_path: target_path,
+                    size: file_size,
+                    mime_type,
+                    renamed: was_renamed,
+                });
+            }
+            Err(err) => {
+                let is_cross_device = err.raw_os_error() == Some(18);
+                if !is_cross_device {
+                    error!(
+                        "Failed to move source file {source_path:?} to {target_path:?}: {err}"
+                    );
+                    return Err(AppError::from(err));
+                }
+                debug!(
+                    "Rename fast path crossed filesystems for {:?}, falling back to buffered copy",
+                    source_path
+                );
+            }
+        }
 
         // Create temporary file for atomic operation
         let temp_filename = format!(
@@ -997,6 +1037,7 @@ mod tests {
     use super::*;
     use std::io::Write;
     use tempfile::TempDir;
+    use crate::http::Request;
 
     fn create_test_cli(upload_dir: PathBuf) -> Cli {
         Cli {
@@ -1130,6 +1171,42 @@ mod tests {
         // Not allowed extensions
         assert!(handler.validate_file_extension("document.exe").is_err());
         assert!(handler.validate_file_extension("document.jpg").is_err());
+    }
+
+    #[test]
+    #[ignore]
+    fn perf_file_backed_upload_fast_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut cli = create_test_cli(temp_dir.path().to_path_buf());
+        cli.allowed_extensions = Some("*".to_string());
+        cli.max_upload_size = Some(256);
+        let mut handler = DirectUploadHandler::new(&cli).unwrap();
+
+        let request_temp = temp_dir.path().join("request-body.tmp");
+        let file = File::create(&request_temp).unwrap();
+        file.set_len(16 * 1024 * 1024).unwrap();
+
+        let request = Request {
+            method: "POST".to_string(),
+            path: "/perf-upload.bin".to_string(),
+            headers: HashMap::new(),
+            body: Some(RequestBody::File {
+                path: request_temp,
+                size: 16 * 1024 * 1024,
+            }),
+        };
+
+        let start = std::time::Instant::now();
+        let response = handler.handle_upload(&request, None).unwrap();
+        let elapsed_us = start.elapsed().as_micros();
+
+        assert_eq!(response.status_code, 200);
+        assert!(temp_dir.path().join("perf-upload.bin").exists());
+        println!(
+            "PERF upload_fast_path size_bytes={} elapsed_us={}",
+            16 * 1024 * 1024,
+            elapsed_us
+        );
     }
 
     #[test]
