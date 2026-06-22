@@ -9,6 +9,7 @@ use crate::router::Router;
 use glob::Pattern;
 use log::{debug, info, trace, warn};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
@@ -26,7 +27,7 @@ use std::mem;
 /// Rate limiter for basic DoS protection
 #[derive(Clone)]
 pub struct RateLimiter {
-    connections: Arc<Mutex<HashMap<IpAddr, ConnectionInfo>>>,
+    connections: Arc<Vec<Mutex<HashMap<IpAddr, ConnectionInfo>>>>,
     max_requests_per_minute: u32,
     max_concurrent_per_ip: u32,
     max_connections_per_ip: u32,
@@ -41,26 +42,41 @@ struct ConnectionInfo {
     total_connections: u32,
 }
 
+const RATE_LIMITER_SHARDS: usize = 64;
+const MAX_RATE_LIMITER_ENTRIES: usize = 100_000;
+const MAX_RATE_LIMITER_ENTRIES_PER_SHARD: usize =
+    MAX_RATE_LIMITER_ENTRIES.div_ceil(RATE_LIMITER_SHARDS);
+
 impl RateLimiter {
     pub fn new(max_requests_per_minute: u32, max_concurrent_per_ip: u32) -> Self {
+        let mut shards = Vec::with_capacity(RATE_LIMITER_SHARDS);
+        for _ in 0..RATE_LIMITER_SHARDS {
+            shards.push(Mutex::new(HashMap::new()));
+        }
         Self {
-            connections: Arc::new(Mutex::new(HashMap::new())),
+            connections: Arc::new(shards),
             max_requests_per_minute,
             max_concurrent_per_ip,
             max_connections_per_ip: 1000, // Limit stored connections per IP
         }
     }
 
+    fn shard_index(ip: IpAddr) -> usize {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        ip.hash(&mut hasher);
+        (hasher.finish() as usize) % RATE_LIMITER_SHARDS
+    }
+
     pub fn check_rate_limit(&self, ip: IpAddr) -> bool {
         trace!("Checking rate limit for IP: {}", ip);
-        let mut connections = self.connections.lock().unwrap();
+        let shard_index = Self::shard_index(ip);
+        let mut connections = self.connections[shard_index].lock().unwrap();
         let now = Instant::now();
 
-        // Hard limit on the number of entries to prevent unbounded memory growth
-        const MAX_RATE_LIMITER_ENTRIES: usize = 100_000;
-
         // Check if we need to evict entries before inserting a new one
-        if !connections.contains_key(&ip) && connections.len() >= MAX_RATE_LIMITER_ENTRIES {
+        if !connections.contains_key(&ip)
+            && connections.len() >= MAX_RATE_LIMITER_ENTRIES_PER_SHARD
+        {
             const EVICTION_SAMPLE: usize = 64;
             let mut best_ip: Option<IpAddr> = None;
             let mut best_last_activity: Option<Instant> = None;
@@ -142,7 +158,8 @@ impl RateLimiter {
 
     pub fn release_connection(&self, ip: IpAddr) {
         trace!("Releasing connection for IP: {}", ip);
-        if let Ok(mut connections) = self.connections.lock() {
+        let shard_index = Self::shard_index(ip);
+        if let Ok(mut connections) = self.connections[shard_index].lock() {
             if let Some(conn_info) = connections.get_mut(&ip) {
                 let old_count = conn_info.active_connections;
                 conn_info.active_connections = conn_info.active_connections.saturating_sub(1);
@@ -159,55 +176,64 @@ impl RateLimiter {
 
     pub fn cleanup_old_entries(&self) {
         trace!("Starting manual cleanup of old rate limiter entries");
-        let mut connections = self.connections.lock().unwrap();
         let now = Instant::now();
-        let initial_count = connections.len();
+        let mut cleaned_count = 0usize;
 
-        trace!("Rate limiter has {} entries before cleanup", initial_count);
+        for shard in self.connections.iter() {
+            let mut connections = shard.lock().unwrap();
+            let initial_count = connections.len();
 
-        // Reduced retention time from 5 minutes to 2 minutes
-        connections
-            .retain(|_, info| now.duration_since(info.last_activity) < Duration::from_secs(120));
+            trace!("Rate limiter shard has {} entries before cleanup", initial_count);
 
-        let cleaned_count = initial_count - connections.len();
-        if cleaned_count > 0 {
-            debug!("Cleaned up {} old rate limiter entries", cleaned_count);
-            // Reduce underlying capacity if we removed many entries
-            if connections.capacity() > connections.len() * 2 {
+            // Reduced retention time from 5 minutes to 2 minutes
+            connections
+                .retain(|_, info| now.duration_since(info.last_activity) < Duration::from_secs(120));
+
+            cleaned_count += initial_count - connections.len();
+            if initial_count > connections.len() && connections.capacity() > connections.len() * 2 {
                 connections.shrink_to_fit();
             }
-        } else {
+        }
+
+        if cleaned_count == 0 {
             trace!("No old entries to clean up");
+        } else {
+            debug!("Cleaned up {} old rate limiter entries", cleaned_count);
         }
     }
 
     /// Perform aggressive cleanup when memory pressure is detected
     pub fn cleanup_on_memory_pressure(&self) {
         debug!("Starting aggressive cleanup due to memory pressure");
-        let mut connections = self.connections.lock().unwrap();
         let now = Instant::now();
-        let initial_count = connections.len();
+        let mut cleaned_count = 0usize;
 
-        trace!(
-            "Memory pressure cleanup: checking {} entries",
-            initial_count
-        );
+        for shard in self.connections.iter() {
+            let mut connections = shard.lock().unwrap();
+            let initial_count = connections.len();
 
-        // More aggressive cleanup - remove entries older than 30 seconds
-        connections.retain(|_, info| {
-            info.active_connections > 0
-                || now.duration_since(info.last_activity) < Duration::from_secs(30)
-        });
+            trace!(
+                "Memory pressure cleanup: checking {} entries in shard",
+                initial_count
+            );
 
-        let cleaned_count = initial_count - connections.len();
+            // More aggressive cleanup - remove entries older than 30 seconds
+            connections.retain(|_, info| {
+                info.active_connections > 0
+                    || now.duration_since(info.last_activity) < Duration::from_secs(30)
+            });
+
+            cleaned_count += initial_count - connections.len();
+            if initial_count > connections.len() && connections.capacity() > connections.len() * 2 {
+                connections.shrink_to_fit();
+            }
+        }
+
         if cleaned_count > 0 {
             warn!(
                 "Memory pressure cleanup removed {} rate limiter entries",
                 cleaned_count
             );
-            if connections.capacity() > connections.len() * 2 {
-                connections.shrink_to_fit();
-            }
         } else {
             trace!("Memory pressure cleanup: no entries removed");
         }
@@ -215,18 +241,30 @@ impl RateLimiter {
 
     /// Get rate limiter memory statistics
     pub fn get_memory_stats(&self) -> (usize, usize) {
-        if let Ok(connections) = self.connections.lock() {
-            let entry_count = connections.len();
-            let estimated_memory = entry_count * std::mem::size_of::<(IpAddr, ConnectionInfo)>();
-            trace!(
-                "Rate limiter stats: {} entries, ~{} bytes",
-                entry_count, estimated_memory
-            );
-            (entry_count, estimated_memory)
-        } else {
-            trace!("Failed to acquire rate limiter lock for stats");
-            (0, 0)
+        let mut entry_count = 0usize;
+        let mut estimated_memory = 0usize;
+
+        for shard in self.connections.iter() {
+            match shard.lock() {
+                Ok(connections) => {
+                    entry_count += connections.len();
+                    estimated_memory +=
+                        connections.len() * std::mem::size_of::<(IpAddr, ConnectionInfo)>();
+                }
+                Err(_) => {
+                    trace!("Failed to acquire rate limiter shard lock for stats");
+                    return (0, 0);
+                }
+            }
         }
+
+        trace!(
+            "Rate limiter stats: {} entries, ~{} bytes across {} shards",
+            entry_count,
+            estimated_memory,
+            RATE_LIMITER_SHARDS
+        );
+        (entry_count, estimated_memory)
     }
 }
 
@@ -800,6 +838,8 @@ fn get_process_memory_bytes() -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::Ipv4Addr;
+    use std::thread;
 
     #[test]
     fn test_upload_statistics_tracking() {
@@ -953,6 +993,43 @@ mod tests {
             assert!(current2.is_none());
             assert!(peak2.is_none());
         }
+    }
+
+    #[test]
+    #[ignore]
+    fn perf_rate_limiter_sharded_unique_ips() {
+        let limiter = RateLimiter::new(10_000, 32);
+        let workers = 8u32;
+        let ips_per_worker = 5_000u32;
+        let start = Instant::now();
+
+        thread::scope(|scope| {
+            for worker in 0..workers {
+                let limiter = limiter.clone();
+                scope.spawn(move || {
+                    for i in 1..=ips_per_worker {
+                        let ordinal = worker * ips_per_worker + (i - 1);
+                        let second = ((ordinal >> 16) & 0xff) as u8;
+                        let third = ((ordinal >> 8) & 0xff) as u8;
+                        let fourth = (ordinal & 0xff) as u8;
+                        let ip = IpAddr::V4(Ipv4Addr::new(10, second, third, fourth));
+                        assert!(limiter.check_rate_limit(ip));
+                    }
+                });
+            }
+        });
+
+        let elapsed_ms = start.elapsed().as_millis();
+        let (entries, memory_bytes) = limiter.get_memory_stats();
+        println!(
+            "PERF rate_limiter_sharded workers={} total_ops={} elapsed_ms={} entries={} memory_bytes={}",
+            workers,
+            workers as u64 * ips_per_worker as u64,
+            elapsed_ms,
+            entries,
+            memory_bytes
+        );
+        assert!(entries > 0);
     }
 }
 
