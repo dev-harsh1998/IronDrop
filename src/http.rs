@@ -82,6 +82,59 @@ pub enum ResponseBody {
     AsyncStream(tokio::sync::mpsc::Receiver<Vec<u8>>),
 }
 
+struct PendingBuffer {
+    data: Vec<u8>,
+    start: usize,
+}
+
+impl PendingBuffer {
+    fn new(data: Vec<u8>) -> Self {
+        Self { data, start: 0 }
+    }
+
+    fn len(&self) -> usize {
+        self.data.len().saturating_sub(self.start)
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        &self.data[self.start..]
+    }
+
+    fn extend_from_slice(&mut self, bytes: &[u8]) {
+        if self.start > 0 && (self.start >= 8192 || self.start * 2 >= self.data.len().max(1)) {
+            self.compact();
+        }
+        self.data.extend_from_slice(bytes);
+    }
+
+    fn take(&mut self, count: usize) -> Vec<u8> {
+        let end = self.start + count;
+        let chunk = self.data[self.start..end].to_vec();
+        self.start = end;
+        if self.start == self.data.len() {
+            self.data.clear();
+            self.start = 0;
+        }
+        chunk
+    }
+
+    fn discard(&mut self, count: usize) {
+        self.start += count;
+        if self.start == self.data.len() {
+            self.data.clear();
+            self.start = 0;
+        }
+    }
+
+    fn compact(&mut self) {
+        if self.start == 0 {
+            return;
+        }
+        self.data.drain(..self.start);
+        self.start = 0;
+    }
+}
+
 impl Request {
     /// Validates if the given method is a valid HTTP method
     fn is_valid_http_method(method: &str) -> bool {
@@ -659,13 +712,14 @@ where
 
 async fn read_chunked_body_async<S>(
     stream: &mut S,
-    mut pending: Vec<u8>,
+    remaining_bytes: Vec<u8>,
 ) -> Result<RequestBody, AppError>
 where
     S: tokio::io::AsyncRead + Unpin,
 {
     const CHUNK_LINE_LIMIT: usize = 8 * 1024;
 
+    let mut pending = PendingBuffer::new(remaining_bytes);
     let mut total_size: usize = 0;
     let mut memory_body: Vec<u8> = Vec::new();
     let mut file_sink: Option<(PathBuf, tokio::fs::File)> = None;
@@ -765,16 +819,16 @@ async fn create_temp_body_file_async() -> Result<(PathBuf, tokio::fs::File), App
 
 async fn read_crlf_line_async<S>(
     stream: &mut S,
-    pending: &mut Vec<u8>,
+    pending: &mut PendingBuffer,
     max_line_len: usize,
 ) -> Result<Vec<u8>, AppError>
 where
     S: tokio::io::AsyncRead + Unpin,
 {
     loop {
-        if let Some(pos) = pending.windows(2).position(|w| w == b"\r\n") {
-            let line = pending[..pos].to_vec();
-            pending.drain(0..pos + 2);
+        if let Some(pos) = pending.as_slice().windows(2).position(|w| w == b"\r\n") {
+            let line = pending.take(pos);
+            pending.discard(2);
             return Ok(line);
         }
 
@@ -793,7 +847,7 @@ where
 
 async fn read_exact_from_buffer_async<S>(
     stream: &mut S,
-    pending: &mut Vec<u8>,
+    pending: &mut PendingBuffer,
     count: usize,
 ) -> Result<Vec<u8>, AppError>
 where
@@ -807,12 +861,12 @@ where
         }
         pending.extend_from_slice(&buffer[..n]);
     }
-    Ok(pending.drain(0..count).collect())
+    Ok(pending.take(count))
 }
 
 async fn consume_expected_crlf_async<S>(
     stream: &mut S,
-    pending: &mut Vec<u8>,
+    pending: &mut PendingBuffer,
 ) -> Result<(), AppError>
 where
     S: tokio::io::AsyncRead + Unpin,
@@ -826,7 +880,7 @@ where
 
 async fn consume_chunked_trailers_async<S>(
     stream: &mut S,
-    pending: &mut Vec<u8>,
+    pending: &mut PendingBuffer,
 ) -> Result<(), AppError>
 where
     S: tokio::io::AsyncRead + Unpin,
@@ -953,4 +1007,44 @@ where
     })?;
 
     Ok((temp_path, total_written as u64))
+}
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+    use tokio::io::{AsyncWriteExt, duplex};
+
+    #[tokio::test]
+    #[ignore]
+    async fn perf_chunked_body_parsing() {
+        let chunk = vec![b'a'; 64 * 1024];
+        let mut payload = Vec::new();
+        for _ in 0..128 {
+            payload.extend_from_slice(format!("{:X}\r\n", chunk.len()).as_bytes());
+            payload.extend_from_slice(&chunk);
+            payload.extend_from_slice(b"\r\n");
+        }
+        payload.extend_from_slice(b"0\r\n\r\n");
+
+        let (mut writer, mut reader) = duplex(payload.len() + 1024);
+        writer.write_all(&payload).await.unwrap();
+        drop(writer);
+
+        let start = Instant::now();
+        let body = read_chunked_body_async(&mut reader, Vec::new()).await.unwrap();
+        let elapsed_ms = start.elapsed().as_millis();
+
+        match body {
+            RequestBody::File { size, .. } => {
+                assert_eq!(size, (64 * 1024 * 128) as u64);
+            }
+            RequestBody::Memory(data) => panic!("expected file-backed body, got {}", data.len()),
+        }
+
+        println!(
+            "PERF chunked_body_parse size_bytes={} elapsed_ms={}",
+            64 * 1024 * 128,
+            elapsed_ms
+        );
+    }
 }

@@ -46,9 +46,10 @@ pub struct SearchParams {
 /// LRU Cache for search results
 pub struct SearchCache {
     cache: HashMap<String, CachedSearchResult>,
-    order: VecDeque<String>,
+    order: VecDeque<(u64, String)>,
     max_size: usize,
     stats: CacheStats,
+    next_generation: u64,
 }
 
 #[derive(Clone)]
@@ -56,6 +57,7 @@ struct CachedSearchResult {
     results: Arc<Vec<SearchResult>>,
     timestamp: Instant,
     hit_count: u32,
+    generation: u64,
 }
 
 #[derive(Default)]
@@ -72,7 +74,29 @@ impl SearchCache {
             order: VecDeque::new(),
             max_size,
             stats: CacheStats::default(),
+            next_generation: 0,
         }
+    }
+
+    fn fresh_generation(&mut self) -> u64 {
+        self.next_generation = self.next_generation.wrapping_add(1);
+        self.next_generation
+    }
+
+    fn evict_oldest(&mut self) -> bool {
+        while let Some((generation, key)) = self.order.pop_front() {
+            let should_remove = self
+                .cache
+                .get(&key)
+                .map(|cached| cached.generation == generation)
+                .unwrap_or(false);
+            if should_remove {
+                self.cache.remove(&key);
+                self.stats.evictions += 1;
+                return true;
+            }
+        }
+        false
     }
 
     /// Force shrink cache when memory usage exceeds threshold
@@ -88,9 +112,8 @@ impl SearchCache {
             };
 
             while self.cache.len() > target_size {
-                if let Some(lru_key) = self.order.pop_back() {
-                    self.cache.remove(&lru_key);
-                    self.stats.evictions += 1;
+                if !self.evict_oldest() {
+                    break;
                 }
             }
 
@@ -104,26 +127,20 @@ impl SearchCache {
     }
 
     pub fn get(&mut self, key: &str) -> Option<Arc<Vec<SearchResult>>> {
+        let generation = self.fresh_generation();
         if let Some(cached) = self.cache.get_mut(key) {
             // Check if cache is still valid (10 seconds TTL for better performance)
             if cached.timestamp.elapsed().as_secs() < 10 {
                 cached.hit_count += 1;
                 self.stats.hits += 1;
-
-                // Move to front of LRU queue
-                if let Some(pos) = self.order.iter().position(|k| k == key) {
-                    self.order.remove(pos);
-                }
-                self.order.push_front(key.to_string());
+                cached.generation = generation;
+                self.order.push_back((generation, key.to_string()));
 
                 debug!("Cache hit for query: {} (hits: {})", key, cached.hit_count);
                 return Some(cached.results.clone());
             }
             // Cache expired, remove it
             self.cache.remove(key);
-            if let Some(pos) = self.order.iter().position(|k| k == key) {
-                self.order.remove(pos);
-            }
             debug!("Cache expired for query: {key}");
         }
         self.stats.misses += 1;
@@ -132,24 +149,25 @@ impl SearchCache {
 
     pub fn put(&mut self, key: String, results: Arc<Vec<SearchResult>>) {
         // Evict LRU item if cache is full
-        while self.cache.len() >= self.max_size {
-            if let Some(lru_key) = self.order.pop_back() {
-                self.cache.remove(&lru_key);
-                self.stats.evictions += 1;
-                debug!("Evicted cache entry: {lru_key}");
+        let replacing_existing = self.cache.contains_key(&key);
+        while !replacing_existing && self.cache.len() >= self.max_size {
+            if !self.evict_oldest() {
+                break;
             }
         }
 
         let result_count = results.len();
+        let generation = self.fresh_generation();
         self.cache.insert(
             key.clone(),
             CachedSearchResult {
                 results,
                 timestamp: Instant::now(),
                 hit_count: 0,
+                generation,
             },
         );
-        self.order.push_front(key.clone());
+        self.order.push_back((generation, key.clone()));
         debug!("Cached {result_count} results for query: {key}");
     }
 
@@ -264,8 +282,16 @@ struct StringPoolEntry {
 /// Radix index bucket for first-byte acceleration
 #[derive(Default)]
 struct RadixBucket {
-    /// Sorted array of entry indices for binary search
-    entries: Vec<u32>, // Variable size, sorted for O(log n) search
+    /// Entry indices grouped by first byte for fast prefix narrowing.
+    entries: Vec<u32>,
+}
+
+struct IndexedDirEntry {
+    path: PathBuf,
+    name: String,
+    size: u64,
+    is_dir: bool,
+    modified: SystemTime,
 }
 
 /// Cache-aligned memory pool for ultra-efficient string storage
@@ -576,13 +602,26 @@ fn murmur3_hash(data: &[u8]) -> u32 {
     hash
 }
 
+fn contains_case_insensitive_ascii(haystack: &str, needle_lower: &str) -> bool {
+    let needle = needle_lower.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|window| {
+            window
+                .iter()
+                .zip(needle.iter())
+                .all(|(&lhs, &rhs)| lhs.to_ascii_lowercase() == rhs)
+        })
+}
+
 impl RadixBucket {
-    /// Add entry to bucket, maintaining sorted order for binary search
+    /// Add entry to bucket during bulk index construction.
     fn add_entry(&mut self, entry_id: u32) {
-        match self.entries.binary_search(&entry_id) {
-            Ok(_) => {} // Already exists
-            Err(pos) => self.entries.insert(pos, entry_id),
-        }
+        self.entries.push(entry_id);
     }
 
     /// Search bucket for entries matching criteria
@@ -841,37 +880,30 @@ impl UltraLowMemoryIndex {
                 continue;
             }
 
-            batch_entries.push((
-                file_name,
-                file_path.clone(),
-                metadata.len(),
-                metadata.is_dir(),
+            batch_entries.push(IndexedDirEntry {
+                path: file_path,
+                name: file_name,
+                size: metadata.len(),
+                is_dir: metadata.is_dir(),
                 modified,
-            ));
-
-            // Collect subdirectories for recursive processing
-            if metadata.is_dir() {
-                subdirs.push(file_path);
-            }
+            });
 
             // Process batch when it's full
             if batch_entries.len() >= 1000 {
-                self.process_entry_batch_hierarchical(&mut batch_entries, parent_entry_id)?;
+                subdirs.extend(
+                    self.process_entry_batch_hierarchical(&mut batch_entries, parent_entry_id)?,
+                );
             }
         }
 
         // Process remaining entries
         if !batch_entries.is_empty() {
-            self.process_entry_batch_hierarchical(&mut batch_entries, parent_entry_id)?;
+            subdirs.extend(self.process_entry_batch_hierarchical(&mut batch_entries, parent_entry_id)?);
         }
 
-        // Recursively process subdirectories with their entry IDs as parents
-        for subdir in subdirs {
-            // Find the entry ID for this subdirectory
-            let subdir_name = subdir.file_name().unwrap().to_string_lossy();
-            if let Some(subdir_entry_id) = self.find_entry_by_name(&subdir_name, parent_entry_id) {
-                self.walk_directory_hierarchical(&subdir, subdir_entry_id, depth + 1)?;
-            }
+        // Recursively process subdirectories with the entry IDs generated during batching.
+        for (subdir, subdir_entry_id) in subdirs {
+            self.walk_directory_hierarchical(&subdir, subdir_entry_id, depth + 1)?;
         }
 
         Ok(())
@@ -880,18 +912,26 @@ impl UltraLowMemoryIndex {
     /// Process batch of entries with hierarchical parent references (ultra-memory efficient)
     fn process_entry_batch_hierarchical(
         &mut self,
-        batch: &mut Vec<(String, PathBuf, u64, bool, SystemTime)>,
+        batch: &mut Vec<IndexedDirEntry>,
         parent_entry_id: u32,
-    ) -> Result<(), AppError> {
-        for (name, _path, size, is_dir, modified) in batch.drain(..) {
+    ) -> Result<Vec<(PathBuf, u32)>, AppError> {
+        let mut subdirs = Vec::new();
+
+        for entry in batch.drain(..) {
             let entry_id = self.entries.len() as u32;
 
             // Add filename to unified string pool
-            let name_offset = self.add_string(&name);
+            let name_offset = self.add_string(&entry.name);
 
             // Create ultra-compact entry with parent reference
             let ultra_compact_entry =
-                UltraCompactEntry::new(name_offset, parent_entry_id, size, modified, is_dir);
+                UltraCompactEntry::new(
+                    name_offset,
+                    parent_entry_id,
+                    entry.size,
+                    entry.modified,
+                    entry.is_dir,
+                );
 
             self.entries.push(ultra_compact_entry);
 
@@ -905,34 +945,20 @@ impl UltraLowMemoryIndex {
             }
 
             // Add to radix index for fast searching
-            if !name.is_empty() {
-                let first_byte = name.as_bytes()[0];
+            if !entry.name.is_empty() {
+                let first_byte = entry.name.as_bytes()[0];
                 self.radix_index[first_byte as usize].add_entry(entry_id);
             }
 
             // Update entry count
             self.entry_count.fetch_add(1, Ordering::Relaxed);
-        }
 
-        Ok(())
-    }
-
-    /// Find entry ID by name within a parent directory
-    fn find_entry_by_name(&self, name: &str, parent_id: u32) -> Option<u32> {
-        if parent_id as usize >= self.directory_children.len() {
-            return None;
-        }
-
-        for &child_id in &self.directory_children[parent_id as usize] {
-            if let Some(entry) = self.entries.get(child_id as usize)
-                && let Some(entry_name) = self.get_string(entry.get_name_offset())
-                && entry_name == name
-            {
-                return Some(child_id);
+            if entry.is_dir {
+                subdirs.push((entry.path, entry_id));
             }
         }
 
-        None
+        Ok(subdirs)
     }
 
     /// Rebuild the entire index from scratch (ultra-low memory optimized)
@@ -965,7 +991,8 @@ impl UltraLowMemoryIndex {
         self.directory_children.push(Vec::new());
 
         // Walk directory hierarchy starting from root
-        self.walk_directory_hierarchical(&self.base_dir.clone(), self.root_entry_id, 0)?;
+        let base_dir = self.base_dir.clone();
+        self.walk_directory_hierarchical(&base_dir, self.root_entry_id, 0)?;
 
         // Build radix index for fast searching
         self.build_radix_index();
@@ -1014,10 +1041,19 @@ impl UltraLowMemoryIndex {
         info!("Building radix index for {} entries", self.entries.len());
         let start = Instant::now();
 
-        // Clear existing radix index
-        self.radix_index = std::array::from_fn(|_| RadixBucket::default());
+        let mut bucket_sizes = [0usize; 256];
+        for entry in &self.entries {
+            if let Some(name) = self.get_string(entry.get_name_offset()) {
+                let first_byte = name.as_bytes().first().copied().unwrap_or(0);
+                bucket_sizes[first_byte as usize] += 1;
+            }
+        }
 
-        // Populate radix buckets based on first character of filename
+        // Clear existing radix index and reserve once per bucket.
+        self.radix_index = std::array::from_fn(|idx| RadixBucket {
+            entries: Vec::with_capacity(bucket_sizes[idx]),
+        });
+
         for (entry_id, entry) in self.entries.iter().enumerate() {
             if let Some(name) = self.get_string(entry.get_name_offset()) {
                 let first_byte = name.as_bytes().first().copied().unwrap_or(0);
@@ -1041,7 +1077,8 @@ impl UltraLowMemoryIndex {
         );
         let start = Instant::now();
         let query_lower = query.to_lowercase();
-        let mut candidate_ids = Vec::new();
+        let query_is_ascii = query.is_ascii();
+        let mut candidate_ids = Vec::with_capacity(limit.saturating_mul(2));
 
         // Strategy 1: Radix-accelerated search using first character
         if !query_lower.is_empty() {
@@ -1057,8 +1094,12 @@ impl UltraLowMemoryIndex {
                 if let Some(entry) = self.entries.get(entry_id as usize)
                     && let Some(name) = self.get_string(entry.get_name_offset())
                 {
-                    let name_lower = name.to_lowercase();
-                    if name_lower.contains(&query_lower) {
+                    let matches = if query_is_ascii {
+                        contains_case_insensitive_ascii(name, &query_lower)
+                    } else {
+                        name.to_lowercase().contains(&query_lower)
+                    };
+                    if matches {
                         candidate_ids.push(entry_id);
                     }
                 }
@@ -1080,8 +1121,12 @@ impl UltraLowMemoryIndex {
                     if let Some(entry) = self.entries.get(entry_id as usize)
                         && let Some(name) = self.get_string(entry.get_name_offset())
                     {
-                        let name_lower = name.to_lowercase();
-                        if name_lower.contains(&query_lower) {
+                        let matches = if query_is_ascii {
+                            contains_case_insensitive_ascii(name, &query_lower)
+                        } else {
+                            name.to_lowercase().contains(&query_lower)
+                        };
+                        if matches {
                             candidate_ids.push(entry_id);
                         }
                     }
@@ -1101,6 +1146,13 @@ impl UltraLowMemoryIndex {
                 results.push(search_result);
             }
         }
+
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results.truncate(limit);
 
         debug!(
             "Ultra-fast search completed in {:.2}ms, {} candidates -> {} results",
@@ -1664,37 +1716,44 @@ pub fn perform_search(
     };
 
     // Perform ultra-fast radix-accelerated search
+    let expanded_limit = params
+        .offset
+        .saturating_add(params.limit)
+        .saturating_mul(2)
+        .max(params.limit.max(1));
     trace!(
         "Starting radix-accelerated search with expanded limit: {}",
-        params.limit * 2
+        expanded_limit
     );
-    let mut results = concurrent_index.search(&params.query, params.limit * 2)?;
-    debug!("Index search returned {} initial results", results.len());
+    let shared_results = concurrent_index.search_shared(&params.query, expanded_limit)?;
+    debug!("Index search returned {} initial results", shared_results.len());
 
     // If index search returns no results, fall back to filesystem search
-    if results.is_empty() {
+    if shared_results.is_empty() {
         info!(
             "Ultra-low memory index search returned no results, falling back to filesystem search"
         );
         debug!("Initiating parallel filesystem search as fallback");
-        results = perform_parallel_search(base_dir, params)?;
+        let mut results = perform_parallel_search(base_dir, params)?;
         trace!(
             "Filesystem search fallback returned {} results",
             results.len()
         );
+        let start_idx = params.offset.min(results.len());
+        let end_idx = (params.offset + params.limit).min(results.len());
+        results = results[start_idx..end_idx].to_vec();
+        let search_time = start.elapsed();
+        info!(
+            "Ultra-fast search completed for '{}': {} results in {:.2}ms (ultra-low memory)",
+            params.query,
+            results.len(),
+            search_time.as_millis()
+        );
+        return Ok(results);
     }
-
-    // Sort by relevance score (stable sort to maintain order for equal scores)
-    results.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    // Apply offset and limit
-    let start_idx = params.offset.min(results.len());
-    let end_idx = (params.offset + params.limit).min(results.len());
-    results = results[start_idx..end_idx].to_vec();
+    let start_idx = params.offset.min(shared_results.len());
+    let end_idx = (params.offset + params.limit).min(shared_results.len());
+    let results = shared_results[start_idx..end_idx].to_vec();
 
     let search_time = start.elapsed();
     info!(
@@ -2104,5 +2163,56 @@ pub fn force_memory_cleanup() -> Result<(), AppError> {
         Err(AppError::InternalServerError(
             "Ultra-low memory search index temporarily unavailable".to_string(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod perf_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    #[ignore]
+    fn perf_index_build_and_cached_search() {
+        let temp_dir = tempdir().unwrap();
+
+        for dir_idx in 0..40 {
+            let dir = temp_dir.path().join(format!("dir_{dir_idx:02}"));
+            std::fs::create_dir_all(&dir).unwrap();
+            for file_idx in 0..200 {
+                std::fs::write(
+                    dir.join(format!("document_{dir_idx:02}_{file_idx:03}.txt")),
+                    b"irondrop",
+                )
+                .unwrap();
+            }
+        }
+
+        let concurrent = ConcurrentUltraLowMemoryIndex::new(temp_dir.path().to_path_buf());
+
+        let build_start = Instant::now();
+        concurrent.update_if_needed(true).unwrap();
+        let build_ms = build_start.elapsed().as_millis();
+
+        let search_start = Instant::now();
+        let first = concurrent.search_shared("document_12_", 64).unwrap();
+        let first_search_us = search_start.elapsed().as_micros();
+
+        let cache_start = Instant::now();
+        let second = concurrent.search_shared("document_12_", 64).unwrap();
+        let cache_hit_us = cache_start.elapsed().as_micros();
+
+        let stats = concurrent.get_stats().unwrap();
+        assert!(!first.is_empty());
+        assert!(Arc::ptr_eq(&first, &second));
+
+        println!(
+            "PERF search_index build_ms={} first_search_us={} cache_hit_us={} entries={} memory_bytes={}",
+            build_ms,
+            first_search_us,
+            cache_hit_us,
+            stats.0,
+            stats.1
+        );
     }
 }
