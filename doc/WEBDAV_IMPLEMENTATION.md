@@ -1,6 +1,6 @@
 # WebDAV Implementation Guide
 
-Version: 2.7.2
+Version: 2.7.5
 
 This guide explains how the WebDAV implementation works in plain language. It focuses on request flow, lock behavior, and the core RFC 4918 semantics implemented in `src/webdav.rs`.
 
