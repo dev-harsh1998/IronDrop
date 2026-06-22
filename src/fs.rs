@@ -44,7 +44,7 @@ pub fn generate_directory_listing(
         match (a_is_dir, b_is_dir) {
             (true, false) => std::cmp::Ordering::Less,
             (false, true) => std::cmp::Ordering::Greater,
-            _ => a.1.to_lowercase().cmp(&b.1.to_lowercase()),
+            _ => cmp_case_insensitive_ascii(&a.1, &b.1),
         }
     });
 
@@ -129,6 +129,26 @@ fn format_file_size(size: u64) -> String {
         format!("{} {}", size, UNITS[unit_index])
     } else {
         format!("{:.1} {}", size_f, UNITS[unit_index])
+    }
+}
+
+fn cmp_case_insensitive_ascii(a: &str, b: &str) -> std::cmp::Ordering {
+    let mut a_it = a.bytes();
+    let mut b_it = b.bytes();
+    loop {
+        match (a_it.next(), b_it.next()) {
+            (Some(x), Some(y)) => {
+                let xl = x.to_ascii_lowercase();
+                let yl = y.to_ascii_lowercase();
+                match xl.cmp(&yl) {
+                    std::cmp::Ordering::Equal => {}
+                    other => return other,
+                }
+            }
+            (None, Some(_)) => return std::cmp::Ordering::Less,
+            (Some(_), None) => return std::cmp::Ordering::Greater,
+            (None, None) => return std::cmp::Ordering::Equal,
+        }
     }
 }
 
