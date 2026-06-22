@@ -60,17 +60,29 @@ impl RateLimiter {
 
         // Check if we need to evict entries before inserting a new one
         if !connections.contains_key(&ip) && connections.len() >= MAX_RATE_LIMITER_ENTRIES {
-            // Smart eviction: find the least recently used entry (oldest last_activity)
-            if let Some((&lru_ip, _)) = connections
-                .iter()
-                .min_by_key(|(_, info)| info.last_activity)
-            {
-                let lru_ip_copy = lru_ip;
-                connections.remove(&lru_ip_copy);
-                debug!(
-                    "Evicted LRU entry for IP {} to make space for new IP {}",
-                    lru_ip_copy, ip
-                );
+            const EVICTION_SAMPLE: usize = 64;
+            let mut best_ip: Option<IpAddr> = None;
+            let mut best_last_activity: Option<Instant> = None;
+            let mut best_is_idle = false;
+
+            for (&candidate_ip, info) in connections.iter().take(EVICTION_SAMPLE) {
+                let is_idle = info.active_connections == 0;
+                if best_ip.is_none()
+                    || (is_idle && !best_is_idle)
+                    || (is_idle == best_is_idle
+                        && best_last_activity
+                            .map(|t| info.last_activity < t)
+                            .unwrap_or(true))
+                {
+                    best_ip = Some(candidate_ip);
+                    best_last_activity = Some(info.last_activity);
+                    best_is_idle = is_idle;
+                }
+            }
+
+            if let Some(victim) = best_ip {
+                connections.remove(&victim);
+                debug!("Evicted rate limiter entry for IP {} to make space for new IP {}", victim, ip);
             }
         }
 
