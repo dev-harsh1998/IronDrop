@@ -1132,7 +1132,7 @@ pub fn run_server(
         .enable_io()
         .enable_time()
         .worker_threads(worker_threads)
-        .max_blocking_threads(worker_threads.saturating_mul(32).max(256))
+        .max_blocking_threads(worker_threads.saturating_mul(8).max(64))
         .build()
         .map_err(|e| AppError::InternalServerError(e.to_string()))?;
 

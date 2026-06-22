@@ -5,7 +5,7 @@
 use crate::error::AppError;
 use crate::response::create_error_response;
 use crate::router::Router;
-use log::{debug, error, info, trace};
+use log::{error, info, trace};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -207,79 +207,13 @@ impl Request {
 // Static asset, favicon, upload, and health handlers moved to handlers.rs
 
 #[allow(clippy::too_many_arguments)]
-fn route_request(
-    request: &mut Request,
-    base_dir: &Arc<PathBuf>,
-    allowed_extensions: &Arc<Vec<glob::Pattern>>,
-    _username: &Arc<Option<String>>,
-    _password: &Arc<Option<String>>,
-    chunk_size: usize,
-    cli_config: Option<&crate::cli::Cli>,
-    _stats: Option<&crate::server::ServerStats>,
-    router: &Arc<Router>,
-) -> Result<Response, AppError> {
-    // Strip the base path prefix from the request path for reverse proxy support.
-    // If a base_path is configured and the request doesn't match, return 404.
-    let bp = crate::templates::base_path();
-    if !bp.is_empty() {
-        let path_only = request
-            .path
-            .split('?')
-            .next()
-            .unwrap_or(&request.path)
-            .to_string();
-        if path_only == bp || path_only.starts_with(&format!("{bp}/")) {
-            // Strip the base path prefix from the full path (including query string)
-            let stripped = request.path[bp.len()..].to_string();
-            request.path = if stripped.is_empty() || !stripped.starts_with('/') {
-                format!("/{stripped}")
-            } else {
-                stripped
-            };
-        } else {
-            // Request path doesn't match the configured base path — 404
-            return Err(AppError::NotFound);
-        }
-    }
-
-    trace!("Routing {} {} through router", request.method, request.path);
-    // Authentication is now handled by middleware in the router
-    // First check if router handles the request (internal routes)
-    if let Some(router_response) = router.route(request) {
-        debug!(
-            "Route found in router for {} {}",
-            request.method, request.path
-        );
-        trace!("Router handler execution starting");
-        return router_response;
-    }
-
-    // All non-internal paths (not starting with /_irondrop/) are treated as file / directory lookup
-    if request.path.starts_with("/_irondrop/") {
-        debug!("Internal path {} not found in router", request.path);
-        return Err(AppError::NotFound);
-    }
-
-    debug!("Handling file request for path: {}", request.path);
-    trace!("Using file handler for non-internal path");
-    // Handle file and directory serving via dedicated handler
-    crate::handlers::handle_file_request(
-        request,
-        base_dir,
-        allowed_extensions,
-        chunk_size,
-        cli_config,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
 pub async fn handle_client_async<S>(
     mut stream: S,
     peer_addr: std::net::SocketAddr,
     base_dir: Arc<PathBuf>,
     allowed_extensions: Arc<Vec<glob::Pattern>>,
-    username: Arc<Option<String>>,
-    password: Arc<Option<String>>,
+    _username: Arc<Option<String>>,
+    _password: Arc<Option<String>>,
     chunk_size: usize,
     cli_config: Option<Arc<crate::cli::Cli>>,
     stats: Option<Arc<crate::server::ServerStats>>,
@@ -308,39 +242,71 @@ pub async fn handle_client_async<S>(
     let request_method = request.method.clone();
     let request_path = request.path.clone();
 
-    let response_result = tokio::task::spawn_blocking({
-        let base_dir = base_dir.clone();
-        let allowed_extensions = allowed_extensions.clone();
-        let username = username.clone();
-        let password = password.clone();
-        let cli_config = cli_config.clone();
-        let router = router.clone();
-        move || {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                route_request(
-                    &mut request,
-                    &base_dir,
-                    &allowed_extensions,
-                    &username,
-                    &password,
-                    chunk_size,
-                    cli_config.as_deref(),
-                    None,
-                    &router,
-                )
-            }))
-            .unwrap_or_else(|_| {
-                Err(AppError::InternalServerError(
-                    "Client handler panicked".into(),
-                ))
-            })
-        }
-    })
-    .await;
+    let response_result = {
+        let bp = crate::templates::base_path();
+        let base_path_check: Result<(), AppError> = if !bp.is_empty() {
+            let path_only = request
+                .path
+                .split('?')
+                .next()
+                .unwrap_or(&request.path)
+                .to_string();
+            if path_only == bp || path_only.starts_with(&format!("{bp}/")) {
+                let stripped = request.path[bp.len()..].to_string();
+                request.path = if stripped.is_empty() || !stripped.starts_with('/') {
+                    format!("/{stripped}")
+                } else {
+                    stripped
+                };
+                Ok(())
+            } else {
+                Err(AppError::NotFound)
+            }
+        } else {
+            Ok(())
+        };
+        if let Err(e) = base_path_check {
+            Err(e)
+        } else {
+            let internal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| router.route(&request)))
+                .unwrap_or_else(|_| {
+                    Some(Err(AppError::InternalServerError(
+                        "Client handler panicked".into(),
+                    )))
+                });
+            if let Some(res) = internal {
+                res
+            } else if request.path.starts_with("/_irondrop/") {
+                Err(AppError::NotFound)
+            } else {
+                let request = request;
+                let base_dir = base_dir.clone();
+                let allowed_extensions = allowed_extensions.clone();
+                let cli_config = cli_config.clone();
+                let response_result = tokio::task::spawn_blocking(move || {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        crate::handlers::handle_file_request(
+                            &request,
+                            &base_dir,
+                            &allowed_extensions,
+                            chunk_size,
+                            cli_config.as_deref(),
+                        )
+                    }))
+                    .unwrap_or_else(|_| {
+                        Err(AppError::InternalServerError(
+                            "Client handler panicked".into(),
+                        ))
+                    })
+                })
+                .await;
 
-    let response_result = match response_result {
-        Ok(result) => result,
-        Err(_) => Err(AppError::InternalServerError("Join error".into())),
+                match response_result {
+                    Ok(result) => result,
+                    Err(_) => Err(AppError::InternalServerError("Join error".into())),
+                }
+            }
+        }
     };
 
     match response_result {
