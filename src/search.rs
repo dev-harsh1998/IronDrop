@@ -1222,15 +1222,15 @@ impl UltraLowMemoryIndex {
         }
 
         // Fast path for common cases
-        if filename_lower.starts_with(&query_lower) {
+        if filename_lower.starts_with(query_lower.as_str()) {
             score += 75.0;
-        } else if filename_lower.ends_with(&query_lower) {
+        } else if filename_lower.ends_with(query_lower.as_str()) {
             score += 50.0;
-        } else if filename_lower.contains(&query_lower) {
+        } else if filename_lower.contains(query_lower.as_str()) {
             score += 25.0;
 
             // Bonus for word boundary matches (optimized)
-            if self.has_word_boundary_match(&filename_lower, &query_lower) {
+            if self.has_word_boundary_match(&filename_lower, query_lower.as_str()) {
                 score += 25.0;
             }
         }
@@ -1405,14 +1405,18 @@ impl ConcurrentUltraLowMemoryIndex {
     }
 
     /// Perform search with minimal lock contention
-    pub fn search_shared(&self, query: &str, limit: usize) -> Result<Arc<Vec<SearchResult>>, AppError> {
+    pub fn search_shared(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Arc<Vec<SearchResult>>, AppError> {
         let cache_key = format!("{query}:{limit}");
 
         {
-            if let Ok(mut cache) = self.search_cache.try_lock() {
-                if let Some(cached_results) = cache.get(&cache_key) {
-                    return Ok(cached_results);
-                }
+            if let Ok(mut cache) = self.search_cache.try_lock()
+                && let Some(cached_results) = cache.get(&cache_key)
+            {
+                return Ok(cached_results);
             }
         }
 
@@ -1809,7 +1813,7 @@ fn search_directory_recursive(
             }
             let file_name_lower = file_name.to_lowercase();
 
-            if file_name_lower.contains(&query_lower)
+            if file_name_lower.contains(query_lower)
                 && let Ok(metadata) = entry.metadata()
             {
                 let relative_path = entry
@@ -1860,13 +1864,7 @@ fn search_directory_recursive(
 
             // Recursively search subdirectories
             if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                search_directory_recursive(
-                    &entry.path(),
-                    query_lower,
-                    base_dir,
-                    tx,
-                    depth + 1,
-                );
+                search_directory_recursive(&entry.path(), query_lower, base_dir, tx, depth + 1);
             }
         }
     }
@@ -1888,15 +1886,15 @@ fn calculate_relevance_score_with_query_lower(filename: &str, query_lower: &str)
         score += 100.0;
     }
     // Starts with query gets high score
-    else if filename_lower.starts_with(&query_lower) {
+    else if filename_lower.starts_with(query_lower) {
         score += 75.0;
     }
     // Ends with query (useful for extensions)
-    else if filename_lower.ends_with(&query_lower) {
+    else if filename_lower.ends_with(query_lower) {
         score += 50.0;
     }
     // Contains query gets moderate score
-    else if filename_lower.contains(&query_lower) {
+    else if filename_lower.contains(query_lower) {
         score += 25.0;
 
         // Bonus for word boundary matches

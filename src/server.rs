@@ -83,7 +83,10 @@ impl RateLimiter {
 
             if let Some(victim) = best_ip {
                 connections.remove(&victim);
-                debug!("Evicted rate limiter entry for IP {} to make space for new IP {}", victim, ip);
+                debug!(
+                    "Evicted rate limiter entry for IP {} to make space for new IP {}",
+                    victim, ip
+                );
             }
         }
 
@@ -345,7 +348,8 @@ impl ServerStats {
         // Only record additional metrics for successful uploads
         if success {
             // Record number of files uploaded
-            self.files_uploaded.fetch_add(files_count, Ordering::Relaxed);
+            self.files_uploaded
+                .fetch_add(files_count, Ordering::Relaxed);
 
             // Record total bytes uploaded
             self.upload_bytes.fetch_add(upload_bytes, Ordering::Relaxed);
@@ -408,7 +412,10 @@ impl ServerStats {
         let largest_upload = self.largest_upload.load(Ordering::Relaxed);
         let concurrent_uploads = self.concurrent_uploads.load(Ordering::Relaxed);
 
-        let processing_times = self.upload_processing_times.lock().unwrap_or_else(|_| panic!("Stats lock poisoned"));
+        let processing_times = self
+            .upload_processing_times
+            .lock()
+            .unwrap_or_else(|_| panic!("Stats lock poisoned"));
         let average_processing_time = if processing_times.is_empty() {
             0.0
         } else {
@@ -587,6 +594,12 @@ impl ServerStats {
         if let Ok(mut last_check) = self.last_memory_check.lock() {
             *last_check = Some(Instant::now());
         }
+    }
+}
+
+impl Default for ServerStats {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

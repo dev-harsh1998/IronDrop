@@ -268,12 +268,13 @@ pub async fn handle_client_async<S>(
         if let Err(e) = base_path_check {
             Err(e)
         } else {
-            let internal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| router.route(&request)))
-                .unwrap_or_else(|_| {
-                    Some(Err(AppError::InternalServerError(
-                        "Client handler panicked".into(),
-                    )))
-                });
+            let internal =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| router.route(&request)))
+                    .unwrap_or_else(|_| {
+                        Some(Err(AppError::InternalServerError(
+                            "Client handler panicked".into(),
+                        )))
+                    });
             if let Some(res) = internal {
                 res
             } else if request.path.starts_with("/_irondrop/") {
