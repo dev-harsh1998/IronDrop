@@ -1619,7 +1619,7 @@ fn perform_parallel_search(
     params: &SearchParams,
 ) -> Result<Vec<SearchResult>, AppError> {
     let (tx, rx) = mpsc::channel();
-    let query = Arc::new(params.query.clone());
+    let query_lower = Arc::new(params.query.to_lowercase());
     let base_dir = Arc::new(base_dir.to_path_buf());
     let num_threads = 4; // Use 4 worker threads for parallel searching
 
@@ -1663,12 +1663,12 @@ fn perform_parallel_search(
         .into_iter()
         .map(|chunk| {
             let tx = tx.clone();
-            let query = Arc::clone(&query);
+            let query_lower = Arc::clone(&query_lower);
             let base_dir = Arc::clone(&base_dir);
 
             thread::spawn(move || {
                 for dir in chunk {
-                    search_directory_recursive(&dir, &query, &base_dir, &tx, 0);
+                    search_directory_recursive(&dir, &query_lower, &base_dir, &tx, 0);
                 }
             })
         })
@@ -1702,7 +1702,7 @@ fn perform_parallel_search(
 /// Recursively search a directory
 fn search_directory_recursive(
     dir: &Path,
-    query: &str,
+    query_lower: &str,
     base_dir: &Path,
     tx: &mpsc::Sender<SearchResult>,
     depth: usize,
@@ -1710,8 +1710,6 @@ fn search_directory_recursive(
     if depth > 10 {
         return; // Limit recursion depth
     }
-
-    let query_lower = query.to_lowercase();
 
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -1759,7 +1757,7 @@ fn search_directory_recursive(
                     } else {
                         "file".to_string()
                     },
-                    score: calculate_relevance_score(&file_name, query),
+                    score: calculate_relevance_score_with_query_lower(&file_name, query_lower),
                     last_modified: metadata
                         .modified()
                         .ok()
@@ -1772,7 +1770,13 @@ fn search_directory_recursive(
 
             // Recursively search subdirectories
             if entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                search_directory_recursive(&entry.path(), query, base_dir, tx, depth + 1);
+                search_directory_recursive(
+                    &entry.path(),
+                    query_lower,
+                    base_dir,
+                    tx,
+                    depth + 1,
+                );
             }
         }
     }
@@ -1780,8 +1784,12 @@ fn search_directory_recursive(
 
 /// Calculate relevance score for search results
 pub fn calculate_relevance_score(filename: &str, query: &str) -> f32 {
-    let filename_lower = filename.to_lowercase();
     let query_lower = query.to_lowercase();
+    calculate_relevance_score_with_query_lower(filename, &query_lower)
+}
+
+fn calculate_relevance_score_with_query_lower(filename: &str, query_lower: &str) -> f32 {
+    let filename_lower = filename.to_lowercase();
 
     let mut score = 0.0f32;
 
@@ -1811,7 +1819,7 @@ pub fn calculate_relevance_score(filename: &str, query: &str) -> f32 {
     }
 
     // Fuzzy match for typos
-    let distance = levenshtein_distance(&filename_lower, &query_lower);
+    let distance = levenshtein_distance(&filename_lower, query_lower);
     if distance <= 2 && distance > 0 {
         score += 10.0 / (1.0 + distance as f32);
     }
