@@ -251,6 +251,7 @@ struct UnifiedStringPool {
     index: Vec<StringPoolEntry>,
     /// Current write position in buffer
     write_pos: u32,
+    lookup: Option<HashMap<u32, Vec<u32>>>,
 }
 
 // Constants for ultra-compact bit packing
@@ -345,10 +346,12 @@ impl UltraCompactEntry {
 impl UnifiedStringPool {
     /// Create new string pool with reserved capacity
     fn with_capacity(capacity: usize) -> Self {
+        let estimated_entries = (capacity / 20).max(1);
         Self {
             buffer: Vec::with_capacity(capacity),
             index: Vec::with_capacity(capacity / 20), // Estimate ~20 chars per string
             write_pos: 0,
+            lookup: Some(HashMap::with_capacity(estimated_entries)),
         }
     }
 
@@ -356,14 +359,19 @@ impl UnifiedStringPool {
     fn add_string(&mut self, s: &str) -> u32 {
         let hash = murmur3_hash(s.as_bytes());
 
-        // Binary search for existing string
-        if let Ok(idx) = self.index.binary_search_by_key(&hash, |entry| entry.hash) {
-            // Hash collision check - verify actual string content
+        if let Some(lookup) = self.lookup.as_ref() {
+            if let Some(offsets) = lookup.get(&hash) {
+                for &offset in offsets {
+                    if self.get_string_at_offset(offset) == Some(s) {
+                        return offset;
+                    }
+                }
+            }
+        } else if let Ok(idx) = self.index.binary_search_by_key(&hash, |entry| entry.hash) {
             let entry = self.index[idx];
             if self.get_string_at_offset(entry.offset) == Some(s) {
                 return entry.offset;
             }
-            // Hash collision - continue to add new string
         }
 
         // Add new string to buffer
@@ -373,14 +381,18 @@ impl UnifiedStringPool {
         self.buffer.push(0); // Null terminator
         self.write_pos += string_bytes.len() as u32 + 1;
 
-        // Add to sorted index
         let entry = StringPoolEntry { hash, offset };
-        match self.index.binary_search_by_key(&hash, |e| e.hash) {
-            Ok(idx) => self.index.insert(idx, entry),
-            Err(idx) => self.index.insert(idx, entry),
+        self.index.push(entry);
+        if let Some(lookup) = self.lookup.as_mut() {
+            lookup.entry(hash).or_default().push(offset);
         }
 
         offset
+    }
+
+    fn finalize(&mut self) {
+        self.index.sort_unstable_by_key(|e| e.hash);
+        self.lookup = None;
     }
 
     /// Get string at specific offset - unsafe but fast
@@ -432,6 +444,7 @@ impl UnifiedStringPool {
         self.buffer.clear();
         self.index.clear();
         self.write_pos = 0;
+        self.lookup = Some(HashMap::new());
 
         // Shrink capacity to prevent memory bloat
         self.buffer.shrink_to_fit();
@@ -442,6 +455,30 @@ impl UnifiedStringPool {
         self.index.reserve(1000); // 1K entries initial
 
         debug!("StringPool cleared and capacity shrunk for long-run memory efficiency");
+    }
+}
+
+#[cfg(test)]
+mod string_pool_tests {
+    use super::*;
+
+    #[test]
+    fn unified_string_pool_deduplicates_and_finalizes() {
+        let mut pool = UnifiedStringPool::with_capacity(1024);
+        let initial_len = pool.buffer.len();
+
+        let a1 = pool.add_string("abc");
+        let a2 = pool.add_string("abc");
+        assert_eq!(a1, a2);
+        assert!(pool.buffer.len() > initial_len);
+
+        pool.finalize();
+        assert!(pool.lookup.is_none());
+
+        let before = pool.buffer.len();
+        let a3 = pool.add_string("abc");
+        assert_eq!(a1, a3);
+        assert_eq!(before, pool.buffer.len());
     }
 }
 
@@ -906,6 +943,7 @@ impl UltraLowMemoryIndex {
 
         // Build radix index for fast searching
         self.build_radix_index();
+        self.string_pool.finalize();
 
         Ok(())
     }
