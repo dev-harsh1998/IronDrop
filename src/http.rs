@@ -1031,7 +1031,9 @@ mod perf_tests {
         drop(writer);
 
         let start = Instant::now();
-        let body = read_chunked_body_async(&mut reader, Vec::new()).await.unwrap();
+        let body = read_chunked_body_async(&mut reader, Vec::new())
+            .await
+            .unwrap();
         let elapsed_ms = start.elapsed().as_millis();
 
         match body {

@@ -88,7 +88,10 @@ pub fn generate_directory_listing(
         request_path
     };
 
-    debug!("Preparing {} selected entries for template rendering", entries.len());
+    debug!(
+        "Preparing {} selected entries for template rendering",
+        entries.len()
+    );
     let total_pages = total_count.div_ceil(limit);
     let safe_page = page.max(1).min(total_pages.max(1));
     let offset = (safe_page - 1) * limit;

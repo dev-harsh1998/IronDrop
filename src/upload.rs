@@ -593,7 +593,9 @@ impl DirectUploadHandler {
         match fs::rename(source_path, &target_path) {
             Ok(()) => {
                 let file_size = known_size.unwrap_or_else(|| {
-                    fs::metadata(&target_path).map(|m| m.len()).unwrap_or_default()
+                    fs::metadata(&target_path)
+                        .map(|m| m.len())
+                        .unwrap_or_default()
                 });
                 let mime_type = get_mime_type(&target_path).to_string();
                 info!(
@@ -614,9 +616,7 @@ impl DirectUploadHandler {
             Err(err) => {
                 let is_cross_device = err.raw_os_error() == Some(18);
                 if !is_cross_device {
-                    error!(
-                        "Failed to move source file {source_path:?} to {target_path:?}: {err}"
-                    );
+                    error!("Failed to move source file {source_path:?} to {target_path:?}: {err}");
                     return Err(AppError::from(err));
                 }
                 debug!(
@@ -1035,9 +1035,9 @@ fn format_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::http::Request;
     use std::io::Write;
     use tempfile::TempDir;
-    use crate::http::Request;
 
     fn create_test_cli(upload_dir: PathBuf) -> Cli {
         Cli {
